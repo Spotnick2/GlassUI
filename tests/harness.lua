@@ -112,14 +112,23 @@ function loadAddon(opts)
 end
 
 -- ForeverProbe, the host SkinProbe depends on, from its checkout
--- ($FOREVERPROBE, else ..\ForeverProbe; CI fetches the tag in
--- Tools/SkinProbe/forever-probe.pin). Loaded into THIS stub environment, the
--- way the client loads a dependency: its files, then its ADDON_LOADED
+-- ($FOREVERPROBE, else ..\ForeverProbe). Loaded into THIS stub environment,
+-- the way the client loads a dependency: its files, then its ADDON_LOADED
 -- (GlassChat's loadForeverProbe, ForeverProbe GUIDE section 8).
+-- ForeverProbe is private and lives on the owner's disk, so the probe's tests
+-- run locally only: CI sets FOREVERPROBE_OPTIONAL=1 and the probe's test file
+-- exits cleanly. Locally, without it, a missing checkout is an error, never a
+-- silent skip.
 function loadForeverProbe()
     local root = (os.getenv("FOREVERPROBE") or "../ForeverProbe"):gsub("\\", "/"):gsub("/$", "")
     local toc = io.open(root .. "/ForeverProbe.toc", "rb")
-    if not toc then error("ForeverProbe checkout not found at " .. root .. ": clone it there or set FOREVERPROBE", 0) end
+    if not toc then
+        if os.getenv("FOREVERPROBE_OPTIONAL") == "1" then
+            io.write("SKIPPED: ForeverProbe isn't here (private, local only); the probe tests run locally\n")
+            os.exit(0)
+        end
+        error("ForeverProbe checkout not found at " .. root .. ": clone it there or set FOREVERPROBE", 0)
+    end
     local files = {}
     for line in toc:read("*a"):gmatch("[^\r\n]+") do
         if line:match("%.lua$") and not line:match("^#") then files[#files + 1] = root .. "/" .. line end
