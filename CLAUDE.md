@@ -25,7 +25,8 @@ file doesn't cover something, check how those handle it before you invent a new 
 - `/glassui` and `/gui` (`/glass` is GlassUnitFrames'). v0.1.0 = wave 1 + hub v1; 1.0.0 at Forever's
   launch. Private repo for now; CurseForge project 1745875.
 
-**Status:** milestone 2, SkinProbe (#2): the wave-1 measurements, waiting for the in-game run.
+**Status:** milestone 2, SkinProbe (#2): the wave-1 measurements are in (docs/FOREVER-PROBE.md,
+70374). Next: the engine and kit (#3) with the merchant skin (#4), on LibGlass r8.
 
 ## The skin contract (non-negotiable)
 

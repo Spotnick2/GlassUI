@@ -147,7 +147,10 @@ WoW.combat = false
 -- W1.6: the squares' readbacks follow the stub's measured behaviour.
 local r = T.gradientOn()
 eq(r.A, 1, "A (gradient, then SetAlpha 0) reads 1")
+eq(r.B, 1, "B (SetAlpha 0, then gradient) reads 1: the gradient undoes the earlier alpha (70374)")
+eq(r.C, 1, "C (image texture, gradient, then SetAlpha 0) reads 1 (70374)")
 eq(r.D, 0, "D (no gradient) reads 0")
+eq(SkinProbeDB.results["W1.6.readback"].B, 1, "the readback is in the results table")
 T.gradientOff()
 
 -- The procedures are defined and every step's run and check works here.

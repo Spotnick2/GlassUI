@@ -127,8 +127,9 @@ function Methods.GetEffectiveScale(w) return w._effScale or 1 end
 function Methods.SetScale(w, s) w._scale = s end
 function Methods.GetScale(w) return w._scale end
 -- A texture painted with SetGradient ignores a later SetAlpha, and GetAlpha
--- keeps reading 1 (porting guide section 3, measured on 70374 twice). Tests
--- passed against that bug until Glass Quest Tracker's stub behaved like this.
+-- keeps reading 1 (porting guide section 3, measured on 70374 twice; an image
+-- texture too, SkinProbe W1.6 square C). Tests passed against that bug until
+-- Glass Quest Tracker's stub behaved like this.
 function Methods.SetAlpha(w, a)
     if w._gradient then return end
     w._alpha = a
@@ -266,8 +267,8 @@ end
 function Methods.SetGradient(t, orientation, c1, c2)
     assert(type(c1) == "table" and type(c2) == "table", "SetGradient takes color objects on this API")
     t._gradient = { orientation, c1, c2 }
-    -- Assumed, not measured: an alpha set BEFORE the gradient doesn't survive
-    -- it. SkinProbe's square B (W1.6) settles that; fix this line if it does.
+    -- An alpha set BEFORE the gradient doesn't survive it either: the texture
+    -- shows and reads 1 (70374, SkinProbe W1.6 square B).
     t._alpha = 1
 end
 function Methods.SetFont(fs, file, size, flags) fs._font = { file, size, flags }; return true end
