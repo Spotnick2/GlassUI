@@ -153,8 +153,26 @@ eq(r.D, 0, "D (no gradient) reads 0")
 eq(SkinProbeDB.results["W1.6.readback"].B, 1, "the readback is in the results table")
 T.gradientOff()
 
+-- #17: Blizzard's card. Without C_Texture (another build), nothing to report;
+-- with it, the atlas is read and the card shown beside our glass (Glass UI
+-- isn't loaded here: only the card), then removed.
+eq(T.cardAtlas(), nil, "no C_Texture: the atlas reads as unknown")
+rawset(_G, "C_Texture", { GetAtlasExists = function(a) return a == "Mode-Selection-Card-Regular" end,
+                          GetAtlasInfo = function() return { width = 200, height = 430 } end })
+local exists, w, h = T.cardAtlas()
+check(exists == true and w == 200 and h == 430, "the atlas and its size are read")
+eq(SkinProbeDB.results["CARD.atlas"].width, 200, "and kept in the results table")
+local okAtlas, painted = T.cardOn()
+check(okAtlas, "the card is shown")
+eq(painted, 0, "without Glass UI, only Blizzard's card")
+T.cardOff()
+T.Probe:ClearLog()
+T.cardOn()
+check(logHas("CARD shown"), "after Remove, Show builds the cards again: nothing was left behind")
+T.cardOff()
+
 -- The procedures are defined and every step's run and check works here.
-for _, name in ipairs({ "wave1", "map", "gradient", "merchant" }) do
+for _, name in ipairs({ "wave1", "map", "gradient", "merchant", "card" }) do
     local p = FP.procedures["SkinProbe/" .. name]
     check(p ~= nil, "procedure " .. name .. " is defined")
     if p then

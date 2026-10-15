@@ -44,6 +44,17 @@ The look is judged from the procedure's screenshots; `Logs\taint.log` is read af
 |---|---|---|
 | Merchant (#4) | `/fp steps skin merchant`: buy, sell, buyback, repair; skin off and on live; after /reload; in combat (optional) | open |
 
+## Blizzard's own glass (#17)
+
+The ruleset screen at login (`Blizzard_GlueXML\Mainline\SuperDistrict.xml:8`) draws its cards with
+one atlas, `Mode-Selection-Card-Regular` (selected: `...-yellow-glow`): a translucent dark body,
+the scene showing through sharp, a gold-metal rim. One fixed size, not sliced.
+
+| # | Question | How | Result |
+|---|---|---|---|
+| G.1 | Does the atlas exist in game, and at what size? | `/fp steps skin card` step 1 | open |
+| G.2 | Beside Glass UI's clear and smoked glass at the same size, over bright and dark scenery: how does it read? | the same procedure, screenshots | open |
+
 ## Facts already known (don't re-measure)
 
 - wow-ui-source branch `forever` is build 1.60.1.70374, the same as the API dump.
