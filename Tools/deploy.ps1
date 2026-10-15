@@ -93,10 +93,28 @@ function Deploy-Probe {
     Write-Host "Deploying SkinProbe -> $dest" -ForegroundColor Cyan
     New-Item -ItemType Directory -Force -Path $dest | Out-Null
     # The TOC and Lua only: forever-probe.pin is CI's.
-    Get-ChildItem -LiteralPath (Join-Path $RepoRoot "Tools\SkinProbe") -File |
+    Get-ChildItem -LiteralPath $ProbeDir -File |
         Where-Object { $_.Extension -in ".toc", ".lua" } | ForEach-Object {
         Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $dest $_.Name) -Force
         Write-Host "  $($_.Name)"
+    }
+}
+
+# Before anything is copied: a probe switch that can't succeed must not leave
+# the addon, the library or ForeverProbe half-deployed (Codex, PR #14).
+$ProbeDir = Join-Path $RepoRoot "Tools\SkinProbe"
+if ($Probe -or $ProbeOnly) {
+    $probeToc = Join-Path $ProbeDir "SkinProbe.toc"
+    if (-not (Test-Path -LiteralPath $probeToc)) {
+        Write-Host "SkinProbe isn't in this revision yet (milestone 2, #2). Nothing was deployed." -ForegroundColor Red
+        exit 1
+    }
+    $missing = @(Get-Content -LiteralPath $probeToc | ForEach-Object { $_.Trim() } |
+        Where-Object { $_ -notmatch "^#" -and $_ -match "[.]lua$" } |
+        Where-Object { -not (Test-Path -LiteralPath (Join-Path $ProbeDir $_)) })
+    if ($missing.Count -gt 0) {
+        Write-Host "SkinProbe.toc lists files that don't exist: $($missing -join ', '). Nothing was deployed." -ForegroundColor Red
+        exit 1
     }
 }
 
@@ -105,4 +123,5 @@ if ($Probe -or $ProbeOnly) { Deploy-Probe }
 
 Write-Host ""
 Write-Host "Changed or new files, a brand-new addon folder included: /reload is enough (porting guide, 2026-10-09)." -ForegroundColor Yellow
-Write-Host "In game:  /console scriptErrors 1   then   /glassui help   (probe: /fp skin, its lines in /fp)" -ForegroundColor Green
+$probeHint = if ($Probe -or $ProbeOnly) { "   (probe: /fp skin, its lines in /fp)" } else { "" }
+Write-Host "In game:  /console scriptErrors 1   then   /glassui help$probeHint" -ForegroundColor Green

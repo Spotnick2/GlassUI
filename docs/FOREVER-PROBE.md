@@ -1,7 +1,7 @@
 # Forever probe: Glass UI
 
 What has to be measured on the live client before each wave of skins, and what was found.
-`Tools/SkinProbe/` is a ForeverProbe module (`..\ForeverProbe\docs\GUIDE.md`): deploy with
+`Tools/SkinProbe/` (it arrives with #2) is a ForeverProbe module (`..\ForeverProbe\docs\GUIDE.md`): deploy with
 `pwsh Tools\deploy.ps1 -Probe`, `/reload`, then `/fp skin <command>`. Its lines go to the `/fp`
 console and to `WTF\Account\<account>\SavedVariables\SkinProbe.lua`. Record the build with every
 result.
