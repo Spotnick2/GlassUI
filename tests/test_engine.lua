@@ -144,12 +144,12 @@ f10:Show(); f11:Show()
 WoW.flushTimers(0)
 eq(d10.n.install + d11.n.install, 0, "nothing installs in combat")
 GUI.Engine.SetEnabled("k", false)
+GUI.Engine.SetEnabled("k", true)
+WoW.flushTimers(0)
 WoW.combat = false
 WoW.fire("PLAYER_REGEN_ENABLED")
-eq(d10.n.style, 0, "a switch during the wait drops every held pass (the generation changed)")
-eq(d11.n.style, 0, "including the switched-off skin's")
-f10:Hide(); f10:Show(); WoW.flushTimers(0)
-eq(d10.n.style, 1, "the next show styles it")
+eq(d10.n.style, 1, "combat over: a held pass runs, though another skin was switched meanwhile")
+eq(d11.n.style, 1, "the switched skin runs once: its pass held before the off and on was dropped")
 WoW.combat = true
 local f12 = window("TestL")
 WoW.combat = false
@@ -160,6 +160,31 @@ f12:Show(); WoW.flushTimers(0)
 WoW.combat = false
 WoW.fire("PLAYER_REGEN_ENABLED")
 eq(d12.n.style, 1, "combat over: the held pass runs")
+
+-- The master switch off and on with several windows up (Codex, PR #16): each
+-- skin's change must not drop the pass just queued for the one before it.
+local f20, f21, f22 = window("TestT"), window("TestU"), window("TestV")
+local d20 = skin("t", f20, { risk = "protected" })
+local d21 = skin("u", f21)
+local d22 = skin("v", f22, { risk = "protected" })
+GUI = session({ d20, d21, d22 })
+f20:Show(); f21:Show(); f22:Show()
+WoW.flushTimers(0)
+GUI._test.slash("off")
+GUI._test.slash("on")
+WoW.flushTimers(0)
+eq(d20.n.style, 2, "master on: the first (protected) window is styled again")
+eq(d21.n.style, 2, "and the plain one")
+eq(d22.n.style, 2, "and the last")
+check(f20._children[1]:IsShown(), "the first window's glass is back")
+-- Another skin failing doesn't drop a queued pass either.
+local f23, f24 = window("TestW"), window("TestX")
+local d23 = skin("w", f23, { risk = "protected" })
+local d24 = skin("x", f24, { style = function() error("boom") end })
+GUI = session({ d23, d24 })
+f23:Show(); f24:Show()
+WoW.flushTimers(0)
+eq(d23.n.style, 1, "a pass queued before another skin threw still runs")
 
 -- Load on demand: nothing until its addon loads.
 local f13

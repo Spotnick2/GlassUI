@@ -20,8 +20,10 @@
 -- still be running at our PLAYER_LOGIN.
 --
 -- Hooks can't be removed, so every callback checks Engine.Active first, and
--- work queued for later (a deferred pass, a combat wait) also checks that the
--- generation hasn't changed: any switch, failure or handover bumps it.
+-- work queued for later (a deferred pass, a combat wait) also checks that its
+-- skin's generation hasn't changed: a switch, failure or handover of THAT
+-- skin bumps it. Per skin, so the master switch (one change per skin, in
+-- turn) or another skin's failure never drops a pass queued for this one.
 
 GlassUI = GlassUI or {}
 local GUI = GlassUI
@@ -35,18 +37,17 @@ Engine.SUITES = { "ElvUI", "EllesmereUIBlizzardSkin", "Tukui" }
 
 Engine.list = {}       -- skin states, in registration (TOC) order
 Engine.byKey = {}
-Engine.gen = 0
 Engine.started = false
 Engine.standDown = nil -- "gamepad", for the session
 Engine.suite = nil     -- the loaded suite's name, for the session
 
--- A skin's state: def, kit, frames (after attach), installed[frame],
+-- A skin's state: def, kit, gen, frames (after attach), installed[frame],
 -- failed (what threw), owner (and late: it arrived after we styled), yieldTo.
 function Engine.Register(def)
     assert(type(def) == "table" and type(def.key) == "string", "Engine.Register: a key")
     assert(not Engine.byKey[def.key], "Engine.Register: key taken: " .. def.key)
     assert(type(def.frames) == "function" and type(def.style) == "function", "Engine.Register: frames and style")
-    local s = { def = def, installed = setmetatable({}, { __mode = "k" }) }
+    local s = { def = def, gen = 0, installed = setmetatable({}, { __mode = "k" }) }
     s.kit = GUI.Kit.New(s)
     Engine.list[#Engine.list + 1] = s
     Engine.byKey[def.key] = s
@@ -72,7 +73,7 @@ end
 local function handover(s, owner)
     s.owner = owner
     s.late = next(s.installed) ~= nil
-    Engine.gen = Engine.gen + 1
+    s.gen = s.gen + 1
     s.kit:HidePanels()
 end
 
@@ -92,7 +93,7 @@ local function run(s, what, fn, ...)
     local ok, err = pcall(fn, ...)
     if ok then return true end
     s.failed = what
-    Engine.gen = Engine.gen + 1
+    s.gen = s.gen + 1
     API.Fail("skin:" .. s.def.key .. ":" .. what, err)
     return false
 end
@@ -100,9 +101,9 @@ Engine.Run = run
 
 -- fn a frame later, if nothing changed meanwhile.
 function Engine.Defer(s, what, fn)
-    local gen = Engine.gen
+    local gen = s.gen
     C_Timer.After(0, function()
-        if gen == Engine.gen and Engine.Active(s.def.key) then run(s, what, fn) end
+        if gen == s.gen and Engine.Active(s.def.key) then run(s, what, fn) end
     end)
 end
 
@@ -111,7 +112,7 @@ local waiting = {}   -- { s, frame, gen }: protected first passes held for comba
 local function apply(s, frame)
     if not Engine.Active(s.def.key) then return end
     if s.def.risk == "protected" and InCombatLockdown() then
-        waiting[#waiting + 1] = { s = s, frame = frame, gen = Engine.gen }
+        waiting[#waiting + 1] = { s = s, frame = frame, gen = s.gen }
         return
     end
     if not s.installed[frame] then
@@ -203,7 +204,7 @@ end
 -- A switch changed. Returns "reload" when it takes a /reload to finish:
 -- turning off a skin that isn't live, or a failed or handed-over one.
 local function changed(s)
-    Engine.gen = Engine.gen + 1
+    s.gen = s.gen + 1
     if not Engine.started or Engine.standDown or Engine.suite then return nil end
     if Engine.Active(s.def.key) then
         if not s.frames then load(s) return nil end
@@ -262,7 +263,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
         local list = waiting
         waiting = {}
         for _, w in ipairs(list) do
-            if w.gen == Engine.gen then apply(w.s, w.frame) end
+            if w.gen == w.s.gen then apply(w.s, w.frame) end
         end
     elseif event == "ADDON_LOADED" then
         -- An owner loading after us: hand over now, not at the next callback.
