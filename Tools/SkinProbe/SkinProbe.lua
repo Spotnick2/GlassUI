@@ -21,7 +21,9 @@
 -- pcall, so one refusal can't stop the rest.
 
 local ADDON, NS = ...
-local MAX_LOG = 6000
+-- The trees are long (the character sheet alone is ~1800 lines): at 6000 the
+-- first run's oldest tenth, the state lines, was trimmed away (70374).
+local MAX_LOG = 20000
 local MAX_TREE_LINES = 700        -- per target, so one window can't flood the log
 
 local Probe = ForeverProbe:Module("SkinProbe", { api = 1, cmd = "skin" })
@@ -76,6 +78,18 @@ local function frameByName(name)
 end
 
 --------------------------------------------------------------------------------
+-- Results: the answers, kept apart from the log so trimming can't lose them
+--------------------------------------------------------------------------------
+
+-- SkinProbeDB.results[key] = a plain value (never a secret). The log holds
+-- the detail; this holds what docs/FOREVER-PROBE.md records.
+local function record(key, value)
+    if type(SkinProbeDB) ~= "table" then return end
+    if type(SkinProbeDB.results) ~= "table" then SkinProbeDB.results = {} end
+    SkinProbeDB.results[key] = value
+end
+
+--------------------------------------------------------------------------------
 -- State: gamepad style (W1.4), /gui (W1.5), neighbours, frames (W1.1)
 --------------------------------------------------------------------------------
 
@@ -92,6 +106,8 @@ local function gamepad()
     if enum then say("W1.4 Enum.InputDeviceInterfaceType " .. Probe.Describe(enum)) end
     local okCvar, padCvar = Probe:Try("GetCVar GamePadEnable", rawget(_G, "GetCVar"), "GamePadEnable")
     say("W1.4 CVar GamePadEnable=" .. show(okCvar and padCvar))
+    record("W1.4", { style = ok and plain(cur) or nil, gamepadValue = pad, gamepad = isPad,
+                     GamePadEnable = okCvar and plain(padCvar) or nil })
     return isPad
 end
 
@@ -114,6 +130,7 @@ local function slash()
     local others = 0
     for _, k in ipairs(owners) do if k ~= "SLASH_GLASSUI2" then others = others + 1 end end
     say("W1.5 owners other than Glass UI: " .. others)
+    record("W1.5", { owners = table.concat(owners, ","), others = others })
     return others
 end
 
@@ -134,7 +151,9 @@ local function neighbours()
         local db = rawget(_G, "LeaMapsDB")
         local v = type(db) == "table" and db.SimpleMapFrame or nil
         say("Leatrix Maps SimpleMapFrame=" .. show(v) .. " -> simple frame " .. tostring(v ~= "Off"))
+        record("leatrixSimpleFrame", v ~= "Off")
     end
+    record("neighbours", table.concat(on, ","))
     return on
 end
 
@@ -147,17 +166,24 @@ local function frameLine(f, label)
     local _, w = call(f, "GetWidth")
     local _, h = call(f, "GetHeight")
     local _, flat = call(f, "GetFlattensRenderLayers")
-    say(label .. " " .. show(select(2, call(f, "GetObjectType"))) .. " protected=" .. show(okP and prot)
+    local s = show(select(2, call(f, "GetObjectType"))) .. " protected=" .. show(okP and prot)
         .. "/" .. show(okP and explicit) .. " forbidden=" .. show(forbidden) .. " strata=" .. show(strata)
         .. " level=" .. show(level) .. " shown=" .. show(shown) .. " size=" .. num(w) .. "x" .. num(h)
-        .. " flattens=" .. show(flat))
+        .. " flattens=" .. show(flat)
+    say(label .. " " .. s)
+    return s
 end
 
 local function frames()
     for _, key in ipairs(ORDER) do
         for _, name in ipairs(TARGETS[key]) do
             local f = frameByName(name)
-            if f then frameLine(f, "W1.1 " .. key .. " " .. name) else say("W1.1 " .. key .. " " .. name .. " MISSING") end
+            if f then
+                record("W1.1." .. name, frameLine(f, "W1.1 " .. key .. " " .. name))
+            else
+                say("W1.1 " .. key .. " " .. name .. " MISSING")
+                record("W1.1." .. name, "MISSING")
+            end
         end
     end
 end
@@ -207,13 +233,13 @@ end
 local function walk(f, path, depth, visit, budget)
     budget.n = budget.n + 1
     if budget.n > budget.max then return end
-    visit("frame", f, path)
+    visit("frame", f, path, f)
     -- call() is ok, ...: everything after the first value is the region list.
     local regions = { select(2, call(f, "GetRegions")) }
     for i, r in ipairs(regions) do
         budget.n = budget.n + 1
         if budget.n > budget.max then return end
-        visit("region", r, path .. "." .. childLabel(r, i))
+        visit("region", r, path .. "." .. childLabel(r, i), f)
     end
     if depth <= 0 then return end
     local kids = { select(2, call(f, "GetChildren")) }
@@ -258,7 +284,7 @@ end
 local function fade(key, depth)
     if InCombatLockdown() then say("fade: not in combat"); return nil end
     depth = tonumber(depth) or 4
-    local tried, ignored = 0, 0
+    local tried, ignored, which = 0, 0, {}
     eachTarget(key, function(f, name)
         walk(f, name, depth, function(kind, obj, path)
             if kind ~= "region" then return end
@@ -274,11 +300,15 @@ local function fade(key, depth)
             after = plain(after)
             if after ~= 0 then
                 ignored = ignored + 1
+                which[#which + 1] = path
                 say("W1.2 IGNORES SetAlpha: " .. path .. " read " .. num(after) .. " after SetAlpha(0)")
             end
         end, { n = 0, max = MAX_TREE_LINES })
     end)
     say("W1.2 fade " .. key .. ": " .. tried .. " textures tried, " .. ignored .. " ignore SetAlpha")
+    if TARGETS[key] then
+        record("W1.2.fade." .. key, { tried = tried, ignored = ignored, which = table.concat(which, " ") })
+    end
     return tried, ignored
 end
 
@@ -337,8 +367,12 @@ local function borderFade()
     local border = map and map.BorderFrame
     if not border then say("W1.3 WorldMapFrame.BorderFrame MISSING"); return 0 end
     local n = 0
-    walk(border, "BorderFrame", 2, function(kind, obj)
+    -- The border's art only, never a button's: fading the maximise button's
+    -- textures hid it, and the owner couldn't maximise (70374, first run).
+    walk(border, "BorderFrame", 2, function(kind, obj, _, owner)
         if kind ~= "region" or faded[obj] then return end
+        local _, ownerType = call(owner, "GetObjectType")
+        if plain(ownerType) == "Button" then return end
         local _, otype = call(obj, "GetObjectType")
         if plain(otype) ~= "Texture" then return end
         local _, a = call(obj, "GetAlpha")
@@ -395,6 +429,7 @@ local function gradientOn()
     square(3, "C", function(t) t:SetTexture(FILE); t:SetGradient("VERTICAL", bottom, top); t:SetAlpha(0) end)
     square(4, "D", function(t) t:SetTexture(FILE); t:SetAlpha(0) end)
     squares = { host = host, readback = readback }
+    record("W1.6.readback", { A = readback.A, B = readback.B, C = readback.C, D = readback.D })
     return readback
 end
 
@@ -473,7 +508,7 @@ Probe:Steps("map", {
           .. "whole window.", button = "Add panels", run = panelsOn },
     { text = "Do you see a blue glass box in the map's top-left corner?", ask = true },
     { text = "Can you see the map through that box (see-through, not solid, not black)?", ask = true },
-    { text = "Fades the map's border art, so the panel behind the window shows where it was.",
+    { text = "Fades the map's border art (not its buttons), so the panel behind the window shows where it was.",
       button = "Fade border", run = borderFade },
     { text = "Is the gold border gone, with blue glass showing in its place?", ask = true },
     { text = "Maximise the map with its button at the top right, then press Next." },

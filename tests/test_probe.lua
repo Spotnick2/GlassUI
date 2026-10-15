@@ -44,6 +44,10 @@ for _, pane in ipairs({ "PaperDollFrame", "ReputationFrame", "SkillsFrame", "PVP
 end
 local map = window("WorldMapFrame")
 map.BorderFrame = window(nil, map)
+-- The maximise button, as on Forever: a Button two levels into the border.
+map.BorderFrame.MaximizeMinimizeFrame = CreateFrame("Frame", nil, map.BorderFrame)
+local maximize = CreateFrame("Button", nil, map.BorderFrame.MaximizeMinimizeFrame)
+local maximizeArt = maximize:CreateTexture(nil, "ARTWORK")
 window("QuestMapFrame", map)
 
 local FP = loadForeverProbe()
@@ -85,6 +89,13 @@ T.state()
 check(logHas("W1.4 style=0 Gamepad=1 -> gamepad false"), "W1.4 reads the style against Enum's Gamepad")
 check(logHas("SLASH_GLASSUI2") and logHas("SLASH_SOMEONEELSE1"), "W1.5 finds every /gui, any case")
 check(logHas("W1.5 owners other than Glass UI: 1"), "W1.5 counts the others")
+-- The answers are kept apart from the log, so trimming can't lose them.
+local R = SkinProbeDB.results
+eq(R["W1.5"].others, 1, "W1.5 is in the results table")
+eq(R["W1.4"].gamepad, false, "W1.4 is in the results table")
+eq(R.leatrixSimpleFrame, true, "Leatrix's mode is in the results table")
+check(type(R["W1.1.MerchantFrame"]) == "string" and R["W1.1.MerchantFrame"]:find("protected=", 1, true),
+      "each W1.1 frame is in the results table")
 check(logHas("Leatrix Maps SimpleMapFrame=nil -> simple frame true"), "Leatrix's unset option is its default On")
 check(logHas("W1.1 merchant MerchantFrame Frame protected="), "W1.1 describes each frame")
 style = 1
@@ -105,6 +116,8 @@ check(logHas("unknown target"), "and says so")
 T.Probe:ClearLog()
 local tried, ignored = T.fade("merchant")
 eq(ignored, 1, "exactly the gradient texture ignores SetAlpha")
+eq(SkinProbeDB.results["W1.2.fade.merchant"].ignored, 1, "the fade count is in the results table")
+check(SkinProbeDB.results["W1.2.fade.merchant"].which:find("MerchantFrame.#2", 1, true), "with the texture's path")
 check(tried >= 5, "every texture of the window was tried (" .. tostring(tried) .. ")")
 near(merchant.NineSlice.TopEdge:GetAlpha(), 0.8, "a faded texture gets its alpha back")
 check(logHas("IGNORES SetAlpha"), "the ignoring texture is named")
@@ -121,6 +134,7 @@ check(T.panels.over:GetFrameLevel() > T.panels.under:GetFrameLevel(), "over sits
 T.panelsOff()
 eq(next(T.panels), nil, "panels off removes both")
 local nb = T.borderFade()
+eq(maximizeArt:GetAlpha(), 1, "a button's art is never faded (the first run hid the maximise button)")
 check(nb >= 4, "the border's textures fade (" .. nb .. ")")
 eq(map.BorderFrame.NineSlice.Center:GetAlpha(), 0, "a border texture is at 0 while faded")
 eq(T.borderRestore(), nb, "every faded texture is restored")
