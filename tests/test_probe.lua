@@ -154,7 +154,7 @@ eq(SkinProbeDB.results["W1.6.readback"].B, 1, "the readback is in the results ta
 T.gradientOff()
 
 -- The procedures are defined and every step's run and check works here.
-for _, name in ipairs({ "wave1", "map", "gradient" }) do
+for _, name in ipairs({ "wave1", "map", "gradient", "merchant" }) do
     local p = FP.procedures["SkinProbe/" .. name]
     check(p ~= nil, "procedure " .. name .. " is defined")
     if p then

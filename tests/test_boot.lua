@@ -11,9 +11,11 @@ for k, v in pairs(GUI.failures) do io.write("    " .. k .. ": " .. v .. "\n") en
 check(type(GUI.db) == "table", "saved settings ready")
 eq(GUI.db, GlassUIDB, "the settings are GlassUIDB")
 
--- Our globals, and the library's loader; nothing else.
+-- Our globals, and the library's loader; nothing else. Blizzard's windows
+-- (the stub's FrameXML) aren't ours.
 local ALLOWED = { GlassUI = true, GlassUIDB = true, LibStub = true,
                   SLASH_GLASSUI1 = true, SLASH_GLASSUI2 = true }
+for _, name in ipairs(WoW.blizzGlobals) do before[name] = true end
 for k in pairs(_G) do
     if not before[k] then check(ALLOWED[k], "no stray global: " .. tostring(k)) end
 end

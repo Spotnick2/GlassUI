@@ -15,6 +15,9 @@
 --   W1.6       the gradient questions left open              /fp steps skin gradient
 -- The guided run for the windows is /fp steps skin wave1.
 --
+-- Each skin's acceptance, on the real addon, with screenshots:
+--   #4 merchant                                              /fp steps skin merchant
+--
 -- The only writes to Blizzard objects are SetAlpha, always put back at once
 -- (`fade`) or by `border restore`, and our own frames parented to the map.
 -- Every client call that may be missing or throw goes through Probe:Try or a
@@ -37,9 +40,11 @@ local function plain(v)
     return v
 end
 
--- obj:method(...) under pcall: ok, ... (false when the method is absent).
+-- obj:method(...) under pcall: ok, ... (false when obj isn't an object or the
+-- method is absent).
 local function call(obj, method, ...)
-    local fn = obj and obj[method]
+    if type(obj) ~= "table" then return false end
+    local fn = obj[method]
     if type(fn) ~= "function" then return false end
     return pcall(fn, obj, ...)
 end
@@ -528,6 +533,88 @@ Probe:Steps("gradient", {
     { text = "Is square C visible? (an image texture, gradient, then SetAlpha 0)", ask = true },
     { text = "Is square D visible? (an image texture, no gradient, SetAlpha 0)", ask = true },
     { text = "Removes the squares.", button = "Remove", run = function() gradientOff(); return true end },
+    { text = "Type /reload to save the results.", reload = true },
+})
+
+--------------------------------------------------------------------------------
+-- Acceptance: the merchant skin (#4), on the real addon (docs/PLAN.md,
+-- milestone 3: "the in-game routine for that window with taintLog 1 and
+-- scriptErrors 1, a functional check, off and on again, after a /reload, in
+-- combat where it applies"). The look is judged from the screenshots.
+--------------------------------------------------------------------------------
+
+local function glassUI() return rawget(_G, "GlassUI") end
+
+-- Glass UI's switch for the merchant skin, through its own engine.
+local function switch(on)
+    local G = glassUI()
+    if not (G and G.Engine) then return false, "Glass UI not loaded" end
+    return G.Engine.SetEnabled("merchant", on)
+end
+
+-- The merchant skin's switch line, and a few of its regions' alphas.
+local function merchantState(label)
+    local G = glassUI()
+    local status = G and G.Engine and G.Engine.Status("merchant") or "Glass UI not loaded"
+    local m = frameByName("MerchantFrame")
+    local parts = {}
+    for _, key in ipairs({ "NineSlice", "Bg", "TopTileStreaks" }) do
+        local ok, a = call(m and m[key], "GetAlpha")
+        parts[#parts + 1] = key .. "=" .. (ok and num(a) or "?")
+    end
+    local ok, a = call(frameByName("MerchantItem1SlotTexture"), "GetAlpha")
+    parts[#parts + 1] = "slot1=" .. (ok and num(a) or "?")
+    say("M " .. label .. ": " .. status .. "; " .. table.concat(parts, " ") .. " combat=" .. tostring(InCombatLockdown()))
+    record("M." .. label, status .. "; " .. table.concat(parts, " "))
+    return status, table.concat(parts, " ")
+end
+
+local function nineAlpha()
+    local m = frameByName("MerchantFrame")
+    local ok, a = call(m and m.NineSlice, "GetAlpha")
+    return ok and plain(a) or nil
+end
+
+local function setCVar(name, value)
+    local cvar = rawget(_G, "C_CVar")
+    local set = cvar and cvar.SetCVar
+    if not set then return false end
+    local ok, r = pcall(set, name, value)
+    return ok and r
+end
+
+Probe:Steps("merchant", {
+    title = "Glass UI: the merchant skin",
+    { text = "Turns on script errors and the taint log (Logs\\taint.log), and reads the skin's switch.",
+      auto = true, run = function()
+          return setCVar("scriptErrors", "1"), setCVar("taintLog", "1"), merchantState("start")
+      end,
+      check = function() local s = merchantState("check"); return s == "on", s end },
+    { text = "Talk to any vendor.", event = "MERCHANT_SHOW" },
+    { text = "The merchant window in glass. Press Next for a screenshot.", screenshot = "merchant, skinned",
+      check = function() return nineAlpha() == 0, merchantState("shown") end },
+    { text = "Can you read every item name and price clearly?", ask = true },
+    { text = "Buy one cheap item. Did it land in your bags, and the money go?", ask = true },
+    { text = "Sell an item from your bags (right-click it). Did it sell?", ask = true },
+    { text = "Open the Buyback tab, then press Next for a screenshot.", screenshot = "merchant, buyback tab",
+      check = function() return nineAlpha() == 0, merchantState("buyback") end },
+    { text = "Buy back the item you sold. Did it come back?", ask = true },
+    { text = "Go back to the Merchant tab. If this vendor repairs and something of yours is damaged, "
+          .. "repair it. Did it work? (No if you couldn't test it, and say why in the Note.)", ask = true },
+    { text = "Switches the skin off, live.", button = "Skin off", screenshot = "merchant, skin off",
+      run = function() return switch(false), merchantState("off") end,
+      check = function() return nineAlpha() == 1, "the border is back" end },
+    { text = "Does the window look exactly like Blizzard's own again?", ask = true },
+    { text = "Switches the skin on again, live.", button = "Skin on", screenshot = "merchant, skin on again",
+      run = function() return switch(true), merchantState("on again") end,
+      check = function() return nineAlpha() == 0, "faded again" end },
+    { text = "Close the merchant window, then reload.", reload = true },
+    { text = "Talk to the vendor again.", event = "MERCHANT_SHOW" },
+    { text = "After the reload. Press Next for a screenshot.", screenshot = "merchant, after reload",
+      check = function() return nineAlpha() == 0, merchantState("after reload") end },
+    { text = "Optional, Skip if it isn't easy: close the window, get into combat next to a vendor (pull "
+          .. "something), and talk to the vendor while fighting.", event = "MERCHANT_SHOW",
+      check = function() return InCombatLockdown() and nineAlpha() == 0, merchantState("combat") end },
     { text = "Type /reload to save the results.", reload = true },
 })
 

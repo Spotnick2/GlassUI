@@ -34,6 +34,16 @@ combat.
 | W1.5 | Does any installed addon other than Glass UI set `/gui`? | `state` | **70374: no.** Only `SLASH_GLASSUI2`, with Leatrix Maps, Skilled and nine Glass addons loaded. |
 | W1.6 | Gradients: does `SetAlpha(0)` made **before** `SetGradient` survive it (square B)? Does an **image** texture with a gradient ignore `SetAlpha` too (square C)? A is the measured case, D the control. | gradient procedure | **70374: once a texture has a gradient, `SetAlpha` can't hide it, whatever the order or kind.** A, B and C all show and read 1; D hides and reads 0. B: `SetAlpha(0)` before `SetGradient` is undone by it. C: an image texture (`WHITE8X8`) with a gradient ignores `SetAlpha` like a colour texture. So a gradient texture is hidden by `SetTexture(nil)` (Blank) or dimmed through its gradient colours' alpha (LibGlass r7's wash), never by `SetAlpha`. |
 
+## Acceptance (each skin, on the real addon)
+
+Each skin's in-game routine (docs/PLAN.md, milestone 3): the window used for real with
+`taintLog 1` and `scriptErrors 1`, off and on live, after a /reload, in combat where it applies.
+The look is judged from the procedure's screenshots; `Logs\taint.log` is read after the run.
+
+| Skin | Procedure | Result |
+|---|---|---|
+| Merchant (#4) | `/fp steps skin merchant`: buy, sell, buyback, repair; skin off and on live; after /reload; in combat (optional) | open |
+
 ## Facts already known (don't re-measure)
 
 - wow-ui-source branch `forever` is build 1.60.1.70374, the same as the API dump.

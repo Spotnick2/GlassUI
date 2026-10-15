@@ -9,8 +9,11 @@ local say = API.Print
 
 -- GlassUIDB, account-wide. Only what the player SET is saved: the
 -- rest falls through to DEFAULTS, so a changed default reaches everyone
--- (GlassMail's rule). The settings themselves arrive with their features.
-local DEFAULTS = {}
+-- (GlassMail's rule).
+--   enabled  the master switch (false: every skin off)
+--   skins    { [key] = false } for each skin switched off (Engine.SetEnabled)
+--   theme    Theme.NAMES
+local DEFAULTS = { enabled = true, theme = "clear" }
 GUI.DEFAULTS = DEFAULTS
 
 local function ensureDefaults()
@@ -49,15 +52,48 @@ end
 -- The command list: /glassui help prints it.
 local function helpLines()
     return {
+        "/glassui skins - every skin and whether it is on",
+        "/glassui skin <name> on|off - one skin",
+        "/glassui on|off - every skin (the master switch)",
+        "/glassui theme clear|smoked|class - the glass",
         "/glassui failures - what failed to build or register",
         "/glassui version - client build vs the measured one",
     }
 end
 GUI.HelpLines = helpLines
 
+local function skins()
+    local Engine = GUI.Engine
+    if #Engine.list == 0 then say("no skins") return end
+    if GUI.db and GUI.db.enabled == false then say("every skin is off (/glassui on)") end
+    for _, s in ipairs(Engine.list) do
+        say(s.def.key .. " (" .. s.def.title .. "): " .. Engine.Status(s.def.key))
+    end
+end
+
+local function reloadNote(result)
+    if result == "reload" then say("/reload to finish: a skin that isn't live can't be undone in place") end
+end
+
 local function slash(msg)
-    local cmd = (msg or ""):lower():match("^%s*(%S*)")
-    if cmd == "failures" then
+    local cmd, a, b = (msg or ""):lower():match("^%s*(%S*)%s*(%S*)%s*(%S*)")
+    local Engine = GUI.Engine
+    if cmd == "skins" then
+        skins()
+    elseif cmd == "skin" and Engine.byKey[a] and (b == "on" or b == "off") then
+        reloadNote(Engine.SetEnabled(a, b == "on"))
+        say(a .. ": " .. Engine.Status(a))
+    elseif cmd == "skin" then
+        say("/glassui skin <name> on|off, where name is one of /glassui skins")
+    elseif cmd == "on" or cmd == "off" then
+        reloadNote(Engine.SetMaster(cmd == "on"))
+        say("every skin " .. cmd)
+    elseif cmd == "theme" and GUI.Theme.IsValid(a) then
+        GUI.Theme.Set(a)
+        say("theme: " .. GUI.Theme.LABELS[a])
+    elseif cmd == "theme" then
+        say("/glassui theme " .. table.concat(GUI.Theme.NAMES, "|") .. " (now " .. GUI.Theme.Name() .. ")")
+    elseif cmd == "failures" then
         failures()
     elseif cmd == "version" then
         say("version " .. GUI.VersionText() .. ", client " .. API.ClientBuild()
@@ -78,7 +114,10 @@ boot:SetScript("OnEvent", function(_, event, arg1)
     elseif event == "PLAYER_LOGIN" then
         -- SavedVariables are read here at the latest (porting guide: not at file scope).
         if not GUI.db then GUI.db = ensureDefaults() end
+        GUI.Theme.Refresh()
+        GUI.Engine.Start()
     elseif event == "PLAYER_ENTERING_WORLD" then
+        GUI.Theme.Retry()
         -- arg1 = isInitialLogin. The build warning asks the developer to re-measure.
         if arg1 and GUI.IsDev() and API.ClientBuild() ~= GUI.MEASURED_ON_BUILD then
             say("client build " .. API.ClientBuild() .. " differs from the one this addon was measured on ("

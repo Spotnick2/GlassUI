@@ -11,4 +11,8 @@
 Libs\LibGlass-1.0\LibGlass-1.0.xml
 Compat.lua
 Glass.lua
+Theme.lua
+Skin\Engine.lua
+Skin\Kit.lua
+Skin\Merchant.lua
 GlassUI.lua
