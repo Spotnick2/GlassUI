@@ -91,7 +91,9 @@ in the dump, event names validated against the dump, every widget method recorde
 `tests\harness.lua` (`check`, `eq`, `near`, `loadAddon`), `test_methods.lua` (every method called
 exists on this client). The contract test arrives with the engine (#3). **Mutation-test every new
 test.** Offline tests can't cover taint, rendering or the live client: that's the probe and each
-skin's in-game acceptance.
+skin's in-game acceptance. **`test_probe` runs locally only:** ForeverProbe is private, so CI sets
+`FOREVERPROBE_OPTIONAL=1` and it skips there (ForeverProbe GUIDE section 8). Run
+`tests\run.ps1` before every PR that touches the probe.
 
 ## Workflow and releasing
 

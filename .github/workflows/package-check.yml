@@ -45,23 +45,6 @@ jobs:
           bash tests/fetch_external.sh Libs/LibGlass-1.0 "$RUNNER_TEMP/LibGlass"
           echo "LIBGLASS=$RUNNER_TEMP/LibGlass" >> "$GITHUB_ENV"
 
-      # SkinProbe is a ForeverProbe module, and its test loads the host: at the
-      # tag Tools/SkinProbe/forever-probe.pin names, never a moving branch
-      # ($FOREVERPROBE, as locally). ForeverProbe is private, so the clone
-      # takes the FOREVERPROBE_TOKEN secret (read-only Contents on that repo;
-      # ForeverProbe GUIDE section 8). The host is only in the probe's TOC,
-      # never in the package.
-      - name: Fetch ForeverProbe at its pinned tag
-        env:
-          TOKEN: ${{ secrets.FOREVERPROBE_TOKEN }}
-        run: |
-          test -n "$TOKEN" || { echo "the FOREVERPROBE_TOKEN secret is missing"; exit 1; }
-          tag=$(tr -d '\r\n ' < Tools/SkinProbe/forever-probe.pin)
-          test -n "$tag" || { echo "Tools/SkinProbe/forever-probe.pin is empty"; exit 1; }
-          git clone --quiet --depth 1 --branch "$tag" \
-            "https://x-access-token:${TOKEN}@github.com/Spotnick2/ForeverProbe.git" "$RUNNER_TEMP/ForeverProbe"
-          echo "FOREVERPROBE=$RUNNER_TEMP/ForeverProbe" >> "$GITHUB_ENV"
-
       # WoW runs Lua 5.1, so the tests do too. tests/run.ps1 is the Windows
       # entry point for the same files.
       - name: Syntax-check every Lua file
@@ -72,7 +55,11 @@ jobs:
           find . -name '*.lua' -not -path './.git/*' -not -path './Libs/*' -print0 | xargs -0 luac5.1 -p
 
       # Without the API dump (local only), test_methods skips the method check.
+      # SkinProbe's test needs ForeverProbe, which is private and local: it
+      # runs locally only, and skips here (ForeverProbe GUIDE section 8).
       - name: Unit tests
+        env:
+          FOREVERPROBE_OPTIONAL: "1"
         run: |
           for f in tests/test_*.lua; do
             echo "-- $f"
