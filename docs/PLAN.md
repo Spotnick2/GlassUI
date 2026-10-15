@@ -28,7 +28,8 @@ Glass UI is two things:
 - **The skin list** (owner, 2026-10-15): tooltips, static popups, menus, the Escape menu, the
   character sheet, the world map, the bag windows, the spellbook, talents, professions, the merchant,
   the auction house, the guild and friends UI, the group finder, the damage meter, the cooldown
-  manager. Mail, chat, the minimap, the quest tracker, the action/bag/micro bars and the unit and
+  manager, and Forever's Legacy window (its talent tree, challenges and reward track). Mail, chat,
+  the minimap, the quest tracker, the action/bag/micro bars and the unit and
   raid frames already belong to sibling addons.
 - **Private GitHub repo** (`Spotnick2/GlassUI`) for now, with issues and PRs; only the owner merges.
 - **CurseForge:** project id `1745875`, https://www.curseforge.com/wow/addons/glass-ui.
@@ -70,6 +71,7 @@ lines in each TOC are the authoritative list of Forever-only variants (FV below)
 | Professions | `ProfessionsFrame`, `ProfessionsBookFrame` | Blizzard_Professions, Blizzard_ProfessionsBook, LoD | FV `ProfessionsFrameBase` (side tab, right tabs 1-7); `ButtonFrameTemplate` | recipe rows are protected (Ellesmere WindowPacks:1895); Skilled hooks it |
 | Group finder | `LFGParentFrame` | Blizzard_GroupFinder_VanillaStyle, LoD | custom, side tabs | retail `PVEFrame` is excluded on Forever (`Blizzard_GroupFinder.toc:10`) |
 | Spellbook + talents | `PlayerSpellsFrame` (`SpellBookFrame`, `TalentsFrame`, `SpecFrame` inside) | Blizzard_PlayerSpells, LoD | FV `PortraitFrameTemplate, TabSystemOwnerTemplate` | spell items call protected `CastSpellBookItem` (`Blizzard_SpellBookItem.lua:610`): alpha only, nothing on the click path; taint pass |
+| Legacy (talent tree, challenges, reward track) | `LegacySystemFrame` (`TreePage.LegacyTreeTraitPanel`, challenges page, reward track page) | Blizzard_LegacySystem, LoD, **Forever only** | `PortraitFrameTemplate`, `LargeSideTabButtonTemplate` side tabs | the tree is a `Blizzard_SharedTalentUI` trait panel with pooled talent buttons (`Blizzard_LegacySystem.lua:30-40`): alpha only on the buttons, nothing on the learn path; taint pass |
 | Guild | `CommunitiesFrame` | Blizzard_Communities, always (FV overrides) | `ButtonFrameTemplateMinimizable` | never hook the roster's ColumnDisplay or move rows (Ellesmere WindowPacks:3189-3202); taint pass |
 | Friends | `FriendsFrame` (FV), or `SocialUIFrame` when `SocialUIControl.IsEnabled()` | always | `ButtonFrameTemplate`, TabSystem header, `PanelTabButtonTemplate` | both must be skinned (`Camelot\FriendsFrame.lua:1262`) |
 | Damage meter | `DamageMeter` + session/source windows | Blizzard_DamageMeter (`standard, camelot`) | `EditModeDamageMeterSystemTemplate` | an Edit Mode system with secret values: chrome only |
@@ -327,7 +329,8 @@ bundles (each addon exports an allowlist; Glass UI only packages them).
      glass or the tint-only fallback is decided from that.
    - **Wave 3, load-on-demand windows with neighbours:** auction house (with Auctionator),
      professions (with Skilled), group finder.
-   - **Wave 4, protected windows:** spellbook and talents (`PlayerSpellsFrame`), guild
+   - **Wave 4, protected windows:** spellbook and talents (`PlayerSpellsFrame`), the Legacy window
+     (`LegacySystemFrame`, its talent tree on the same shared talent UI), guild
      (`CommunitiesFrame`), friends (`FriendsFrame` and `SocialUIFrame`).
    - **Wave 5, HUD systems with secret data:** damage meter and cooldown manager, chrome only.
    - **Hub v2+**, each its own decision: theme following, unlock-all, settings bundles.
