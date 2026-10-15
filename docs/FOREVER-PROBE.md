@@ -1,26 +1,43 @@
 # Forever probe: Glass UI
 
 What has to be measured on the live client before each wave of skins, and what was found.
-`Tools/SkinProbe/` (it arrives with #2) is a ForeverProbe module (`..\ForeverProbe\docs\GUIDE.md`): deploy with
-`pwsh Tools\deploy.ps1 -Probe`, `/reload`, then `/fp skin <command>`. Its lines go to the `/fp`
-console and to `WTF\Account\<account>\SavedVariables\SkinProbe.lua`. Record the build with every
-result.
+`Tools/SkinProbe/` is a ForeverProbe module (`..\ForeverProbe\docs\GUIDE.md`). Its lines go to the
+`/fp` console and to `WTF\Account\<account>\SavedVariables\SkinProbe.lua`; the procedures' records
+go to `ForeverProbe.lua` (`steps.records["SkinProbe/<name>"]`). Record the build with every result.
 
 The probe is discovery. Each skin's acceptance is on its final implementation (docs/PLAN.md,
 milestones), not on the probe's copy.
 
+## Running it
+
+1. `pwsh Tools\deploy.ps1 -Probe` (deploys Glass UI, LibGlass, ForeverProbe and SkinProbe), then
+   `/console scriptErrors 1` and `/reload` in game.
+2. `/fp steps skin wave1`, then `/fp steps skin map`, then `/fp steps skin gradient`. Each is a
+   panel of buttons: do what a step says, answer its questions, type anything odd into its Note box.
+   Each ends with `/reload`, which saves the results to disk; nothing needs pasting.
+3. One-off commands: `/fp skin` lists them (`state`, `tree <target> [depth]`, `fade <target>`,
+   `panels on|off`, `border fade|restore`, `gradient on|off`, `clear`). Targets: `merchant`,
+   `popup`, `character`, `map`.
+
+The only writes to Blizzard objects are `SetAlpha` on textures, each put back at once (`fade`) or
+by `border restore` (the map procedure's last step does it). `fade` and the map panels refuse in
+combat.
+
 ## Wave 1 (#2)
 
-| # | Question | Result |
-|---|---|---|
-| W1.1 | Merchant, static popups, character sheet, world map: the real frame on this client, protected or not, strata and level | open |
-| W1.2 | Each target's region tree (names, parentKeys, layers, templates) the kit will touch | open |
-| W1.3 | World map `frameBuffer="true"`: does a child glass panel render correctly? (gates the map skin) | open |
-| W1.4 | How the gamepad interface style is detected (the stand-down) | open |
-| W1.5 | Is `/gui` already taken by an installed addon? | open |
+| # | Question | How | Result |
+|---|---|---|---|
+| W1.1 | Merchant, static popups, character sheet (six panes), world map: does each frame exist; protected; strata, level, size; flattens render layers? | `state` (wave1 step 1) | open |
+| W1.2 | Each target's frame and region tree (type, name, parentKey, layer, atlas or texture, alpha), and **which textures ignore `SetAlpha`** (they carry a gradient, so `kit:Fade` can't hide them) | `tree`, `fade` (wave1 steps 2-6, map step 1) | open |
+| W1.3 | World map `frameBuffer="true"`: does a glass panel of our own render as a child of `WorldMapFrame`, see-through, over the map and behind its faded border, windowed and maximised? | map procedure | open |
+| W1.4 | Is the gamepad interface style detected by `C_InputInterfaceStyle.GetCurrentStyle() == Enum.InputDeviceInterfaceType.Gamepad` (Ellesmere's test)? | `state` | open |
+| W1.5 | Does any installed addon other than Glass UI set `/gui`? | `state` | open |
+| W1.6 | Gradients: does `SetAlpha(0)` made **before** `SetGradient` survive it (square B)? Does an **image** texture with a gradient ignore `SetAlpha` too (square C)? A is the measured case, D the control. | gradient procedure | open |
 
 ## Facts already known (don't re-measure)
 
 - wow-ui-source branch `forever` is build 1.60.1.70374, the same as the API dump.
+- A colour texture painted with `SetGradient` ignores a later `SetAlpha`, and `GetAlpha()` keeps
+  reading 1 (porting guide section 3, measured twice on 70374).
 - Leatrix Maps 1.60.23 reads "Simple map frame" once at its `ADDON_LOADED` (default On), applies
   it at `PLAYER_LOGIN`, and writes it back at logout (`Leatrix_Maps.lua:2887, 2956, 2962`).

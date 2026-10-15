@@ -107,3 +107,22 @@ function loadAddon(opts)
     WoW.flushTimers(0)
     return GlassUI
 end
+
+-- ForeverProbe, the host SkinProbe depends on, from its checkout
+-- ($FOREVERPROBE, else ..\ForeverProbe; CI fetches the tag in
+-- Tools/SkinProbe/forever-probe.pin). Loaded into THIS stub environment, the
+-- way the client loads a dependency: its files, then its ADDON_LOADED
+-- (GlassChat's loadForeverProbe, ForeverProbe GUIDE section 8).
+function loadForeverProbe()
+    local root = (os.getenv("FOREVERPROBE") or "../ForeverProbe"):gsub("\\", "/"):gsub("/$", "")
+    local toc = io.open(root .. "/ForeverProbe.toc", "rb")
+    if not toc then error("ForeverProbe checkout not found at " .. root .. ": clone it there or set FOREVERPROBE", 0) end
+    local files = {}
+    for line in toc:read("*a"):gmatch("[^\r\n]+") do
+        if line:match("%.lua$") and not line:match("^#") then files[#files + 1] = root .. "/" .. line end
+    end
+    toc:close()
+    for _, file in ipairs(files) do assert(loadfile(file))("ForeverProbe", {}) end
+    WoW.fire("ADDON_LOADED", "ForeverProbe")
+    return ForeverProbe
+end

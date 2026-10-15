@@ -126,13 +126,20 @@ function Methods.GetCenter(w) return w._cx, w._cy end
 function Methods.GetEffectiveScale(w) return w._effScale or 1 end
 function Methods.SetScale(w, s) w._scale = s end
 function Methods.GetScale(w) return w._scale end
-function Methods.SetAlpha(w, a) w._alpha = a end
+-- A texture painted with SetGradient ignores a later SetAlpha, and GetAlpha
+-- keeps reading 1 (porting guide section 3, measured on 70374 twice). Tests
+-- passed against that bug until Glass Quest Tracker's stub behaved like this.
+function Methods.SetAlpha(w, a)
+    if w._gradient then return end
+    w._alpha = a
+end
 function Methods.GetAlpha(w) return w._alpha end
 function Methods.GetFrameLevel(w) return w._level end
 function Methods.SetFrameLevel(w, l) w._level = l end
 function Methods.SetFrameStrata(w, s) w._strata = s end
 function Methods.GetFrameStrata(w) return w._strata or "MEDIUM" end
 function Methods.GetName(w) return w._name end
+function Methods.GetParentKey(w) return w._parentKey end
 function Methods.GetParent(w) return w._parent end
 function Methods.SetParent(w, p)
     if w._parent and w._parent._children then
@@ -258,6 +265,10 @@ function Methods.RemoveMaskTexture(t, m)
 end
 function Methods.SetGradient(t, orientation, c1, c2)
     assert(type(c1) == "table" and type(c2) == "table", "SetGradient takes color objects on this API")
+    t._gradient = { orientation, c1, c2 }
+    -- Assumed, not measured: an alpha set BEFORE the gradient doesn't survive
+    -- it. SkinProbe's square B (W1.6) settles that; fix this line if it does.
+    t._alpha = 1
 end
 function Methods.SetFont(fs, file, size, flags) fs._font = { file, size, flags }; return true end
 
@@ -391,7 +402,7 @@ WoW.reset()
 
 -- Strict globals.
 -- LibStub: the embedded library's own loader reads _G.LibStub before creating it.
-local allowNil = { GlassUI = true, GlassUIDB = true,
+local allowNil = { GlassUI = true, GlassUIDB = true, SkinProbeDB = true,
                    SLASH_GLASSUI1 = true, SLASH_GLASSUI2 = true, LibStub = true }
 setmetatable(_G, { __index = function(_, k)
     if allowNil[k] then return nil end
