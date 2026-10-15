@@ -92,7 +92,7 @@ function Deploy-Probe {
     $dest = Join-Path $AddOnsPath "SkinProbe"
     Write-Host "Deploying SkinProbe -> $dest" -ForegroundColor Cyan
     New-Item -ItemType Directory -Force -Path $dest | Out-Null
-    # The TOC and Lua only: forever-probe.pin is CI's.
+    # The TOC and Lua only.
     Get-ChildItem -LiteralPath $ProbeDir -File |
         Where-Object { $_.Extension -in ".toc", ".lua" } | ForEach-Object {
         Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $dest $_.Name) -Force

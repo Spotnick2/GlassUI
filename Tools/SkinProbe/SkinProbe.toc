@@ -1,0 +1,10 @@
+## Interface: 16001
+## Title: SkinProbe
+## Notes: Throwaway probe for Glass UI: the wave-1 windows' frames, regions and fades, glass on the world map, gradients, gamepad style. A ForeverProbe module: /fp skin
+## Author: Spotnick
+## Version: dev
+## Dependencies: ForeverProbe
+## OptionalDeps: GlassUI
+## SavedVariables: SkinProbeDB
+
+SkinProbe.lua
