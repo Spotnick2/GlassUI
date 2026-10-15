@@ -1,0 +1,14 @@
+## Interface: 16001
+## Title: |cff7fd4ffGlass|r UI
+## Notes: Blizzard's windows in liquid glass, each skin with its own switch, and one home for the Glass addons. /glassui help
+## Author: Spotnick
+## Version: @project-version@
+## X-License: MIT
+## Category: |cff7fd4ffGlass|r
+## IconTexture: Interface\Icons\inv_misc_gem_diamond_01
+## SavedVariables: GlassUIDB
+
+Libs\LibGlass-1.0\LibGlass-1.0.xml
+Compat.lua
+Glass.lua
+GlassUI.lua
