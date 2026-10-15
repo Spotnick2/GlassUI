@@ -1,0 +1,226 @@
+-- The skin engine (docs/PLAN.md, "Tests"): Active gates every callback,
+-- owners and yields, the late-owner handover, a throwing skin disabled alone,
+-- load-on-demand windows, protected windows deferred and held through combat,
+-- the gamepad stand-down, the suite check, and the kit's guards. Test skins on
+-- plain frames; the merchant's own test is test_merchant.lua.
+dofile("tests/wow_stubs.lua")
+dofile("tests/harness.lua")
+
+-- A window and a skin that counts its passes and fades one texture.
+local function window(name)
+    local f = CreateFrame("Frame", name, UIParent)
+    f:Hide()
+    f.Art = f:CreateTexture(nil, "BACKGROUND")
+    return f
+end
+local function skin(key, f, extra)
+    local def = { key = key, title = key, live = true, frames = function() return f end, n = { install = 0, style = 0 } }
+    def.install = function(kit, frame) def.n.install = def.n.install + 1; kit:Panel(frame) end
+    def.style = function(kit, frame) def.n.style = def.n.style + 1; kit:Fade(frame.Art) end
+    for k, v in pairs(extra or {}) do def[k] = v end
+    return def
+end
+-- Load with these skins registered (after the files, before login).
+local function session(defs, opts)
+    opts = opts or {}
+    local before = opts.before
+    opts.before = function()
+        for _, d in ipairs(defs) do GlassUI.Engine.Register(d) end
+        if before then before() end
+    end
+    return loadAddon(opts)
+end
+local function said(text) return table.concat(WoW.chat, "\n"):find(text, 1, true) ~= nil end
+
+-- Nothing runs before login; then a shown window is styled at once.
+local f, d
+local active
+local GUI = session({}, { before = function()
+    f = window("TestA")
+    d = skin("a", f)
+    GlassUI.Engine.Register(d)
+    active = GlassUI.Engine.Active("a")
+end })
+eq(active, false, "inactive before PLAYER_LOGIN")
+eq(d.n.install, 0, "a hidden window isn't touched at login")
+f:Show()
+eq(d.n.install, 1, "installed at its first OnShow")
+eq(d.n.style, 1, "and styled")
+f:Hide(); f:Show()
+eq(d.n.install, 1, "installed once")
+eq(d.n.style, 2, "styled again at every show (Blizzard may have reset a reused region)")
+eq(f.Art:GetAlpha(), 0, "the kit's fade")
+
+-- Off: the OnShow hook stays (it can't be removed) but does nothing.
+GUI.Engine.SetEnabled("a", false)
+f:Hide(); f:Show()
+eq(d.n.style, 2, "a switched-off skin's hook does nothing")
+eq(f.Art:GetAlpha(), 1, "and its fade is given back")
+
+-- Owners: one loaded at login wins for the session.
+local f2, d2 = window("TestB"), nil
+d2 = skin("b", f2, { owners = { "GlassMaps" } })
+GUI = session({ d2 }, { before = function() WoW.loaded.GlassMaps = true end })
+f2:Show()
+eq(d2.n.style, 0, "an owned window isn't styled")
+eq(GUI.Engine.Status("b"), "handled by GlassMaps", "the switch says who has it")
+
+-- A late owner (LoadAddOn mid-session): our callbacks stop, our panels hide,
+-- nothing is restored over its changes.
+local f3 = window("TestC")
+local d3 = skin("c", f3, { owners = { "GlassMaps" } })
+GUI = session({ d3 })
+f3:Show()
+local panel = f3._children[1]
+check(panel and panel:IsShown(), "our panel is up")
+WoW.loadAddOn("GlassMaps")
+check(not panel:IsShown(), "a late owner: our panel hides")
+eq(f3.Art:GetAlpha(), 0, "and nothing is restored over its changes")
+f3.Art:SetAlpha(0.7)
+eq(f3.Art:GetAlpha(), 0.7, "the new owner's alphas apply: our fade no longer holds")
+check(GUI.Engine.Status("c"):find("reload to finish the handover", 1, true), "the switch says to reload")
+f3:Hide(); f3:Show()
+eq(d3.n.style, 1, "no more passes")
+-- Rechecked at run time too, when no ADDON_LOADED was seen.
+local f4 = window("TestD")
+local d4 = skin("d", f4, { owners = { "SomeOwner" } })
+GUI = session({ d4 })
+WoW.loaded.SomeOwner = true
+f4:Show()
+eq(d4.n.style, 0, "an owner found when the callback runs wins")
+eq(GUI.Engine.Status("d"), "handled by SomeOwner", "before anything was styled: no reload needed")
+
+-- Yields, read once at login.
+local f5, f6 = window("TestE"), window("TestF")
+local d5 = skin("e", f5, { yields = { Leatrix_Maps = function() return true end } })
+local d6 = skin("f", f6, { yields = { Leatrix_Maps = function() return false end } })
+GUI = session({ d5, d6 }, { before = function() WoW.loaded.Leatrix_Maps = true end })
+f5:Show(); f6:Show()
+eq(d5.n.style, 0, "a yielding skin skips while the neighbour rebuilds the window")
+check(GUI.Engine.Status("e"):find("Leatrix_Maps", 1, true), "and says why")
+eq(d6.n.style, 1, "a false predicate: styled as usual")
+
+-- A throwing skin is disabled alone.
+local f7, f8 = window("TestG"), window("TestH")
+local d7 = skin("g", f7, { style = function() error("boom") end })
+local d8 = skin("h", f8)
+GUI = session({ d7, d8 })
+f7:Show(); f8:Show()
+check(GUI.failures["skin:g:style"] and GUI.failures["skin:g:style"]:find("boom", 1, true), "the throw is recorded")
+check(GUI.Engine.Status("g"):find("failed", 1, true), "the skin reads failed")
+eq(GUI.Engine.Active("g"), false, "and is inactive for the session")
+eq(d8.n.style, 1, "the other skin is unaffected")
+GUI._test.slash("failures")
+check(said("skin:g:style"), "/glassui failures lists it")
+
+-- A protected skin: deferred a frame, and work queued before a switch is dropped.
+local f9 = window("TestI")
+local d9 = skin("i", f9, { risk = "protected" })
+GUI = session({ d9 })
+f9:Show()
+eq(d9.n.style, 0, "a protected window is styled a frame later, not inside the show")
+WoW.flushTimers(0)
+eq(d9.n.style, 1, "then styled")
+f9:Hide(); f9:Show()
+GUI.Engine.SetEnabled("i", false)
+WoW.flushTimers(0)
+eq(d9.n.style, 1, "a deferred pass queued before a switch went off is dropped")
+GUI.Engine.SetEnabled("i", true)
+eq(d9.n.style, 1, "switching a protected skin on defers its pass too")
+WoW.flushTimers(0)
+eq(d9.n.style, 2, "then runs it")
+f9:Hide(); f9:Show()
+GUI.Engine.SetEnabled("i", false)
+GUI.Engine.SetEnabled("i", true)
+WoW.flushTimers(0)
+eq(d9.n.style, 3, "off and on with a pass queued: only the pass queued after runs (the generation changed)")
+-- First shown in combat: held until combat ends, and dropped if switched meanwhile.
+local f10, f11 = window("TestJ"), window("TestK")
+local d10 = skin("j", f10, { risk = "protected" })
+local d11 = skin("k", f11, { risk = "protected" })
+GUI = session({ d10, d11 })
+WoW.combat = true
+f10:Show(); f11:Show()
+WoW.flushTimers(0)
+eq(d10.n.install + d11.n.install, 0, "nothing installs in combat")
+GUI.Engine.SetEnabled("k", false)
+WoW.combat = false
+WoW.fire("PLAYER_REGEN_ENABLED")
+eq(d10.n.style, 0, "a switch during the wait drops every held pass (the generation changed)")
+eq(d11.n.style, 0, "including the switched-off skin's")
+f10:Hide(); f10:Show(); WoW.flushTimers(0)
+eq(d10.n.style, 1, "the next show styles it")
+WoW.combat = true
+local f12 = window("TestL")
+WoW.combat = false
+local d12 = skin("l", f12, { risk = "protected" })
+GUI = session({ d12 })
+WoW.combat = true
+f12:Show(); WoW.flushTimers(0)
+WoW.combat = false
+WoW.fire("PLAYER_REGEN_ENABLED")
+eq(d12.n.style, 1, "combat over: the held pass runs")
+
+-- Load on demand: nothing until its addon loads.
+local f13
+local d13 = { key = "m", title = "m", live = true, addon = "Blizzard_Test", n = 0,
+              frames = function() return f13 end, style = function() end }
+d13.style = function() d13.n = d13.n + 1 end
+GUI = session({ d13 })
+eq(GUI.Engine.Status("m"), "on (waits for Blizzard_Test)", "waits for its addon")
+f13 = window("TestM")
+f13:Show()
+WoW.loadAddOn("Blizzard_Test")
+eq(d13.n, 1, "attached when its addon loads, and styled since the window is up")
+
+-- Gamepad: no skin installs a hook this session.
+local f14 = window("TestN")
+local d14 = skin("n", f14)
+GUI = session({ d14 }, { before = function() WoW.style = 1 end })
+eq(f14._scripts.OnShow, nil, "the gamepad interface: no hook on any window")
+f14:Show()
+eq(d14.n.style, 0, "and nothing styled")
+check(GUI.Engine.Status("n"):find("gamepad", 1, true), "the switch says why")
+WoW.style = 0
+
+-- A full UI suite loaded: every skin off, said once.
+local f15 = window("TestO")
+local d15 = skin("o", f15)
+GUI = session({ d15 }, { before = function() WoW.loaded.ElvUI = true end })
+f15:Show()
+eq(d15.n.style, 0, "ElvUI loaded: no skin runs")
+check(said("while ElvUI is loaded"), "and says so")
+check(GUI.Engine.Status("o"):find("ElvUI", 1, true), "the switch says why")
+
+-- A skin whose window doesn't exist on this build.
+local d16 = { key = "p", title = "p", frames = function() return nil end, style = function() end }
+GUI = session({ d16 })
+check(GUI.failures["skin:p:frames"], "a missing window is recorded")
+
+-- The kit's guards.
+local f17 = window("TestQ")
+local grad = f17:CreateTexture(nil, "ARTWORK")
+grad:SetColorTexture(1, 1, 1, 1)
+grad:SetGradient("VERTICAL", CreateColor(1, 1, 1, 0), CreateColor(1, 1, 1, 1))
+local result
+local d17 = skin("q", f17, { style = function(kit) result = kit:Fade(grad) end })
+local f18 = window("TestR")
+local d18 = skin("r", f18, { style = function(kit, frame) kit:Blank(frame.Art) end })
+local f19 = window("TestS")
+local d19 = skin("s", f19, { live = false, style = function(kit, frame)
+    kit:Blank(frame.Art); kit:Tint(frame.Art, 0.5, 0.6, 0.7); kit:Shade(frame:CreateFontString())
+end })
+GUI = session({ d17, d18, d19 })
+f17:Show(); f18:Show(); f19:Show()
+eq(result, false, "a gradient texture: Fade reads the alpha back and says no")
+local key
+for k in pairs(GUI.failures) do if k:find("^fade:q:") then key = k end end
+check(key, "and records it")
+check(GUI.failures["skin:r:style"] and GUI.failures["skin:r:style"]:find("live = false", 1, true),
+      "Blank on a live skin is refused")
+eq(f19.Art:GetTexture(), nil, "Blank drops the image")
+check(f19.Art:IsDesaturated(), "Tint desaturates")
+eq(GUI.Engine.SetEnabled("s", false), "reload", "turning off a skin that isn't live asks for a /reload")
+check(GUI.Engine.Status("s"):find("after a /reload", 1, true), "and says so")
+
+done("test_engine")

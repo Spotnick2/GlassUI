@@ -7,8 +7,10 @@
 --
 -- An instance, not the library itself: its tuning and font registry are
 -- Glass UI's own and never touch another glass addon's surfaces.
--- The clean material (r6): thin rectangular rims, no grain. No textures of
--- our own: Glass.MEDIA is the library's folder.
+-- The clean material (r6): thin rectangular rims, no grain. Pinned at r8: r7's
+-- SetWash is how Theme paints a wash (a gradient ignores SetAlpha on this
+-- client, SkinProbe W1.6). No textures of our own: Glass.MEDIA is the
+-- library's folder.
 
 GlassUI = GlassUI or {}
 GlassUI.Glass = LibStub("LibGlass-1.0"):New({ preset = "clean" })

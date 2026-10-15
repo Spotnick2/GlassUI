@@ -10,6 +10,11 @@
 -- - METHOD calls: every widget method called is recorded (WoW.methodsCalled)
 --   so test_methods.lua can check each against the dump's widget methods.
 -- - The widget METATABLE is a real method table, like the client's.
+-- - BLIZZARD objects (WoW.makeMerchant): every method addon code calls on
+--   one is recorded (WoW.blizzCalls), with SetTexture/SetAtlas's argument
+--   (WoW.textureArgs); a Lua method is recorded apart (WoW.luaCalls); a field
+--   written is trapped (WoW.fieldChanges). Glass Quest Tracker's contract
+--   machinery. WoW.asBlizzard runs code as Blizzard's own.
 
 WoW = {}
 WoW.DUMP = os.getenv("GLASSQT_API_DUMP") or "C:/Projects/WoW/References/forever-api-1.60.1.70374.md"
@@ -52,6 +57,9 @@ WoW.Methods = Methods
 
 local function record(w, name)
     WoW.methodsCalled[(rawget(w, "_type") or "?") .. ":" .. name] = true
+    -- A call on a Blizzard object from addon code (not from the simulated
+    -- Blizzard side): test_contract checks each against the C-only allowlist.
+    if rawget(w, "_blizz") and not WoW.inBlizzard then WoW.blizzCalls[name] = (WoW.blizzCalls[name] or 0) + 1 end
 end
 
 -- The shared method table: any Capitalised name is a method (a no-op unless
@@ -167,6 +175,8 @@ function Methods.RegisterForDrag(w, ...) w._drag = { ... } end
 function Methods.IsMouseOver(w) return WoW.mouseOver[w] == true end
 function Methods.GetChecked(w) return w._checked == true end
 function Methods.SetEnabled(w, v) w._enabled = v and true or false end
+function Methods.Enable(w) w._enabled = true end
+function Methods.Disable(w) w._enabled = false end
 function Methods.IsEnabled(w) return w._enabled ~= false end
 function Methods.SetChecked(w, v) w._checked = v and true or false end
 function Methods.SetText(w, t) w._text = t end
@@ -226,7 +236,14 @@ function Methods.SetScript(w, name, fn) w._scripts[name] = fn end
 function Methods.GetScript(w, name) return w._scripts[name] end
 function Methods.HookScript(w, name, fn)
     local old = w._scripts[name]
-    w._scripts[name] = function(...) if old then old(...) end; fn(...) end
+    w._scripts[name] = function(...)
+        if old then old(...) end
+        -- The hook is addon code, even when Blizzard's side fired the script.
+        local was = WoW.inBlizzard
+        WoW.inBlizzard = false
+        fn(...)
+        WoW.inBlizzard = was
+    end
 end
 function Methods.Click(w, mouse)
     if w._scripts.OnClick then w._scripts.OnClick(w, mouse or "LeftButton", false) end
@@ -248,9 +265,14 @@ end
 function Methods.CreateTexture(w, _, layer) return region(w, "Texture", layer) end
 function Methods.CreateMaskTexture(w) return region(w, "MaskTexture") end
 function Methods.CreateFontString(w, _, layer) return region(w, "FontString", layer) end
-function Methods.SetTexture(t, file) t._file = file; t._atlas = nil; return true end
+-- On a Blizzard object, addon code's argument is kept: the contract allows
+-- only nil, or giving back the value read before.
+local function textureArg(t, method, v)
+    if rawget(t, "_blizz") and not WoW.inBlizzard then table.insert(WoW.textureArgs, { t, method, v }) end
+end
+function Methods.SetTexture(t, file) textureArg(t, "SetTexture", file); t._file = file; t._atlas = nil; return true end
 function Methods.GetTexture(t) return t._file end
-function Methods.SetAtlas(t, atlas) t._atlas = atlas; t._file = nil; return true end
+function Methods.SetAtlas(t, atlas) textureArg(t, "SetAtlas", atlas); t._atlas = atlas; t._file = nil; return true end
 function Methods.GetAtlas(t) return t._atlas end
 function Methods.SetTexCoord(t, ...) t._coords = { ... } end
 function Methods.GetTexCoord(t)
@@ -258,6 +280,18 @@ function Methods.GetTexCoord(t)
     return unpack(c)
 end
 function Methods.SetVertexColor(t, r, g, b, a) t._vertex = { r, g, b, a } end
+function Methods.GetVertexColor(t)
+    local v = t._vertex or { 1, 1, 1, 1 }
+    return v[1], v[2], v[3], v[4] or 1
+end
+function Methods.SetDesaturated(t, v) t._desat = v and true or false end
+function Methods.IsDesaturated(t) return t._desat == true end
+function Methods.SetShadowOffset(fs, x, y) fs._shadowOffset = { x, y } end
+function Methods.GetShadowOffset(fs)
+    local o = fs._shadowOffset or { 0, 0 }
+    return o[1], o[2]
+end
+function Methods.SetShadowColor(fs, r, g, b, a) fs._shadowColor = { r, g, b, a } end
 function Methods.SetRotation(t, r) t._rotation = r end
 function Methods.SetColorTexture(t, r, g, b, a) t._color = { r, g, b, a } end
 function Methods.AddMaskTexture(t, m) t._masks = t._masks or {}; table.insert(t._masks, m) end
@@ -300,6 +334,14 @@ function WoW.reset()
     WoW.class = "MAGE"
     WoW.combat = false
     WoW.loaded = {}
+    WoW.onLoaded = {}
+    WoW.style = 0
+    WoW.blizz, WoW.blizzCalls, WoW.luaCalls, WoW.fieldWrites, WoW.textureArgs = {}, {}, {}, {}, {}
+    WoW.hookedKeys = setmetatable({}, { __mode = "k" })
+    WoW.snap = setmetatable({}, { __mode = "k" })
+    WoW.inBlizzard = false
+    for _, name in ipairs(WoW.blizzGlobals or {}) do rawset(_G, name, nil) end
+    WoW.blizzGlobals = {}
     UIParent = newWidget("Frame", nil, "UIParent")
     UIParent._level = 0
     UIParent._width, UIParent._height = 1024, 768
@@ -338,8 +380,37 @@ function hooksecurefunc(t, name, fn)
         return
     end
     local orig = t[name]
-    rawset(t, name, function(self, ...) local r = orig(self, ...); fn(self, ...); return r end)
+    -- The client's own field: not an addon write (test_contract skips it).
+    if rawget(t, "_blizz") then WoW.hookedKeys[t] = WoW.hookedKeys[t] or {}; WoW.hookedKeys[t][name] = true end
+    rawset(t, name, function(self, ...)
+        local r = orig(self, ...)
+        -- The hook is addon code, even when Blizzard's side made the call.
+        local was = WoW.inBlizzard
+        WoW.inBlizzard = false
+        fn(self, ...)
+        WoW.inBlizzard = was
+        return r
+    end)
 end
+
+-- EventUtil (Blizzard_SharedXML\EventUtil.lua:67): now if loaded, else at its
+-- ADDON_LOADED. WoW.loadAddOn(name) loads one mid-session.
+EventUtil = { ContinueOnAddOnLoaded = function(name, fn)
+    if WoW.loaded[name] then fn() return end
+    WoW.onLoaded[name] = WoW.onLoaded[name] or {}
+    table.insert(WoW.onLoaded[name], fn)
+end }
+function WoW.loadAddOn(name)
+    WoW.loaded[name] = true
+    WoW.fire("ADDON_LOADED", name)
+    local list = WoW.onLoaded[name] or {}
+    WoW.onLoaded[name] = nil
+    for _, fn in ipairs(list) do fn() end
+end
+
+-- The interface style, as read on 70374 (SkinProbe W1.4: {Gamepad=1, Mkb=0}).
+Enum.InputDeviceInterfaceType = { Mkb = 0, Gamepad = 1 }
+C_InputInterfaceStyle = { GetCurrentStyle = function() return WoW.style end }
 
 -- Timers keep their delay: WoW.flushTimers(upTo) runs those due within upTo.
 C_Timer = { After = function(s, fn) table.insert(WoW.timers, { s = s, fn = fn }) end }
@@ -373,6 +444,177 @@ C_ClassColor = { GetClassColor = function(class)
     if class == "MAGE" then return { r = 0.25, g = 0.78, b = 0.92 } end
     return { r = 1, g = 1, b = 1 }
 end }
+
+--------------------------------------------------------------------------------
+-- Blizzard's objects (wow-ui-source branch forever, 70374)
+--------------------------------------------------------------------------------
+
+-- A Blizzard object: a NEW key written from addon code is trapped here;
+-- a changed EXISTING key is caught by WoW.fieldChanges() against the
+-- snapshot. Keys starting with "_" are the stub's own bookkeeping.
+local blizzMT = {
+    __index = MethodTable,
+    __newindex = function(t, k, v)
+        if type(k) == "string" and k:sub(1, 1) == "_" then return rawset(t, k, v) end
+        if not WoW.inBlizzard then table.insert(WoW.fieldWrites, tostring(k)) end
+        rawset(t, k, v)
+    end,
+}
+
+local function blizz(wtype, parent, name, layer)
+    local w = setmetatable(newWidget(wtype, parent, name), blizzMT)
+    rawset(w, "_blizz", true)
+    w._layer = layer
+    table.insert(WoW.blizz, w)
+    if parent and wtype ~= "Texture" and wtype ~= "FontString" then adopt(parent, w) end
+    if name then rawset(_G, name, w); table.insert(WoW.blizzGlobals, name) end
+    return w
+end
+WoW.blizzObject = blizz
+
+-- Run fn as Blizzard's own code.
+function WoW.asBlizzard(fn, ...)
+    local was = WoW.inBlizzard
+    WoW.inBlizzard = true
+    fn(...)
+    WoW.inBlizzard = was
+end
+
+-- The plain fields of every Blizzard object not yet snapshotted, as
+-- Blizzard's side built them.
+function WoW.snapshot()
+    for _, w in ipairs(WoW.blizz) do
+        if not WoW.snap[w] then
+            local s = {}
+            for k, v in pairs(w) do
+                if type(k) ~= "string" or k:sub(1, 1) ~= "_" then s[k] = v end
+            end
+            WoW.snap[w] = s
+        end
+    end
+end
+
+-- Fields an addon changed or added since the snapshot (hooksecurefunc's own
+-- wrapper excepted), as "key" strings.
+function WoW.fieldChanges()
+    local out = {}
+    for _, w in ipairs(WoW.blizz) do
+        local s, hooked = WoW.snap[w] or {}, WoW.hookedKeys[w] or {}
+        for k, v in pairs(w) do
+            if (type(k) ~= "string" or k:sub(1, 1) ~= "_") and not hooked[k] and s[k] ~= v then
+                out[#out + 1] = tostring(k)
+            end
+        end
+    end
+    for _, k in ipairs(WoW.fieldWrites) do out[#out + 1] = k end
+    return out
+end
+
+-- A Lua method on a Blizzard object (a mixin copy): calling one from addon
+-- code is recorded (WoW.luaCalls) as well as run.
+local function luaMethod(obj, name, fn)
+    rawset(obj, name, function(self, ...)
+        if not WoW.inBlizzard then table.insert(WoW.luaCalls, name) end
+        local was = WoW.inBlizzard
+        WoW.inBlizzard = true
+        local r = fn(self, ...)
+        WoW.inBlizzard = was
+        return r
+    end)
+end
+
+local NINE = { "TopLeftCorner", "TopRightCorner", "BottomLeftCorner", "BottomRightCorner",
+               "TopEdge", "BottomEdge", "LeftEdge", "RightEdge", "Center" }
+local function nineSlice(parent)
+    local n = blizz("Frame", parent)
+    for _, k in ipairs(NINE) do n[k] = blizz("Texture", n, nil, "OVERLAY") end
+    return n
+end
+-- InsetFrameTemplate: .Bg and .NineSlice.
+local function inset(parent, name)
+    local i = blizz("Frame", parent, name)
+    i.Bg = blizz("Texture", i, nil, "BACKGROUND")
+    i.NineSlice = nineSlice(i)
+    return i
+end
+-- PanelTabButtonTemplate (SharedUIPanelTemplates.xml:932): six base pieces,
+-- three highlight pieces, its text; PanelTemplates_SelectTab shows the
+-- Active pieces, hides the others and disables the tab (.lua:616).
+local TAB_BASE = { "Left", "Middle", "Right", "LeftActive", "MiddleActive", "RightActive" }
+local function tab(parent, name)
+    local t = blizz("Button", parent, name)
+    for _, k in ipairs(TAB_BASE) do t[k] = blizz("Texture", t, nil, "BACKGROUND") end
+    for _, k in ipairs({ "LeftHighlight", "MiddleHighlight", "RightHighlight" }) do
+        t[k] = blizz("Texture", t, nil, "HIGHLIGHT")
+    end
+    t.Text = blizz("FontString", t, nil, "ARTWORK")
+    return t
+end
+
+-- MerchantFrame (Mainline\MerchantFrame.xml, ButtonFrameTemplate), with the
+-- regions SkinProbe listed on 70374 (docs/FOREVER-PROBE.md W1.2). Hidden.
+function WoW.makeMerchant()
+    WoW.asBlizzard(function()
+        local f = blizz("Frame", UIParent, "MerchantFrame")
+        f._shown = false
+        f._level = 1
+        f.NineSlice = nineSlice(f)
+        f.NineSlice._level = 500
+        f.Bg = blizz("Texture", f, "MerchantFrameBg", "BACKGROUND")
+        f.TopTileStreaks = blizz("Texture", f, nil, "BORDER")
+        f.PortraitContainer = blizz("Frame", f)
+        f.PortraitContainer.portrait = blizz("Texture", f.PortraitContainer, "MerchantFramePortrait", "OVERLAY")
+        f.CloseButton = blizz("Button", f)
+        f.Inset = inset(f)
+        f.FilterDropdown = blizz("DropdownButton", f)
+        inset(f, "MerchantMoneyInset")
+        inset(f, "MerchantExtraCurrencyInset")
+        blizz("Frame", f, "MerchantMoneyBg")
+        blizz("Frame", f, "MerchantExtraCurrencyBg")
+        blizz("Texture", f, "MerchantFrameBottomLeftBorder", "OVERLAY")
+        blizz("Texture", f, "BuybackBG", "BACKGROUND")._shown = false
+        for i = 1, 12 do
+            local row = blizz("Frame", f, "MerchantItem" .. i)
+            row.SlotTexture = blizz("Texture", row, "MerchantItem" .. i .. "SlotTexture", "BACKGROUND")
+            blizz("Texture", row, "MerchantItem" .. i .. "NameFrame", "BACKGROUND")
+            row.Name = blizz("FontString", row, "MerchantItem" .. i .. "Name", "BACKGROUND")
+            row.ItemButton = blizz("Button", row)
+        end
+        tab(f, "MerchantFrameTab1")
+        tab(f, "MerchantFrameTab2")
+        -- A mixin method, so a call from addon code shows up in WoW.luaCalls.
+        luaMethod(f, "UpdateMerchant", function() end)
+        WoW.merchantTab(1)
+        WoW.snapshot()
+    end)
+    return MerchantFrame
+end
+
+-- Blizzard selecting merchant tab i (PanelTemplates_SelectTab and the buyback
+-- page's art, MerchantFrame.lua:480-593): Show/Hide, never an alpha.
+function WoW.merchantTab(i)
+    WoW.asBlizzard(function()
+        for n = 1, 2 do
+            local t = _G["MerchantFrameTab" .. n]
+            local on = n == i
+            t.Left:SetShown(not on); t.Middle:SetShown(not on); t.Right:SetShown(not on)
+            t.LeftActive:SetShown(on); t.MiddleActive:SetShown(on); t.RightActive:SetShown(on)
+            t:SetEnabled(not on)
+        end
+        BuybackBG:SetShown(i == 2)
+        MerchantFrameBottomLeftBorder:SetShown(i == 1)
+        WoW.bset(MerchantFrame, "selectedTab", i)
+    end)
+end
+
+-- Blizzard's side writes its own fields through here: the snapshot follows.
+function WoW.bset(t, k, v)
+    rawset(t, k, v)
+    if WoW.snap[t] then WoW.snap[t][k] = v end
+end
+
+function WoW.showMerchant() WoW.asBlizzard(function() MerchantFrame:Show() end) end
+function WoW.hideMerchant() WoW.asBlizzard(function() MerchantFrame:Hide() end) end
 
 --------------------------------------------------------------------------------
 -- Driving

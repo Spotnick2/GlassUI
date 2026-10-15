@@ -78,12 +78,15 @@ end
 -- Load the addon the way the client does, in a fresh session: every TOC line
 -- with (name, ns), the library's XML expanded in place, then ADDON_LOADED,
 -- PLAYER_LOGIN and PLAYER_ENTERING_WORLD.
+-- Blizzard's always-loaded windows exist before any addon, as FrameXML loads
+-- first: the merchant (opts.noMerchant: a client without it).
 -- opts.db: saved variables. opts.before(): runs after the files load and
 -- before ADDON_LOADED.
 function loadAddon(opts)
     opts = opts or {}
     GlassUI, GlassUIDB, LibStub = nil, nil, nil
     WoW.reset()
+    if not opts.noMerchant then WoW.makeMerchant() end
     local ns = {}
     for _, line in ipairs(tocLines()) do
         local files

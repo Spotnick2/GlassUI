@@ -25,8 +25,8 @@ file doesn't cover something, check how those handle it before you invent a new 
 - `/glassui` and `/gui` (`/glass` is GlassUnitFrames'). v0.1.0 = wave 1 + hub v1; 1.0.0 at Forever's
   launch. Private repo for now; CurseForge project 1745875.
 
-**Status:** milestone 2, SkinProbe (#2): the wave-1 measurements are in (docs/FOREVER-PROBE.md,
-70374). Next: the engine and kit (#3) with the merchant skin (#4), on LibGlass r8.
+**Status:** milestone 3: the engine, kit and theme (#3) with the merchant skin (#4), on LibGlass
+r8, waiting for the merchant's in-game acceptance (`/fp steps skin merchant`). Next: popups (#5).
 
 ## The skin contract (non-negotiable)
 
@@ -49,11 +49,16 @@ audited exceptions and the reasons are in docs/PLAN.md, "The skin contract". In 
 |---|---|
 | `Compat.lua` | `API.*`: failures, events, version, `IsSecret`/`Plain`, `CVarBool`, `ClassColor`, Settings registration |
 | `Glass.lua` | our LibGlass instance (`preset = "clean"`) |
+| `Theme.lua` | clear / smoked / class: tint, wash (`SetWash`) and the opaque backing, repainted live |
+| `Skin\Engine.lua` | `Register`, `Active`, owners/yields/handover, the switches, deferral and the combat wait, gamepad and suite stand-downs, `Status` |
+| `Skin\Kit.lua` | per-skin touches (`Fade` with read-back, `Blank`/`Tint`/`Shade` for `live = false`), `Panel`, widget kinds (`Shell`, `Inset`, `Tab`) |
+| `Skin\Merchant.lua` | the merchant window (live) |
 | `GlassUI.lua` | bootstrap, `GlassUIDB`, `/glassui` |
 
-Planned, per docs/PLAN.md: `Theme.lua`, `Skin\Engine.lua`, `Skin\Kit.lua`, `Skin\<Window>.lua`,
-`Hub.lua`, `Options.lua`. `Tools\SkinProbe\` is the ForeverProbe module (never shipped): `/fp skin`
-and the procedures `/fp steps skin wave1|map|gradient`; docs/FOREVER-PROBE.md says how to run it.
+Planned, per docs/PLAN.md: `Skin\<Window>.lua` for the rest, `Hub.lua`, `Options.lua`.
+`Tools\SkinProbe\` is the ForeverProbe module (never shipped): `/fp skin`, the measurements
+`/fp steps skin wave1|map|gradient` and each skin's acceptance (`/fp steps skin merchant`);
+docs/FOREVER-PROBE.md says how to run it.
 
 ## References
 
