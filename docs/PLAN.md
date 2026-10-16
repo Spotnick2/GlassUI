@@ -47,6 +47,7 @@ Glass UI is two things:
 **Non-goals** (each one is a separate decision later, not a "phase 2" of this addon):
 - Any behaviour change to a Blizzard window: no auto-sell, no bag sorting, no new map pins.
 - A custom options window (Ellesmere's is about 150k lines). Glass UI uses Blizzard's Settings.
+  Hosting the other addons' own pages in one window is a different thing (Hub, hosted pages).
 - Suite-wide profiles and import/export. Deferred until the adapter boundaries hold (Hub, later).
 - A shared mover engine. GlassUnitFrames' and GlassRaidFrames' movers solve different problems.
 - Nameplates, a bag replacement, a damage meter of our own, buff reminders, QoL automation.
@@ -291,6 +292,17 @@ values are copied into the sibling's own DB, so removing Glass UI changes nothin
 everything" that fans out to each addon's own movers (they keep their combat guards), and settings
 bundles (each addon exports an allowlist; Glass UI only packages them).
 
+**Hosted pages (adapter api 2, #20; owner's idea, 2026-10-16).** Glass UI hosts the Glass addons'
+configuration pages in one window, a tab per page, for pages too big for Blizzard's Settings (the
+pilot: Glass Raid Frames' click-casting window). Each addon builds its page as one frame, from a
+function that takes its parent and lays the page out to the parent's size. Without Glass UI it
+passes its own standalone window. With Glass UI it also registers
+`{ api = 2, pages = { { title = ..., build = fn } } }`, and Glass UI builds the page when its tab
+first opens. Glass UI provides only the window and the tabs. It never reads an addon's saved data,
+and every addon keeps its own window and slash command. This is not the "custom options window"
+non-goal: Glass UI writes none of the controls. The shared look of the controls is a LibGlass
+question.
+
 ## Milestones (each an issue → PR; waves are ordered by risk, then value)
 1. **Scaffold.** TOC, `.pkgmeta`, CI, test harness, `CLAUDE.md`, `README.md`, `CHANGELOG.md`,
    `LICENSE` (MIT), this plan, `docs/FOREVER-PROBE.md`, the `codex-consult` skill copied from
@@ -333,7 +345,8 @@ bundles (each addon exports an allowlist; Glass UI only packages them).
      (`LegacySystemFrame`, its talent tree on the same shared talent UI), guild
      (`CommunitiesFrame`), friends (`FriendsFrame` and `SocialUIFrame`).
    - **Wave 5, HUD systems with secret data:** damage meter and cooldown manager, chrome only.
-   - **Hub v2+**, each its own decision: theme following, unlock-all, settings bundles.
+   - **Hub v2+**, each its own decision: hosted configuration pages (#20), theme following,
+     unlock-all, settings bundles.
    - Candidates the owner hasn't asked for, listed so they aren't forgotten: bank, gossip and quest
      dialogs, loot and loot rolls, trainer, trade, inspect, macros, the AddOn list, ready check.
 
