@@ -42,7 +42,7 @@ The look is judged from the procedure's screenshots; `Logs\taint.log` is read af
 
 | Skin | Procedure | Result |
 |---|---|---|
-| Merchant (#4) | `/fp steps skin merchant`: buy, sell, buyback, repair; skin off and on live; after /reload; in combat (optional) | open |
+| Merchant (#4) | `/fp steps skin merchant`: the looks side by side (clear at 0.85, 0.6 and 0.35 backing, smoked, class); buy, sell, buyback, repair; skin off and on live; after /reload; in combat (optional) | open |
 
 ## Facts already known (don't re-measure)
 

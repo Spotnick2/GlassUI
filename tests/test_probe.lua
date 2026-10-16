@@ -153,6 +153,21 @@ eq(r.D, 0, "D (no gradient) reads 0")
 eq(SkinProbeDB.results["W1.6.readback"].B, 1, "the readback is in the results table")
 T.gradientOff()
 
+-- #4: the looks compared through Glass UI's Theme (a stand-in here), and put back.
+eq(T.themeTry("clear", 0.6), false, "without Glass UI, nothing to compare")
+local current = "class"
+local presets = { clear = { backing = 0.85 }, smoked = { backing = 0.92 }, class = { backing = 0.85 } }
+rawset(_G, "GlassUI", { Theme = { PRESETS = presets, Name = function() return current end,
+                                  Set = function(n) current = n end } })
+local name, used = T.themeTry("clear", 0.6)
+check(name == "clear" and used == 0.6 and current == "clear", "a trial: clear at a lighter backing")
+eq(select(2, T.themeTry("smoked")), 0.92, "smoked keeps its own backing")
+T.themeTry("clear", 0.35)
+T.themeRestore()
+eq(presets.clear.backing, 0.85, "Restore puts the shipped backing back")
+eq(current, "class", "and the player's theme")
+rawset(_G, "GlassUI", nil)
+
 -- The procedures are defined and every step's run and check works here.
 for _, name in ipairs({ "wave1", "map", "gradient", "merchant" }) do
     local p = FP.procedures["SkinProbe/" .. name]
