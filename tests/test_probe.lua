@@ -153,6 +153,37 @@ eq(r.D, 0, "D (no gradient) reads 0")
 eq(SkinProbeDB.results["W1.6.readback"].B, 1, "the readback is in the results table")
 T.gradientOff()
 
+-- #4: the looks compared through Glass UI's Theme (a stand-in here), and put
+-- back. The player's theme is saved in SkinProbeDB before the first trial,
+-- not kept in memory: the procedure survives a /reload, and Theme.Set saves
+-- each trial theme (Codex, PR #19).
+eq(T.themeTry("clear", 0.6), false, "without Glass UI, nothing to compare")
+local current = "class"
+local presets = { clear = { backing = 0.85 }, smoked = { backing = 0.92 }, class = { backing = 0.85 } }
+rawset(_G, "GlassUI", { Theme = { PRESETS = presets, Name = function() return current end,
+                                  Set = function(n) current = n end } })
+local name, used = T.themeTry("clear", 0.6)
+check(name == "clear" and used == 0.6 and current == "clear", "a trial: clear at a lighter backing")
+eq(SkinProbeDB.themeWas.name, "class", "the player's theme is saved before the first trial")
+eq(select(2, T.themeTry("smoked")), 0.92, "smoked keeps its own backing")
+T.themeTry("clear", 0.35)
+T.themeRestore()
+eq(presets.clear.backing, 0.85, "Restore puts the shipped backing back")
+eq(current, "class", "and the player's theme")
+eq(SkinProbeDB.themeWas, nil, "and forgets it")
+-- A /reload mid-comparison: the last session saved "smoked" as the player's
+-- theme and left the trial "class" selected; the backing is back to shipped
+-- (it lives in code). A trial after resuming keeps the saved original, and
+-- Restore gives it back.
+SkinProbeDB.themeWas = { name = "smoked", backing = 0.85 }
+current = "class"
+T.themeTry("clear", 0.6)
+eq(SkinProbeDB.themeWas.name, "smoked", "after a reload, a trial keeps the saved original")
+T.themeRestore()
+eq(current, "smoked", "and Restore gives the player's theme back after a reload")
+eq(presets.clear.backing, 0.85, "with the shipped backing")
+rawset(_G, "GlassUI", nil)
+
 -- #17: Blizzard's card. Without C_Texture (another build), nothing to report;
 -- with it, the atlas is read and the card shown beside our glass (Glass UI
 -- isn't loaded here: only the card), then removed.

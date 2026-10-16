@@ -553,6 +553,41 @@ local function switch(on)
     return G.Engine.SetEnabled("merchant", on)
 end
 
+-- The looks side by side on the open window (#4, after #17 found clear and
+-- smoked nearly alike: the opaque backing dominates). A theme, and for clear
+-- a trial backing opacity, set through Glass UI's Theme; Restore puts back
+-- the player's theme and the shipped backing. Theme.Set saves each trial
+-- theme, and the procedure survives a /reload, so the player's theme is
+-- saved too (SkinProbeDB.themeWas) until Restore: memory would lose it.
+
+local function themeTry(name, backing)
+    local G = glassUI()
+    if not (G and G.Theme) then return false, "Glass UI not loaded" end
+    local T = G.Theme
+    if type(SkinProbeDB) ~= "table" then return false, "no saved table" end
+    local was = SkinProbeDB.themeWas
+    if type(was) ~= "table" then
+        was = { name = T.Name(), backing = T.PRESETS.clear.backing }
+        SkinProbeDB.themeWas = was
+    end
+    T.PRESETS.clear.backing = backing or was.backing
+    T.Set(name)
+    local used = T.PRESETS[name].backing
+    say("THEME " .. name .. " backing " .. num(used))
+    return name, used
+end
+
+local function themeRestore()
+    local G = glassUI()
+    local was = type(SkinProbeDB) == "table" and SkinProbeDB.themeWas or nil
+    if not (type(was) == "table" and G and G.Theme) then return true end
+    G.Theme.PRESETS.clear.backing = was.backing
+    G.Theme.Set(was.name)
+    say("THEME restored: " .. tostring(was.name))
+    SkinProbeDB.themeWas = nil
+    return true
+end
+
 -- The merchant skin's switch line, and a few of its regions' alphas.
 local function merchantState(label)
     local G = glassUI()
@@ -595,6 +630,19 @@ Probe:Steps("merchant", {
     { text = "The merchant window in glass. Press Next for a screenshot.", screenshot = "merchant, skinned",
       check = function() return nineAlpha() == 0, merchantState("shown") end },
     { text = "Can you read every item name and price clearly?", ask = true },
+    { text = "Now the looks, one screenshot each. First: clear, as shipped (backing 0.85).", button = "Clear 0.85",
+      run = function() return themeTry("clear") end, screenshot = "merchant, clear 0.85" },
+    { text = "Clear with a lighter backing (0.6).", button = "Clear 0.6",
+      run = function() return themeTry("clear", 0.6) end, screenshot = "merchant, clear 0.6" },
+    { text = "Clear with a much lighter backing (0.35).", button = "Clear 0.35",
+      run = function() return themeTry("clear", 0.35) end, screenshot = "merchant, clear 0.35" },
+    { text = "Smoked.", button = "Smoked", run = function() return themeTry("smoked") end,
+      screenshot = "merchant, smoked" },
+    { text = "Class colour.", button = "Class", run = function() return themeTry("class") end,
+      screenshot = "merchant, class" },
+    { text = "Did one of the lighter clears (0.6 or 0.35) read well AND look more like glass than 0.85? "
+          .. "Say which you liked best in the Note box.", ask = true },
+    { text = "Puts your theme back.", button = "Restore", run = themeRestore },
     { text = "Buy one cheap item. Did it land in your bags, and the money go?", ask = true },
     { text = "Sell an item from your bags (right-click it). Did it sell?", ask = true },
     { text = "Open the Buyback tab, then press Next for a screenshot.", screenshot = "merchant, buyback tab",
@@ -730,4 +778,5 @@ end)
 NS._test = { Probe = Probe, state = state, tree = tree, fade = fade, slashOwners = slashOwners,
              gamepad = gamepad, panelsOn = panelsOn, panelsOff = panelsOff, borderFade = borderFade,
              borderRestore = borderRestore, gradientOn = gradientOn, gradientOff = gradientOff,
-             panels = panels, faded = faded, cardAtlas = cardAtlas, cardOn = cardOn, cardOff = cardOff }
+             panels = panels, faded = faded, cardAtlas = cardAtlas, cardOn = cardOn, cardOff = cardOff,
+             themeTry = themeTry, themeRestore = themeRestore }
