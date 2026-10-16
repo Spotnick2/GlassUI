@@ -95,7 +95,7 @@ For Glass UI, good things to hand Codex:
 were measured on the live client. Without them, a cold reviewer argues from Classic-era or Retail
 behaviour that doesn't hold here (that Classic's `SpellBookFrame` or `PVEFrame` exist, that a
 Blizzard window's own methods are harmless to call).
-`C:/Projects/WoW/References/forever-api-1.60.1.70374.md` is the full API surface when a question
+`C:/Projects/WoW/References/forever-api-1.60.1.70450.md` is the full API surface when a question
 turns on whether something exists, and `C:/Projects/WoW/wow-ui-source` (branch `forever`) is the
 client's own FrameXML. The design references are
 `C:/Projects/WoW/References/EllesmereUI-v9.5.5/EllesmereUIBlizzardSkin` and
