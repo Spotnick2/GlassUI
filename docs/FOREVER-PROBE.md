@@ -64,8 +64,10 @@ the scene showing through sharp, a gold-metal rim. One fixed size, not sliced.
 - **With `taintLog` at 1 or 2, Blizzard's own code throws "attempt to call a nil value"**, none at 0:
   in tooltips (Glass Quest Tracker, 70374, `TooltipDataHandler.lua:300`), and in the bag bar's
   layout on every bag change (70425, `BagsBar.lua:125`, `self:UpdateDividers()`: 254 errors in the
-  merchant session, none after the `/reload` that turned the log off). Ignore those stacks during a
-  taint pass. `/reload` sets `taintLog` back to 0. On 70425 a level-1 session with nothing blocked
+  merchant session, none after the `/reload` that turned the log off; 84 more in the typed taint
+  pass), and in the pet bar (70374, `PetActionBar.lua:123`, a call to a Blizzard global no addon
+  touches: 114 times in Glass Quest Tracker's taint session). Every session with the log on had
+  them, none without. BugSack fills up with them: ignore those stacks during a taint pass. `/reload` sets `taintLog` back to 0. On 70425 a level-1 session with nothing blocked
   leaves `Logs	aint.log` untouched (it kept its old date after a full exit): an old date means "nothing
   logged", not "logging off". Level 2 also logs every tainted read, so use it to see an addon's taint.
 - A colour texture painted with `SetGradient` ignores a later `SetAlpha`, and `GetAlpha()` keeps
