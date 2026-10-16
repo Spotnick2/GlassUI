@@ -182,6 +182,23 @@ eq(SkinProbeDB.themeWas.name, "smoked", "after a reload, a trial keeps the saved
 T.themeRestore()
 eq(current, "smoked", "and Restore gives the player's theme back after a reload")
 eq(presets.clear.backing, 0.85, "with the shipped backing")
+-- Each look the merchant procedure shows is the one its button names, whatever
+-- clear ships with (the stand-in now ships Glass UI's own 0.35; Codex, PR #22:
+-- a trial that fell back to the shipped value showed 0.35 under a 0.85 label).
+presets.clear.backing = 0.35
+SkinProbeDB.themeWas = nil
+local shown = 0
+for _, st in ipairs(FP.procedures["SkinProbe/merchant"].steps) do
+    local label = st.button and st.button:match("^Clear (%d%.%d+)$")
+    if label then
+        local _, b = st.run()
+        eq(b, tonumber(label), "the step labelled " .. st.button .. " shows backing " .. label)
+        shown = shown + 1
+    end
+end
+eq(shown, 3, "three clear trials")
+T.themeRestore()
+eq(presets.clear.backing, 0.35, "and Restore gives the shipped backing back")
 rawset(_G, "GlassUI", nil)
 
 -- #17: Blizzard's card. Without C_Texture (another build), nothing to report;
