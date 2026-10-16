@@ -17,6 +17,7 @@
 --
 -- Each skin's acceptance, on the real addon, with screenshots:
 --   #4 merchant                                              /fp steps skin merchant
+-- And Blizzard's own glass, the login ruleset card beside ours (#17): /fp steps skin card
 --
 -- The only writes to Blizzard objects are SetAlpha, always put back at once
 -- (`fade`) or by `border restore`, and our own frames parented to the map.
@@ -555,15 +556,21 @@ end
 -- The looks side by side on the open window (#4, after #17 found clear and
 -- smoked nearly alike: the opaque backing dominates). A theme, and for clear
 -- a trial backing opacity, set through Glass UI's Theme; Restore puts back
--- the player's theme and the shipped backing.
-local themeWas   -- { name, backing }: what to put back
+-- the player's theme and the shipped backing. Theme.Set saves each trial
+-- theme, and the procedure survives a /reload, so the player's theme is
+-- saved too (SkinProbeDB.themeWas) until Restore: memory would lose it.
 
 local function themeTry(name, backing)
     local G = glassUI()
     if not (G and G.Theme) then return false, "Glass UI not loaded" end
     local T = G.Theme
-    if not themeWas then themeWas = { name = T.Name(), backing = T.PRESETS.clear.backing } end
-    T.PRESETS.clear.backing = backing or themeWas.backing
+    if type(SkinProbeDB) ~= "table" then return false, "no saved table" end
+    local was = SkinProbeDB.themeWas
+    if type(was) ~= "table" then
+        was = { name = T.Name(), backing = T.PRESETS.clear.backing }
+        SkinProbeDB.themeWas = was
+    end
+    T.PRESETS.clear.backing = backing or was.backing
     T.Set(name)
     local used = T.PRESETS[name].backing
     say("THEME " .. name .. " backing " .. num(used))
@@ -572,11 +579,12 @@ end
 
 local function themeRestore()
     local G = glassUI()
-    if not (themeWas and G and G.Theme) then return true end
-    G.Theme.PRESETS.clear.backing = themeWas.backing
-    G.Theme.Set(themeWas.name)
-    say("THEME restored: " .. themeWas.name)
-    themeWas = nil
+    local was = type(SkinProbeDB) == "table" and SkinProbeDB.themeWas or nil
+    if not (type(was) == "table" and G and G.Theme) then return true end
+    G.Theme.PRESETS.clear.backing = was.backing
+    G.Theme.Set(was.name)
+    say("THEME restored: " .. tostring(was.name))
+    SkinProbeDB.themeWas = nil
     return true
 end
 
@@ -660,6 +668,98 @@ Probe:Steps("merchant", {
 })
 
 --------------------------------------------------------------------------------
+-- Blizzard's own glass (#17): the ruleset screen's card at login
+-- (Blizzard_GlueXML\Mainline\SuperDistrict.xml:8) beside our panels
+--------------------------------------------------------------------------------
+
+local CARD = "Mode-Selection-Card-Regular"
+local card   -- { host, result }
+
+-- Does the atlas exist in game, and its size: exists, width, height.
+local function cardAtlas()
+    local T = rawget(_G, "C_Texture")
+    if not T then return nil end
+    local ok, exists = pcall(T.GetAtlasExists, CARD)
+    exists = ok and plain(exists) or nil
+    local ok2, info = pcall(T.GetAtlasInfo, CARD)
+    local w, h
+    if ok2 and type(info) == "table" then w, h = plain(info.width), plain(info.height) end
+    say("CARD " .. CARD .. ": exists=" .. show(exists) .. " size=" .. show(w) .. "x" .. show(h))
+    record("CARD.atlas", { exists = exists, width = w, height = h })
+    return exists, w, h
+end
+
+-- A: Blizzard's card. B and C: Glass UI's glass at the same size, painted
+-- like its clear and smoked themes (Theme.PRESETS: tint, wash, backing).
+local function cardOn()
+    if card then return card.result end
+    local _, w, h = cardAtlas()
+    w = type(w) == "number" and w > 0 and w or 260
+    h = type(h) == "number" and h > 0 and h or 530
+    local host = CreateFrame("Frame", nil, UIParent)
+    host:SetSize(3 * w + 80, h + 40)
+    host:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+    host:SetFrameStrata("DIALOG")
+    local function label(anchor, text)
+        local fs = host:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        fs:SetPoint("BOTTOM", anchor, "TOP", 0, 6)
+        fs:SetText(text)
+    end
+    local a = host:CreateTexture(nil, "ARTWORK")
+    local okAtlas = pcall(a.SetAtlas, a, CARD, true)
+    a:SetSize(w, h)
+    a:SetPoint("LEFT", host, "LEFT", 20, 0)
+    label(a, "A  Blizzard")
+    local G = glassUI()
+    local painted = 0
+    if G and G.Glass and G.Theme then
+        for i, name in ipairs({ "clear", "smoked" }) do
+            local f = CreateFrame("Frame", nil, host)
+            f:SetSize(w, h)
+            f:SetPoint("LEFT", host, "LEFT", 20 + i * (w + 20), 0)
+            local ok, g = pcall(G.Glass.Apply, f, "large")
+            if ok and g then
+                local p, c = G.Theme.PRESETS[name], G.Theme.BACKING
+                local backing = f:CreateTexture(nil, "BACKGROUND", nil, -7)
+                backing:SetAllPoints(f)
+                backing:AddMaskTexture(g.mask)
+                backing:SetColorTexture(c[1], c[2], c[3], p.backing)
+                pcall(G.Glass.SetSurfaceTint, g, p.tint[1], p.tint[2], p.tint[3], p.tint[4])
+                pcall(G.Glass.SetWash, g, p.wash)
+                painted = painted + 1
+            end
+            label(f, (i == 1 and "B  " or "C  ") .. name)
+        end
+    end
+    say("CARD shown: atlas set " .. tostring(okAtlas) .. ", our panels " .. painted .. " (" .. w .. "x" .. h .. ")")
+    card = { host = host, result = okAtlas }
+    return okAtlas, painted
+end
+
+local function cardOff()
+    if card then card.host:Hide(); card.host:SetParent(nil); card = nil end
+end
+
+Probe:Command("card", function(args)
+    if (args or ""):match("off") then cardOff() else cardOn() end
+end, "#17: card on|off: Blizzard's mode-selection card beside our clear and smoked glass")
+
+Probe:Steps("card", {
+    title = "Glass UI: Blizzard's card beside our glass",
+    { text = "Checks that the ruleset screen's card exists in game.", auto = true,
+      run = cardAtlas, check = function() local e = cardAtlas(); return e == true, "the atlas exists" end },
+    { text = "Stand somewhere bright (open ground in daylight), then press Show: A is Blizzard's card, "
+          .. "B and C are our clear and smoked glass at the same size.", button = "Show",
+      run = cardOn, screenshot = "card beside our glass, bright" },
+    { text = "Is A see-through, as on the ruleset screen?", ask = true },
+    { text = "Would you like a theme that looks like A? Say why in the Note box.", ask = true },
+    { text = "Now stand somewhere dark (indoors, a cave, or night), then press Next for a second screenshot.",
+      screenshot = "card beside our glass, dark" },
+    { text = "Removes the three cards.", button = "Remove", run = function() cardOff(); return true end },
+    { text = "Type /reload to save the results.", reload = true },
+})
+
+--------------------------------------------------------------------------------
 -- Boot
 --------------------------------------------------------------------------------
 
@@ -678,4 +778,5 @@ end)
 NS._test = { Probe = Probe, state = state, tree = tree, fade = fade, slashOwners = slashOwners,
              gamepad = gamepad, panelsOn = panelsOn, panelsOff = panelsOff, borderFade = borderFade,
              borderRestore = borderRestore, gradientOn = gradientOn, gradientOff = gradientOff,
-             panels = panels, faded = faded, themeTry = themeTry, themeRestore = themeRestore }
+             panels = panels, faded = faded, cardAtlas = cardAtlas, cardOn = cardOn, cardOff = cardOff,
+             themeTry = themeTry, themeRestore = themeRestore }
