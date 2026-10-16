@@ -42,7 +42,7 @@ The look is judged from the procedure's screenshots; `Logs\taint.log` is read af
 
 | Skin | Procedure | Result |
 |---|---|---|
-| Merchant (#4) | `/fp steps skin merchant`: the looks side by side (clear at 0.85, 0.6 and 0.35 backing, smoked, class); buy, sell, buyback, repair; skin off and on live; after /reload; in combat (optional) | **70425: passes.** Buy, sell and buyback work; repair not tested (nothing to repair). The screenshots show the gold shell gone, glass under the window and tabs, and the item rows keeping Blizzard's red. Off live: exactly stock (owner: yes); on live: faded again; after /reload: on, faded at the first show. No `ADDON_ACTION_BLOCKED`/`FORBIDDEN` in the three sessions. Combat skipped (a plain, unprotected window). **Looks:** all five read well, and 0.35 looks the most like glass (owner): clear and class now use backing 0.35, smoked keeps 0.92. **Taint log:** not written. The probe turned `taintLog` on mid-session, and `Logs	aint.log` kept its October 14 date; read it after a full client exit. |
+| Merchant (#4) | `/fp steps skin merchant`: the looks side by side (clear at 0.85, 0.6 and 0.35 backing, smoked, class); buy, sell, buyback, repair; skin off and on live; after /reload; in combat (optional) | **70425: passes.** Buy, sell and buyback work; repair not tested (nothing to repair). The screenshots show the gold shell gone, glass under the window and tabs, and the item rows keeping Blizzard's red. Off live: exactly stock (owner: yes); on live: faded again; after /reload: on, faded at the first show. No `ADDON_ACTION_BLOCKED`/`FORBIDDEN` in the three sessions. Combat skipped (a plain, unprotected window). **Looks:** all five read well, and 0.35 looks the most like glass (owner): clear and class now use backing 0.35, smoked keeps 0.92. **Taint pass on 70450 (typed `/console taintLog 1`, buy/sell/buyback, full exit):** the log was on (BugGrabber: the bag-bar error 84 times that session, see the facts below), and `Logs	aint.log` was not rewritten. At level 1 the client writes only when something is blocked, so nothing was. A level-2 pass over every wave-1 skin goes into the v0.1.0 release check (#9). |
 
 ## Blizzard's own glass (#17)
 
@@ -57,15 +57,20 @@ the scene showing through sharp, a gold-metal rim. One fixed size, not sliced.
 
 ## Facts already known (don't re-measure)
 
-- wow-ui-source branch `forever` is build 1.60.1.70374, the same as the API dump. The client is now
-  70425 (dump `forever-api-1.60.1.70425.md`, and `origin/forever` is 70425). The wave-1 measurements
-  above are from 70374 except where a result names 70425. Re-measure the popups, the character
-  sheet and the map at their own skins: their FrameXML changed (popups gained `ConfirmText`).
+- **Glass UI is measured on 1.60.1.70450** (`MEASURED_ON_BUILD`). 70450 and 70425 are the same UI:
+  the API dumps are identical, and `origin/forever` changed only `version.txt`. The merchant passed on
+  70425, and its taint pass ran on 70450. The other wave-1 measurements above are from 70374. From
+  70374 to 70425 the popups, the character sheet and the map changed in FrameXML (the popups gained
+  `ConfirmText`): re-measure each at its own skin.
 - **With `taintLog` at 1 or 2, Blizzard's own code throws "attempt to call a nil value"**, none at 0:
   in tooltips (Glass Quest Tracker, 70374, `TooltipDataHandler.lua:300`), and in the bag bar's
   layout on every bag change (70425, `BagsBar.lua:125`, `self:UpdateDividers()`: 254 errors in the
-  merchant session, none after the `/reload` that turned the log off). Ignore those stacks during a
-  taint pass. `/reload` sets `taintLog` back to 0.
+  merchant session, none after the `/reload` that turned the log off; 84 more in the typed taint
+  pass), and in the pet bar (70374, `PetActionBar.lua:123`, a call to a Blizzard global no addon
+  touches: 114 times in Glass Quest Tracker's taint session). Every session with the log on had
+  them, none without. BugSack fills up with them: ignore those stacks during a taint pass. `/reload` sets `taintLog` back to 0. On 70425 a level-1 session with nothing blocked
+  leaves `Logs	aint.log` untouched (it kept its old date after a full exit): an old date means "nothing
+  logged", not "logging off". Level 2 also logs every tainted read, so use it to see an addon's taint.
 - A colour texture painted with `SetGradient` ignores a later `SetAlpha`, and `GetAlpha()` keeps
   reading 1 (porting guide section 3, measured twice on 70374).
 - Leatrix Maps 1.60.23 reads "Simple map frame" once at its `ADDON_LOADED` (default On), applies

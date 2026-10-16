@@ -17,7 +17,7 @@
 --   machinery. WoW.asBlizzard runs code as Blizzard's own.
 
 WoW = {}
-WoW.DUMP = os.getenv("GLASSQT_API_DUMP") or "C:/Projects/WoW/References/forever-api-1.60.1.70374.md"
+WoW.DUMP = os.getenv("GLASSQT_API_DUMP") or "C:/Projects/WoW/References/forever-api-1.60.1.70450.md"
 
 --------------------------------------------------------------------------------
 -- Known events (from the dump when present)
@@ -360,7 +360,7 @@ strmatch = string.match
 function wipe(t) for k in pairs(t) do t[k] = nil end; return t end
 Enum = { UITextureSliceMode = { Stretched = 0, Tiled = 1 } }
 function CreateColor(r, g, b, a) return { r = r, g = g, b = b, a = a } end
-WoW.build, WoW.version = "70374", "v0.1.0"
+WoW.build, WoW.version = "70450", "v0.1.0"
 function GetBuildInfo() return "1.60.1", WoW.build, "Oct 13 2026", 16001 end
 C_AddOns = {
     GetAddOnMetadata = function(name, variable)

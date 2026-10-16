@@ -34,7 +34,7 @@ for _, f in ipairs(tocFiles()) do
 end
 
 local GUI = loadAddon()
-eq(GUI.MEASURED_ON_BUILD, "1.60.1.70374", "MEASURED_ON_BUILD")
+eq(GUI.MEASURED_ON_BUILD, "1.60.1.70450", "MEASURED_ON_BUILD")
 
 -- Every texture the library names ships with it. No Media of our own.
 local root = libGlassRoot()
@@ -56,6 +56,6 @@ check(table.concat(WoW.chat, "\n"):find("differs from the one this addon was mea
 WoW.build, WoW.version = "70400", "v0.1.0"
 loadAddon()
 check(not table.concat(WoW.chat, "\n"):find("differs", 1, true), "a release keeps quiet")
-WoW.build = "70374"
+WoW.build = "70450"
 
 done("test_toc")

@@ -26,8 +26,8 @@ file doesn't cover something, check how those handle it before you invent a new 
   launch. Private repo for now; CurseForge project 1745875.
 
 **Status:** milestone 3: the engine, kit and theme (#3) are in, and the merchant skin (#4)
-passed its in-game acceptance on 70425 (the taint log still to read after a client exit). Next: the
-build bump to 70425, then popups (#5).
+passed its in-game acceptance (70425, taint pass on 70450). Measured on 1.60.1.70450. Next: popups
+(#5), re-measured first (their FrameXML changed after 70374).
 
 ## The skin contract (non-negotiable)
 
@@ -65,8 +65,8 @@ docs/FOREVER-PROBE.md says how to run it.
 
 - `..\References\PORTING-TBC-TO-FOREVER.md`: Edit Mode systems, secure code, secret values,
   options-page recipe, packaging.
-- `..\References\forever-api-1.60.1.70374.md`: does an API exist? Presence is not a contract.
-- `..\wow-ui-source` (branch `forever`, 70374): the client's own FrameXML. The authority on frame
+- `..\References\forever-api-1.60.1.70450.md`: does an API exist? Presence is not a contract.
+- `..\wow-ui-source` (branch `forever`; 70450 is on `origin/forever`, the checkout may lag): the client's own FrameXML. The authority on frame
   names, templates and `[AllowLoadGameType camelot]` variants.
 - `..\References\RELEASING.md`, `..\References\LIBGLASS-MIGRATION.md`, `..\References\EMBEDDED-LIBRARIES.md`,
   `..\References\PROBES.md` and `..\ForeverProbe\docs\GUIDE.md` (probes).

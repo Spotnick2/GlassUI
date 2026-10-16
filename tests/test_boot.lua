@@ -25,7 +25,7 @@ eq(SLASH_GLASSUI2, "/gui", "/gui is the short name (/glass is GlassUnitFrames')"
 
 -- The commands answer.
 GUI._test.slash("version")
-check(table.concat(WoW.chat, "\n"):find("measured on 1.60.1.70374", 1, true), "/glassui version")
+check(table.concat(WoW.chat, "\n"):find("measured on 1.60.1.70450", 1, true), "/glassui version")
 WoW.chat = {}
 GUI._test.slash("failures")
 check(table.concat(WoW.chat, "\n"):find("no failures recorded", 1, true), "/glassui failures")
