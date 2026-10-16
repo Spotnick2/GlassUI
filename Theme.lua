@@ -12,7 +12,10 @@
 -- A window's glass is a reading surface: item names and prices have to read
 -- over bright terrain. GlassMail's lesson (owner's screenshots, 2026-10-11):
 -- the body alone let a bright quest tracker read through, so every panel has
--- an opaque backing under the tint, at the theme's opacity.
+-- an opaque backing under the tint, at the theme's opacity. Clear's started at
+-- 0.85, which made clear and smoked read alike (#17); on the merchant (#4,
+-- 70425) the owner compared 0.85, 0.6 and 0.35: all read well, and 0.35 looks
+-- the most like glass. Smoked stays dense for bright scenery.
 --
 -- Only body regions are repainted (tint, wash, backing); rims are the
 -- material's. The wash is a gradient, which ignores SetAlpha on this client
@@ -28,9 +31,9 @@ GUI.Theme = Theme
 Theme.NAMES = { "clear", "smoked", "class" }
 Theme.LABELS = { clear = "Clear glass", smoked = "Smoked glass", class = "Class colour glass" }
 Theme.PRESETS = {
-    clear  = { tint = { 0.13, 0.16, 0.22, 0.24 }, wash = 0.18, backing = 0.85 },
+    clear  = { tint = { 0.13, 0.16, 0.22, 0.24 }, wash = 0.18, backing = 0.35 },
     smoked = { tint = { 0.05, 0.06, 0.08, 0.62 }, wash = 0.14, backing = 0.92 },
-    class  = { classShade = 0.6, wash = 0.18, backing = 0.85 },
+    class  = { classShade = 0.6, wash = 0.18, backing = 0.35 },
 }
 Theme.BACKING = { 0.04, 0.05, 0.07 }
 

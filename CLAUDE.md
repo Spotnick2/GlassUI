@@ -25,8 +25,9 @@ file doesn't cover something, check how those handle it before you invent a new 
 - `/glassui` and `/gui` (`/glass` is GlassUnitFrames'). v0.1.0 = wave 1 + hub v1; 1.0.0 at Forever's
   launch. Private repo for now; CurseForge project 1745875.
 
-**Status:** milestone 3: the engine, kit and theme (#3) with the merchant skin (#4), on LibGlass
-r8, waiting for the merchant's in-game acceptance (`/fp steps skin merchant`). Next: popups (#5).
+**Status:** milestone 3: the engine, kit and theme (#3) are in, and the merchant skin (#4)
+passed its in-game acceptance on 70425 (the taint log still to read after a client exit). Next: the
+build bump to 70425, then popups (#5).
 
 ## The skin contract (non-negotiable)
 

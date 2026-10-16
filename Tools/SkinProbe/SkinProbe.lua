@@ -621,7 +621,9 @@ end
 
 Probe:Steps("merchant", {
     title = "Glass UI: the merchant skin",
-    { text = "Turns on script errors and the taint log (Logs\\taint.log), and reads the skin's switch.",
+    { text = "Turns on script errors and the taint log (Logs\\taint.log), and reads the skin's switch. "
+          .. "With the taint log on, Blizzard's own code throws 'attempt to call a nil value' errors "
+          .. "(tooltips, the bag bar): ignore those. A /reload turns the log off again.",
       auto = true, run = function()
           return setCVar("scriptErrors", "1"), setCVar("taintLog", "1"), merchantState("start")
       end,
