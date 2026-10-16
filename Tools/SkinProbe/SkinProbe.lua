@@ -621,7 +621,9 @@ end
 
 Probe:Steps("merchant", {
     title = "Glass UI: the merchant skin",
-    { text = "Turns on script errors and the taint log (Logs\\taint.log), and reads the skin's switch.",
+    { text = "Turns on script errors and the taint log (Logs\\taint.log), and reads the skin's switch. "
+          .. "With the taint log on, Blizzard's own code throws 'attempt to call a nil value' errors "
+          .. "(tooltips, the bag bar): ignore those. A /reload turns the log off again.",
       auto = true, run = function()
           return setCVar("scriptErrors", "1"), setCVar("taintLog", "1"), merchantState("start")
       end,
@@ -630,8 +632,8 @@ Probe:Steps("merchant", {
     { text = "The merchant window in glass. Press Next for a screenshot.", screenshot = "merchant, skinned",
       check = function() return nineAlpha() == 0, merchantState("shown") end },
     { text = "Can you read every item name and price clearly?", ask = true },
-    { text = "Now the looks, one screenshot each. First: clear, as shipped (backing 0.85).", button = "Clear 0.85",
-      run = function() return themeTry("clear") end, screenshot = "merchant, clear 0.85" },
+    { text = "Now the looks, one screenshot each. First: clear with the dense backing it had before #4 (0.85).",
+      button = "Clear 0.85", run = function() return themeTry("clear", 0.85) end, screenshot = "merchant, clear 0.85" },
     { text = "Clear with a lighter backing (0.6).", button = "Clear 0.6",
       run = function() return themeTry("clear", 0.6) end, screenshot = "merchant, clear 0.6" },
     { text = "Clear with a much lighter backing (0.35).", button = "Clear 0.35",

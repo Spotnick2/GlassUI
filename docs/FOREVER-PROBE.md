@@ -42,7 +42,7 @@ The look is judged from the procedure's screenshots; `Logs\taint.log` is read af
 
 | Skin | Procedure | Result |
 |---|---|---|
-| Merchant (#4) | `/fp steps skin merchant`: the looks side by side (clear at 0.85, 0.6 and 0.35 backing, smoked, class); buy, sell, buyback, repair; skin off and on live; after /reload; in combat (optional) | open |
+| Merchant (#4) | `/fp steps skin merchant`: the looks side by side (clear at 0.85, 0.6 and 0.35 backing, smoked, class); buy, sell, buyback, repair; skin off and on live; after /reload; in combat (optional) | **70425: passes.** Buy, sell and buyback work; repair not tested (nothing to repair). The screenshots show the gold shell gone, glass under the window and tabs, and the item rows keeping Blizzard's red. Off live: exactly stock (owner: yes); on live: faded again; after /reload: on, faded at the first show. No `ADDON_ACTION_BLOCKED`/`FORBIDDEN` in the three sessions. Combat skipped (a plain, unprotected window). **Looks:** all five read well, and 0.35 looks the most like glass (owner): clear and class now use backing 0.35, smoked keeps 0.92. **Taint log:** not written. The probe turned `taintLog` on mid-session, and `Logs	aint.log` kept its October 14 date; read it after a full client exit. |
 
 ## Blizzard's own glass (#17)
 
@@ -53,11 +53,19 @@ the scene showing through sharp, a gold-metal rim. One fixed size, not sliced.
 | # | Question | How | Result |
 |---|---|---|---|
 | G.1 | Does the atlas exist in game, and at what size? | `/fp steps skin card` step 1 | **70425: yes, 260x530.** |
-| G.2 | Beside Glass UI's clear and smoked glass at the same size, over bright and dark scenery: how does it read? | the same procedure, screenshots | **70425: it isn't glass.** In game the card is opaque: dark brown parchment, gold rim (owner: "it does not look like glass", no theme wanted). The see-through look at login is the cards' **disabled** state while the servers are down: `SetAlpha(0.55)` and desaturated (`SuperDistrict.lua:123-127`). Beside it, our clear and smoked glass read almost alike, a dark grey slab with the scene faint behind: the opaque backing (0.85 / 0.92) dominates the tint. To revisit with the merchant's screenshots. |
+| G.2 | Beside Glass UI's clear and smoked glass at the same size, over bright and dark scenery: how does it read? | the same procedure, screenshots | **70425: it isn't glass.** In game the card is opaque: dark brown parchment, gold rim (owner: "it does not look like glass", no theme wanted). The see-through look at login is the cards' **disabled** state while the servers are down: `SetAlpha(0.55)` and desaturated (`SuperDistrict.lua:123-127`). Beside it, our clear and smoked glass read almost alike, a dark grey slab with the scene faint behind: the opaque backing (0.85 / 0.92) dominates the tint. Settled on the merchant (#4): clear's backing is now 0.35. |
 
 ## Facts already known (don't re-measure)
 
-- wow-ui-source branch `forever` is build 1.60.1.70374, the same as the API dump.
+- wow-ui-source branch `forever` is build 1.60.1.70374, the same as the API dump. The client is now
+  70425 (dump `forever-api-1.60.1.70425.md`, and `origin/forever` is 70425). The wave-1 measurements
+  above are from 70374 except where a result names 70425. Re-measure the popups, the character
+  sheet and the map at their own skins: their FrameXML changed (popups gained `ConfirmText`).
+- **With `taintLog` at 1 or 2, Blizzard's own code throws "attempt to call a nil value"**, none at 0:
+  in tooltips (Glass Quest Tracker, 70374, `TooltipDataHandler.lua:300`), and in the bag bar's
+  layout on every bag change (70425, `BagsBar.lua:125`, `self:UpdateDividers()`: 254 errors in the
+  merchant session, none after the `/reload` that turned the log off). Ignore those stacks during a
+  taint pass. `/reload` sets `taintLog` back to 0.
 - A colour texture painted with `SetGradient` ignores a later `SetAlpha`, and `GetAlpha()` keeps
   reading 1 (porting guide section 3, measured twice on 70374).
 - Leatrix Maps 1.60.23 reads "Simple map frame" once at its `ADDON_LOADED` (default On), applies

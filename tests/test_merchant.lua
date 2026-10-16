@@ -116,7 +116,14 @@ local c = S[1].g.tint._color
 local want = GUI.Theme.PRESETS.smoked.tint
 check(c and c[1] == want[1] and c[4] == want[4], "smoked repaints the tint")
 eq(S[1].backing._color[4], GUI.Theme.PRESETS.smoked.backing, "and the backing's opacity")
+-- The looks the owner picked on the merchant (#4, 70425): clear and class light,
+-- smoked dense, so the two glass looks differ.
+eq(GUI.Theme.PRESETS.clear.backing, 0.35, "clear's backing is light (0.35)")
+eq(GUI.Theme.PRESETS.class.backing, GUI.Theme.PRESETS.clear.backing, "class is clear's body, tinted")
+check(GUI.Theme.PRESETS.smoked.backing - GUI.Theme.PRESETS.clear.backing >= 0.4, "smoked stays much denser")
 eq(GlassUIDB.theme, "smoked", "the theme is saved")
+GUI._test.slash("theme clear")
+eq(S[1].backing._color[4], 0.35, "clear repaints the backing light")
 
 -- The switch survives a reload.
 GUI = loadAddon({ db = { skins = { merchant = false } } })
