@@ -294,6 +294,20 @@ GlassUI.failures.x = "boom"
 pass, why = T.suiteCheck("all, following", ALLSET, true)
 check(not pass and why:find("failure", 1, true), "a Glass UI failure fails the session")
 GlassUI.failures.x = nil
+-- Its own look is the saved one, Pearl when none is saved.
+for _, nm in ipairs({ "GlassUnitFrames", "GlassRaidFrames" }) do
+    reports[nm] = { built = nil }; answers[nm] = { ready = true, reason = "not-following" }; states[nm] = "own"
+end
+GlassUnitFramesDB.look, GlassRaidFramesDB.look = nil, nil
+pass, why = T.suiteCheck("own, default", ALLSET, false)
+check(pass, "own look on the default: Pearl is right: " .. tostring(why))
+GlassRaidFramesDB.look = "clean"
+pass, why = T.suiteCheck("own, saved clean", ALLSET, false)
+check(not pass and why:find("wanted clean", 1, true), "a saved Clean built as Pearl fails")
+GlassRaidFramesDB.look = nil
+for _, nm in ipairs({ "GlassUnitFrames", "GlassRaidFrames" }) do
+    reports[nm] = { built = "pearl" }; answers[nm] = { ready = true, preset = "pearl" }; states[nm] = "following"
+end
 pass = T.suiteCheck("all, following", { GlassUI = true, GlassUnitFrames = true }, true)
 eq(pass, false, "a member loaded that shouldn't be fails")
 -- S.3: own look again, against an earlier session.

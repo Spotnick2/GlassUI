@@ -877,8 +877,11 @@ local function suiteCheck(label, set, follow, same)
             if m.built ~= want then fail(n .. " built " .. show(m.built) .. ", wanted " .. show(want)) end
             if m.state ~= (follow and "following" or "own") then fail(n .. " state " .. show(m.state)) end
         end
-        if set[n] and m.preset ~= nil and (m.preset == "pearl") ~= (follow == true and set.GlassUI == true) then
-            fail(n .. " instance preset " .. show(m.preset))
+        -- Following builds Pearl; its own look is the saved one, Pearl by default (owner, 2026-10-18).
+        local wantPreset = (follow == true and set.GlassUI == true) and "pearl"
+            or (m.saved and m.saved.look) or "pearl"
+        if set[n] and m.preset ~= nil and m.preset ~= wantPreset then
+            fail(n .. " instance preset " .. show(m.preset) .. ", wanted " .. show(wantPreset))
         end
         local e = type(earlier) == "table" and earlier[n] or nil
         if set[n] and type(e) == "table" then

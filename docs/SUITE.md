@@ -18,7 +18,8 @@ are untouched and listed as "not yet integrated".
 **Deferred:**
 - the preset catalogue, Reflective everywhere, an advanced customisation UI, import/export and
   suite-wide migration;
-- a local "Pearl" look in each addon, and Pearl as a fresh install's default;
+- a Reflective look for the bars (a new LibGlass recipe; today `Glass.Reflect` is a window layer,
+  used only by GRF's click-cast editor);
 - layering local appearance settings over the suite theme;
 - hosted pages (#20) and moving the click-cast bindings (GUF #116).
 
@@ -30,6 +31,14 @@ are untouched and listed as "not yet integrated".
   (look, body, tunables, ramp) are suspended but kept**, and come back unchanged when it stops.
   Layering them over the suite theme is deferred. Font, cast colours and aggro red are not
   appearance in this sense: they stay local.
+- **Pearl is each addon's own default look** (owner, later the same day). GUF and GRF offer **Look:
+  Pearl (default), Clean, Classic** and, separately as today, **Body: Clear, Smoked**.
+  - **Everyone moves to Pearl:** both addons save only what differs from the default, so a
+    profile that never chose a look switches to Pearl at its next /reload, and one that saved
+    Clean or Classic keeps it. No migration step, no version stamp.
+  - This supersedes "preserve existing appearances until the player opts in" for the default
+    look only. Following Glass UI stays opt-in, and still suspends the local settings.
+  - Reflective for the bars is later (above).
 
 **Review:** Codex (`gpt-6-astra`, high effort), **consensus in round 3** (2026-10-18). Round 1
 had one BLOCKER, that following suppresses a local body. It was set aside by the owner's decision
@@ -159,7 +168,10 @@ a failed build.
    - GUF: the tunables applied in `ensureDefaults` (`GlassUnitFrames.lua:29`) and the ramp
      (`:669`); `/glass fill|rim|track|fade|edge|ramp|look|body`; the sliders; Reset Look;
    - GRF: `/grf look|body` and its radios.
-4. **Otherwise, or if that build fails:** the local look, exactly as today.
+4. **Otherwise:** the local look, whose default is now Pearl (owner decision above). `LOOKS` gains
+   `pearl`, and `UseLook` maps a look name straight to `preset = look` (r11 accepts `"classic"`,
+   `"clean"` and `"pearl"`). If the build fails (a winning LibGlass older than r11), the local
+   look falls back to Clean and says so; a followed Pearl reports `"library-too-old"` as before.
 5. **Report**, under `pcall`.
 6. **Its options page and its `/glass look` or `/grf look`:**
    - while following: "Look: following Glass UI (Pearl), set in Glass UI", with the look, body,
@@ -172,7 +184,9 @@ a failed build.
    - an old LibGlass without `pearl`, including a newer copy arriving after the build;
    - each must fall back to the local look and never touch the saved appearance keys;
    - following, then not following, restores the local look and its keys after a reload, including
-     a saved smoked body and non-default tunables.
+     a saved smoked body and non-default tunables;
+   - the default: an empty profile builds Pearl, a saved Clean or Classic keeps it, and the
+     Look choice offers Pearl, Clean and Classic.
    Mutation-tested.
 
 ### Click-casting (status only)
@@ -229,7 +243,7 @@ It switches addon combinations itself, for this character only:
 
 | # | What | Pass |
 |---|---|---|
-| S.1 | Startup: Glass UI alone, GUF alone, GRF alone, both without Glass UI, Glass UI + GUF, Glass UI + GRF, all three (following off, then on) | without Glass UI, the local look as before; with it and following, Pearl in both; no errors; the page's states match |
+| S.1 | Startup: Glass UI alone, GUF alone, GRF alone, both without Glass UI, Glass UI + GUF, Glass UI + GRF, all three (following off, then on) | without Glass UI, its own look (Pearl by default, or the saved one); with it and following, Pearl in both; no errors; the page's states match |
 | S.2 | Load order | every addon's `Theme` answer was given after `Ready()`, in every combination |
 | S.3 | With a saved smoked body and non-default GUF tunables: follow on, reload, off, reload | Pearl, then exactly the local look again; its saved keys unchanged |
 | S.4 | Live repaint under Pearl: target changes (class and reaction colours), font, cast colours | each repaints live as with the local look |
