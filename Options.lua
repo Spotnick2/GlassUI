@@ -184,6 +184,11 @@ local function memberCard(m)
     follow:SetPoint("RIGHT", open, "LEFT", -190, 0)
     local text = label(content, "Use Glass UI appearance")
     text:SetPoint("LEFT", follow, "RIGHT", 6, 0)
+    -- The name and state stop short of the checkbox (they ran under it in game, 70450).
+    for _, fs in ipairs({ name, status }) do
+        fs:SetPoint("RIGHT", follow, "LEFT", -10, 0)
+        fs:SetWordWrap(false)
+    end
     follow:SetScript("OnClick", function()
         Suite.SetFollow(m.name, follow:GetChecked() == true)
         refreshAll()
@@ -199,9 +204,7 @@ local function memberCard(m)
         elseif state == "early" then s = "Started before Glass UI: using addon settings"
         elseif state == "silent" then s = "No report from it: see its errors"
         else s = "Using addon settings" end
-        if pending then
-            s = s .. " - reload to " .. (Suite.Following(m.name) and ("use " .. theme) or "use its own settings")
-        end
+        if pending then s = s .. " - reload to apply" end
         status:SetText(s)
         follow:SetChecked(Suite.Following(m.name))
         open:SetShown(r ~= nil and r.options ~= nil)
