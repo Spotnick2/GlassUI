@@ -278,6 +278,14 @@ O.panel:Hide()
 WoW.chat = {}
 GUI._test.slash("options")
 eq(WoW.settingsOpened, "Glass UI", "/glassui options opens the page")
+WoW.settingsOpened = nil
+eq(Suite.Open(), true, "Suite.Open() opens Glass UI's page, for an addon's 'set in Glass UI' button")
+eq(WoW.settingsOpened, "Glass UI", "the same page")
+local realOpen = GUI.Options.Open
+GUI.Options.Open = function() error("Settings refused") end
+check(pcall(Suite.Open), "Suite.Open never errors")
+eq(Suite.Open(), false, "and says false when it couldn't")
+GUI.Options.Open = realOpen
 
 -- Never another addon's SavedVariables: the strict globals would throw on a
 -- read, and nothing was written.

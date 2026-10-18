@@ -202,6 +202,16 @@ function Suite.ClickCast()
     return r and r.clickCast
 end
 
+-- Open Glass UI's settings page (an addon's "set in Glass UI" button).
+-- Added in API 1 (additive: the API number stays). true when it opened;
+-- never errors.
+function Suite.Open()
+    local O = GUI.Options
+    if type(O) ~= "table" or type(O.Open) ~= "function" then return false end
+    local ok, opened = pcall(O.Open)
+    return ok and opened == true
+end
+
 function Suite.ReportOf(addon) return reports[addon] end
 function Suite.AnswerOf(addon) return answers[addon] end
 

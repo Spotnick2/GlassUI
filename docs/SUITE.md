@@ -96,6 +96,7 @@ GlassUI.Suite = { API = 1 }
 GlassUI.Suite.Ready()               --> bool
 GlassUI.Suite.Theme(addon)          --> { name = "pearl", preset = "pearl" } | nil, reason
 GlassUI.Suite.Report(addon, state)  --> nothing
+GlassUI.Suite.Open()                --> bool   (added within API 1)
 ```
 
 - **Versioning** (GlassMiniMapBar's rule, `PublicAPI.lua:7`):
@@ -123,6 +124,11 @@ GlassUI.Suite.Report(addon, state)  --> nothing
 - **Saved:** `GlassUIDB.suite = { theme = "pearl", follow = { [addon] = true } }`. Nobody follows by
   default, so every look stays as it is until the player opts in. Saved only when it differs from
   `DEFAULTS` (the existing rule).
+- **`Open()`** opens Glass UI's settings page and returns true when it did. It never errors. It is
+  for an addon's "set in Glass UI" button next to its suspended look controls (the owner, for GRF and
+  GUF). It was added after the first version, which is additive, so `API` stays 1. An addon checks
+  `type(rawget(Suite, "Open")) == "function"` before showing the button, and calls it under
+  `pcall`. It never reaches into `GlassUI.Options`: `Suite` is the contract.
 - Glass UI **never reads** another addon's SavedVariables or tables beyond what `Report` handed it,
   and **never writes** to them. It never asks an addon to restyle.
 
