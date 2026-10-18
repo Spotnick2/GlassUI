@@ -7,7 +7,10 @@
 -- Each member's line is Suite.Line, the same as /glassui suite. A member
 -- that speaks the suite API gets a Follow checkbox, and an Options button
 -- when it reported one. Every change applies at the next /reload: the page
--- only saves it, and offers the reload.
+-- only saves it, and says to type /reload. ReloadUI() from addon code is
+-- protected on Forever (porting guide; ForeverProbe's reload is a secure macro
+-- button), and a secure button inside Blizzard's Settings panel would make the
+-- panel's own show and hide protected in combat: so no Reload button.
 
 GlassUI = GlassUI or {}
 local GUI = GlassUI
@@ -100,7 +103,7 @@ local function build()
         if c and c.open then API.Try("suite:clickcast", c.open) end
     end)
     ccOpen:SetPoint("LEFT", cc, "RIGHT", 8, 0)
-    local reload = button(panel, "Reload", 90, function() ReloadUI() end)
+    local reload = label(panel, "Type /reload to apply the changes.", "GameFontNormal")
     reload:SetPoint("TOPLEFT", cc, "BOTTOMLEFT", 0, -16)
     refreshers[#refreshers + 1] = function()
         local c = Suite.ClickCast()

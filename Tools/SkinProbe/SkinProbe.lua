@@ -678,7 +678,9 @@ Probe:Steps("merchant", {
 -- keys, and LibGlass's MINOR. It switches addon combinations for THIS
 -- character only (the GUID: a name changes nothing, porting guide C_AddOns),
 -- after saving the three addons' enable states and the follow switches in
--- SkinProbeDB.suiteWas; its last step, or /fp skin suite restore, puts them
+-- SkinProbeDB.suiteWas[GUID] (account-wide saved variables, per-character
+-- states: a run stopped on one character never restores onto another); its
+-- last step, or /fp skin suite restore, puts them
 -- back.
 --------------------------------------------------------------------------------
 
@@ -718,15 +720,30 @@ local function setEnabled(name, on)
     return (pcall(on and C_AddOns.EnableAddOn or C_AddOns.DisableAddOn, name, g))
 end
 
--- Saved once, before the first change; kept across the procedure's reloads.
+-- This character's saved states, or nil; the table of them, made on demand.
+local function suiteSaved(make)
+    if type(SkinProbeDB) ~= "table" then return nil end
+    local g = guid()
+    if not g then return nil end
+    if type(SkinProbeDB.suiteWas) ~= "table" then
+        if not make then return nil end
+        SkinProbeDB.suiteWas = {}
+    end
+    return SkinProbeDB.suiteWas[g], SkinProbeDB.suiteWas, g
+end
+
+-- Saved once per character, before the first change; kept across the
+-- procedure's reloads.
 local function suiteSnapshot()
     if type(SkinProbeDB) ~= "table" then return false, "no saved table" end
-    if type(SkinProbeDB.suiteWas) == "table" then return true, "already saved" end
-    local was = { enabled = {}, follow = {} }
+    local was, all, g = suiteSaved(true)
+    if not all then return false, "no character GUID" end
+    if type(was) == "table" then return true, "already saved" end
+    was = { enabled = {}, follow = {} }
     for _, n in ipairs(SUITE_ADDONS) do was.enabled[n] = enableState(n) end
     local S = suite()
     for _, n in ipairs(MEMBERS) do was.follow[n] = S and S.Following and S.Following(n) or false end
-    SkinProbeDB.suiteWas = was
+    all[g] = was
     say("SUITE saved: GlassUI=" .. show(was.enabled.GlassUI) .. " GlassUnitFrames=" .. show(was.enabled.GlassUnitFrames)
         .. " GlassRaidFrames=" .. show(was.enabled.GlassRaidFrames))
     return true, "saved"
@@ -756,8 +773,8 @@ local function suiteSet(set, follow)
 end
 
 local function suiteRestore()
-    local was = type(SkinProbeDB) == "table" and SkinProbeDB.suiteWas or nil
-    if type(was) ~= "table" then return true, "nothing to restore" end
+    local was, all, g = suiteSaved(false)
+    if type(was) ~= "table" then return true, "nothing to restore for this character" end
     local S = suite()
     if S and S.SetFollow then
         for _, n in ipairs(MEMBERS) do S.SetFollow(n, was.follow[n] == true) end
@@ -773,7 +790,7 @@ local function suiteRestore()
         end
     end
     -- The follow switches live in GlassUIDB: kept for when Glass UI is back.
-    if S then SkinProbeDB.suiteWas = nil end
+    if S then all[g] = nil end
     local detail = table.concat(parts, " ") .. (S and "" or "; follow not restored (Glass UI not loaded)")
     say("SUITE restored " .. detail)
     return ok, detail

@@ -251,11 +251,21 @@ end
 fakeSuite()
 follow.GlassUnitFrames = true
 eq(T.suiteSnapshot(), true, "the enable states and Follow switches are saved")
-eq(SkinProbeDB.suiteWas.enabled.GlassRaidFrames, 0, "with each addon's state for this character")
-eq(SkinProbeDB.suiteWas.follow.GlassUnitFrames, true, "and its Follow switch")
+eq(SkinProbeDB.suiteWas[WoW.GUID].enabled.GlassRaidFrames, 0, "with each addon's state, under this character's GUID")
+eq(SkinProbeDB.suiteWas[WoW.GUID].follow.GlassUnitFrames, true, "and its Follow switch")
 WoW.installed.GlassRaidFrames = 2
 T.suiteSnapshot()
-eq(SkinProbeDB.suiteWas.enabled.GlassRaidFrames, 0, "a second snapshot keeps the first: it is what to restore")
+eq(SkinProbeDB.suiteWas[WoW.GUID].enabled.GlassRaidFrames, 0, "a second snapshot keeps the first: it is what to restore")
+-- Another character: its own snapshot, and nothing of the first is restored onto it.
+local firstGUID = WoW.GUID
+WoW.GUID = "Player-4618-0FFFFFFF"
+check(SkinProbeDB.suiteWas[WoW.GUID] == nil, "nothing saved yet for another character")
+local before = #calls
+local okOther, whyOther = T.suiteRestore()
+check(okOther and whyOther:find("nothing to restore", 1, true), "restore on another character finds nothing of the first")
+eq(#calls, before, "and changes nothing")
+check(SkinProbeDB.suiteWas[firstGUID] ~= nil, "the first character's snapshot is kept")
+WoW.GUID = firstGUID
 local okSet, detail = T.suiteSet({ GlassUnitFrames = true })
 check(okSet, "a combination is set and read back: " .. tostring(detail))
 eq(WoW.installed.GlassUI, 0, "Glass UI off for it")
@@ -341,7 +351,7 @@ check(okRestore, "restore reads its changes back")
 eq(WoW.installed.GlassRaidFrames, 0, "Raid Frames back to disabled, as saved")
 eq(WoW.installed.GlassUI, 2, "Glass UI back on")
 eq(follow.GlassUnitFrames, true, "the Follow switch is back")
-eq(SkinProbeDB.suiteWas, nil, "and the snapshot is cleared")
+eq(SkinProbeDB.suiteWas[WoW.GUID], nil, "and this character's snapshot is cleared")
 T.suiteSnapshot()
 
 -- The procedures are defined and every step's run and check works here.
