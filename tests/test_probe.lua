@@ -219,8 +219,51 @@ T.cardOn()
 check(logHas("CARD shown"), "after Remove, Show builds the cards again: nothing was left behind")
 T.cardOff()
 
+-- #5: the popup checks read the shown popup's own art, stock or faded, and
+-- the switch goes through Glass UI's engine (a stand-in here).
+eq(T.popupFaded(true), false, "no popup shown: the check fails")
+local p2 = StaticPopup2
+p2.BG = CreateFrame("Frame", nil, p2)
+p2.BG.Top = p2.BG:CreateTexture(nil, "BACKGROUND")
+p2.BG.Bottom = p2.BG:CreateTexture(nil, "BACKGROUND")
+p2.EditBox = CreateFrame("EditBox", nil, p2)
+p2.EditBox:Hide()
+p2.ConfirmText = p2:CreateFontString(nil, "ARTWORK")
+p2.which = "DELETE_ITEM"
+p2:Show()
+check(T.popupFaded(false), "a stock popup reads stock")
+eq(T.popupFaded(true), false, "and not faded")
+eq(T.popupFaded(false, "EditBox"), false, "the edit box check wants a popup with its edit box up")
+p2.EditBox:Show()
+p2.BG.Top:SetAlpha(0); p2.BG.Bottom:SetAlpha(0)
+check(T.popupFaded(true, "EditBox"), "a faded popup with its edit box reads faded")
+p2.BG.Bottom:SetAlpha(1)
+eq(T.popupFaded(true), false, "both pieces must be faded")
+eq(T.switchSkin("popups", false), false, "without Glass UI, no switch")
+local switched = {}
+rawset(_G, "GlassUI", { Engine = { SetEnabled = function(k, on) switched[k] = on end,
+                                   Status = function() return "on" end } })
+T.switchSkin("popups", false)
+eq(switched.popups, false, "the switch is Glass UI's own, for the popups' key")
+local status, line = T.popupState("test")
+check(status == "on" and line:find("popup=StaticPopup2", 1, true) and line:find("which=DELETE_ITEM", 1, true)
+      and line:find("EditBox=true", 1, true), "the state line names the popup, its dialog and its parts")
+p2.BG.Bottom:SetAlpha(0)
+local okM = T.popupMeasure()
+check(okM, "the measure passes when no texture ignores SetAlpha")
+eq(SkinProbeDB.results["P.measure"].ignored, 0, "the measure is in the results table")
+check(SkinProbeDB.results["P.measure"].confirmText, "with 70450's ConfirmText seen")
+eq(p2.BG.Top:GetAlpha(), 0, "the measure puts every alpha back")
+local grad = p2:CreateTexture(nil, "ARTWORK")
+grad:SetColorTexture(1, 1, 1, 1)
+grad:SetGradient("VERTICAL", CreateColor(1, 1, 1, 0), CreateColor(1, 1, 1, 1))
+eq((T.popupMeasure()), false, "a popup texture that ignores SetAlpha fails the measure")
+grad:Hide(); grad:SetAlpha(0)
+rawset(_G, "GlassUI", nil)
+p2:Hide()
+
 -- The procedures are defined and every step's run and check works here.
-for _, name in ipairs({ "wave1", "map", "gradient", "merchant", "card" }) do
+for _, name in ipairs({ "wave1", "map", "gradient", "merchant", "popup", "card" }) do
     local p = FP.procedures["SkinProbe/" .. name]
     check(p ~= nil, "procedure " .. name .. " is defined")
     if p then

@@ -14,7 +14,8 @@ milestones), not on the probe's copy.
    `/console scriptErrors 1` and `/reload` in game.
 2. `/fp steps skin wave1`, then `/fp steps skin map`, then `/fp steps skin gradient`. Each is a
    panel of buttons: do what a step says, answer its questions, type anything odd into its Note box.
-   Each ends with `/reload`, which saves the results to disk; nothing needs pasting.
+   Each ends with `/reload`, which saves the results to disk; nothing needs pasting. Each skin's
+   acceptance is its own procedure (below): `/fp steps skin merchant`, `/fp steps skin popup`.
 3. One-off commands: `/fp skin` lists them (`state`, `tree <target> [depth]`, `fade <target>`,
    `panels on|off`, `border fade|restore`, `gradient on|off`, `clear`). Targets: `merchant`,
    `popup`, `character`, `map`.
@@ -42,6 +43,7 @@ The look is judged from the procedure's screenshots; `Logs\taint.log` is read af
 
 | Skin | Procedure | Result |
 |---|---|---|
+| Popups (#5) | `/fp steps skin popup`: first the **re-measure on this build** with the skin off (W1.1 and W1.2 for `StaticPopup1..4` on the delete popup: frames, tree, fade, and 70450's `ConfirmText`), then on live with the popup open; readability and the red buttons on the glass; smoked and class; a plain dialog (delete a grey item: No), an edit box (Ignore Player or a new chat window), money input (the backpack's gold), the delete confirmation (a rare item, the typed word), an item dialog (token vendor, optional); off and on live; after /reload; raised in combat (Yes: the item goes) | **70450, first run: partial.** **Re-measure:** `StaticPopup1` not protected, DIALOG/level 1, 420x74 shown (the others MEDIUM/0 while hidden); 680 textures tried, **none ignores `SetAlpha`** (as on 70374); `ConfirmText` present; `BG.Top`/`BG.Bottom` keep their atlases (`UI-DiamondDialogBox-Border`, `UI-DialogBox-Background-Dark`). **Works:** the delete popup (No: the item stays; Yes: destroyed), the edit box (Ignore Player: typing shows and reads well; Cancel closes). **Looks:** the screenshots show the diamond border and dark body gone, glass under the popup; text readable and the red buttons right on the glass (owner: yes to both); smoked and class fine. Off live: exactly stock (owner: yes); on live and after /reload: faded. No `ADDON_ACTION_BLOCKED`/`FORBIDDEN`, and `Logs\taint.log` untouched (nothing blocked at level 1). **Not covered:** money input (on Forever a click on the backpack's gold opens the currency tab, not the popup: `ContainerFrame.xml:204`, `showCurrencyTracking`), the rare-item delete confirmation, the item dialog, the popup raised in combat. |
 | Merchant (#4) | `/fp steps skin merchant`: the looks side by side (clear at 0.85, 0.6 and 0.35 backing, smoked, class); buy, sell, buyback, repair; skin off and on live; after /reload; in combat (optional) | **70425: passes.** Buy, sell and buyback work; repair not tested (nothing to repair). The screenshots show the gold shell gone, glass under the window and tabs, and the item rows keeping Blizzard's red. Off live: exactly stock (owner: yes); on live: faded again; after /reload: on, faded at the first show. No `ADDON_ACTION_BLOCKED`/`FORBIDDEN` in the three sessions. Combat skipped (a plain, unprotected window). **Looks:** all five read well, and 0.35 looks the most like glass (owner): clear and class now use backing 0.35, smoked keeps 0.92. **Taint pass on 70450 (typed `/console taintLog 1`, buy/sell/buyback, full exit):** the log was on (BugGrabber: the bag-bar error 84 times that session, see the facts below), and `Logs	aint.log` was not rewritten. At level 1 the client writes only when something is blocked, so nothing was. A level-2 pass over every wave-1 skin goes into the v0.1.0 release check (#9). |
 
 ## Blizzard's own glass (#17)
@@ -67,7 +69,10 @@ the scene showing through sharp, a gold-metal rim. One fixed size, not sliced.
   layout on every bag change (70425, `BagsBar.lua:125`, `self:UpdateDividers()`: 254 errors in the
   merchant session, none after the `/reload` that turned the log off; 84 more in the typed taint
   pass), and in the pet bar (70374, `PetActionBar.lua:123`, a call to a Blizzard global no addon
-  touches: 114 times in Glass Quest Tracker's taint session). Every session with the log on had
+  touches: 114 times in Glass Quest Tracker's taint session), and in the action bars' grid on
+  every drag that drops an item off the cursor (70450, `ActionBar.lua:170`,
+  `self:UpdateFrameStrata()` on `MultiBarBottomRight`, `ACTIONBAR_HIDEGRID`: 94 times in the popup
+  session, none in the session after its `/reload`, which dragged items too). Every session with the log on had
   them, none without. BugSack fills up with them: ignore those stacks during a taint pass. `/reload` sets `taintLog` back to 0. On 70425 a level-1 session with nothing blocked
   leaves `Logs	aint.log` untouched (it kept its old date after a full exit): an old date means "nothing
   logged", not "logging off". Level 2 also logs every tainted read, so use it to see an addon's taint.

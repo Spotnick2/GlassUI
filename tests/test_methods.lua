@@ -30,8 +30,12 @@ local GUI = loadAddon()
 WoW.showMerchant()
 WoW.merchantTab(2)
 WoW.asBlizzard(function() MerchantFrame.Bg:SetAlpha(0.5) end)
+WoW.showPopup(1, "DELETE_ITEM")
+WoW.showPopup(2, "ADD_IGNORE", { editBox = true })
+WoW.asBlizzard(function() StaticPopup1.BG.Bottom:SetAlpha(0.5) end)
 for _, cmd in ipairs({ "failures", "version", "help", "", "skins", "skin merchant off", "skin merchant on",
-                       "off", "on", "theme smoked", "theme class", "theme clear" }) do
+                       "skin popups off", "skin popups on", "off", "on", "theme smoked", "theme class",
+                       "theme clear" }) do
     GUI._test.slash(cmd)
 end
 WoW.flushTimers()

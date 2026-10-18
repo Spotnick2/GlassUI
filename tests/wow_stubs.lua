@@ -616,6 +616,98 @@ end
 function WoW.showMerchant() WoW.asBlizzard(function() MerchantFrame:Show() end) end
 function WoW.hideMerchant() WoW.asBlizzard(function() MerchantFrame:Hide() end) end
 
+-- StaticPopup1..4 (Blizzard_StaticPopup_Game\GameDialog.xml, StaticPopupTemplate,
+-- 70450), with the regions SkinProbe listed on 70374 (docs/FOREVER-PROBE.md
+-- W1.2) and 70450's ConfirmText. Hidden; level 1, as measured.
+local POPUP_BUTTON_ART = { "Normal", "Pushed", "Disabled", "Highlight" }
+local function popupButton(parent, name, key)
+    local b = blizz("Button", parent, name)
+    parent[key] = b
+    b.Flash = blizz("Texture", b, nil, "OVERLAY")
+    b.Text = blizz("FontString", b, name .. "Text", "ARTWORK")
+    b._art = {}
+    for _, k in ipairs(POPUP_BUTTON_ART) do b._art[k] = blizz("Texture", b, nil, k == "Highlight" and "HIGHLIGHT" or "ARTWORK") end
+    return b
+end
+-- InputBoxTemplate's three pieces.
+local function inputBox(parent, name)
+    local e = blizz("EditBox", parent, name)
+    for _, k in ipairs({ "Left", "Middle", "Right" }) do e[k] = blizz("Texture", e, nil, "BACKGROUND") end
+    return e
+end
+WoW.POPUP_BUTTON_ART = POPUP_BUTTON_ART
+
+function WoW.makePopups()
+    WoW.asBlizzard(function()
+        for i = 1, 4 do
+            local n = "StaticPopup" .. i
+            local f = blizz("Frame", UIParent, n)
+            f._shown = false
+            f._level = 1
+            f.BG = blizz("Frame", f)
+            f.BG._level = 1
+            f.BG.Bottom = blizz("Texture", f.BG, nil, "BACKGROUND")
+            f.BG.Top = blizz("Texture", f.BG, nil, "BACKGROUND")
+            f.Text = blizz("FontString", f, n .. "Text", "ARTWORK")
+            f.ConfirmText = blizz("FontString", f, nil, "ARTWORK")
+            f.SubText = blizz("FontString", f, nil, "ARTWORK")
+            f.AlertIcon = blizz("Texture", f, nil, "ARTWORK")
+            f.Separator = blizz("Texture", f, nil, "ARTWORK")
+            f.ProgressBarBorder = blizz("Texture", f, nil, "BACKGROUND")
+            f.ProgressBarFill = blizz("Texture", f, nil, "BACKGROUND")
+            f.CloseButton = blizz("Button", f, n .. "CloseButton")
+            f.CoverFrame = blizz("Frame", f)
+            f.CoverFrame._shown = false
+            f.ButtonContainer = blizz("Frame", f)
+            f.ButtonContainer.Buttons = {}
+            for b = 1, 4 do
+                f.ButtonContainer.Buttons[b] = popupButton(f.ButtonContainer, n .. "Button" .. b, "Button" .. b)
+            end
+            popupButton(f, n .. "ExtraButton", "ExtraButton")
+            f.EditBox = blizz("EditBox", f, n .. "EditBox")
+            f.EditBox._shown = false
+            f.EditBox.NineSlice = nineSlice(f.EditBox)
+            f.EditBox.Instructions = blizz("FontString", f.EditBox, nil, "ARTWORK")
+            f.MoneyFrame = blizz("Frame", f, n .. "MoneyFrame")
+            f.MoneyFrame._shown = false
+            f.MoneyInputFrame = blizz("Frame", f, n .. "MoneyInputFrame")
+            f.MoneyInputFrame._shown = false
+            for _, c in ipairs({ "Gold", "Silver", "Copper" }) do
+                f.MoneyInputFrame[c:lower()] = inputBox(f.MoneyInputFrame, n .. "MoneyInputFrame" .. c)
+            end
+            f.ItemFrame = blizz("Frame", f)
+            f.ItemFrame._shown = false
+            f.ItemFrame.NameFrame = blizz("Texture", f.ItemFrame, nil, "ARTWORK")
+            f.ItemFrame.Text = blizz("FontString", f.ItemFrame, nil, "ARTWORK")
+            f.ItemFrame.Item = blizz("ItemButton", f.ItemFrame)
+            f.ItemFrame.Item.IconBorder = blizz("Texture", f.ItemFrame.Item, nil, "OVERLAY")
+            f.DarkOverlay = blizz("Frame", f)
+            f.DarkOverlay._shown = false
+            -- GameDialogMixin's methods, so a call from addon code shows up in WoW.luaCalls.
+            luaMethod(f, "GetButton1", function(self) return self.ButtonContainer.Buttons[1] end)
+            luaMethod(f, "GetEditBox", function(self) return self.EditBox end)
+            WoW.bset(f, "which", nil)
+        end
+        WoW.snapshot()
+    end)
+end
+
+-- Blizzard showing dialog `which` on popup i (StaticPopup_Show, GameDialogMixin:Init):
+-- it sets its own fields and shows the parts this dialog has, then the frame.
+-- parts: { editBox =, money =, item = } booleans.
+function WoW.showPopup(i, which, parts)
+    parts = parts or {}
+    WoW.asBlizzard(function()
+        local f = _G["StaticPopup" .. i]
+        WoW.bset(f, "which", which or "TEST")
+        f.EditBox:SetShown(parts.editBox == true)
+        f.MoneyInputFrame:SetShown(parts.money == true)
+        f.ItemFrame:SetShown(parts.item == true)
+        f:Show()
+    end)
+end
+function WoW.hidePopup(i) WoW.asBlizzard(function() _G["StaticPopup" .. i]:Hide() end) end
+
 --------------------------------------------------------------------------------
 -- Driving
 --------------------------------------------------------------------------------

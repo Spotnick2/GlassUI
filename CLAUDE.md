@@ -26,8 +26,10 @@ file doesn't cover something, check how those handle it before you invent a new 
   launch. Private repo for now; CurseForge project 1745875.
 
 **Status:** milestone 3: the engine, kit and theme (#3) are in, and the merchant skin (#4)
-passed its in-game acceptance (70425, taint pass on 70450). Measured on 1.60.1.70450. Next: popups
-(#5), re-measured first (their FrameXML changed after 70374).
+passed its in-game acceptance (70425, taint pass on 70450). Measured on 1.60.1.70450. The popup
+skin (#5) is re-measured on 70450 and passed a first acceptance run (`/fp steps skin popup`): plain,
+edit box, off/on live, /reload. Left: the in-combat popup and the rare-item delete confirmation
+(money input and the item dialog are hard to raise on Forever). Next: the character sheet (#6).
 
 ## The skin contract (non-negotiable)
 
@@ -54,11 +56,12 @@ audited exceptions and the reasons are in docs/PLAN.md, "The skin contract". In 
 | `Skin\Engine.lua` | `Register`, `Active`, owners/yields/handover, the switches, deferral and the combat wait, gamepad and suite stand-downs, `Status` |
 | `Skin\Kit.lua` | per-skin touches (`Fade` with read-back, `Blank`/`Tint`/`Shade` for `live = false`), `Panel`, widget kinds (`Shell`, `Inset`, `Tab`) |
 | `Skin\Merchant.lua` | the merchant window (live) |
+| `Skin\Popup.lua` | the static popups, `StaticPopup1..4` (live) |
 | `GlassUI.lua` | bootstrap, `GlassUIDB`, `/glassui` |
 
 Planned, per docs/PLAN.md: `Skin\<Window>.lua` for the rest, `Hub.lua`, `Options.lua`.
 `Tools\SkinProbe\` is the ForeverProbe module (never shipped): `/fp skin`, the measurements
-`/fp steps skin wave1|map|gradient` and each skin's acceptance (`/fp steps skin merchant`);
+`/fp steps skin wave1|map|gradient` and each skin's acceptance (`/fp steps skin merchant`, `popup`);
 docs/FOREVER-PROBE.md says how to run it.
 
 ## References

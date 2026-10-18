@@ -17,6 +17,7 @@
 --
 -- Each skin's acceptance, on the real addon, with screenshots:
 --   #4 merchant                                              /fp steps skin merchant
+--   #5 static popups (re-measured on the build first)        /fp steps skin popup
 -- And Blizzard's own glass, the login ruleset card beside ours (#17): /fp steps skin card
 --
 -- The only writes to Blizzard objects are SetAlpha, always put back at once
@@ -546,11 +547,11 @@ Probe:Steps("gradient", {
 
 local function glassUI() return rawget(_G, "GlassUI") end
 
--- Glass UI's switch for the merchant skin, through its own engine.
-local function switch(on)
+-- Glass UI's switch for one skin, through its own engine.
+local function switchSkin(key, on)
     local G = glassUI()
     if not (G and G.Engine) then return false, "Glass UI not loaded" end
-    return G.Engine.SetEnabled("merchant", on)
+    return G.Engine.SetEnabled(key, on)
 end
 
 -- The looks side by side on the open window (#4, after #17 found clear and
@@ -653,11 +654,11 @@ Probe:Steps("merchant", {
     { text = "Go back to the Merchant tab. If this vendor repairs and something of yours is damaged, "
           .. "repair it. Did it work? (No if you couldn't test it, and say why in the Note.)", ask = true },
     { text = "Switches the skin off, live.", button = "Skin off", screenshot = "merchant, skin off",
-      run = function() return switch(false), merchantState("off") end,
+      run = function() return switchSkin("merchant", false), merchantState("off") end,
       check = function() return nineAlpha() == 1, "the border is back" end },
     { text = "Does the window look exactly like Blizzard's own again?", ask = true },
     { text = "Switches the skin on again, live.", button = "Skin on", screenshot = "merchant, skin on again",
-      run = function() return switch(true), merchantState("on again") end,
+      run = function() return switchSkin("merchant", true), merchantState("on again") end,
       check = function() return nineAlpha() == 0, "faded again" end },
     { text = "Close the merchant window, then reload.", reload = true },
     { text = "Talk to the vendor again.", event = "MERCHANT_SHOW" },
@@ -667,6 +668,161 @@ Probe:Steps("merchant", {
           .. "something), and talk to the vendor while fighting.", event = "MERCHANT_SHOW",
       check = function() return InCombatLockdown() and nineAlpha() == 0, merchantState("combat") end },
     { text = "Type /reload to save the results.", reload = true },
+})
+
+--------------------------------------------------------------------------------
+-- The static popups (#5): re-measured on this build first (their FrameXML
+-- changed after 70374: ConfirmText, and the delete confirmation's typed
+-- word), with the skin off; then the acceptance on the real skin. The
+-- dialogs are real ones the owner raises: a popup our code showed would
+-- carry our taint into the taint pass.
+--------------------------------------------------------------------------------
+
+-- The first shown popup, and which of its parts are up.
+local function popupShown()
+    for _, name in ipairs(TARGETS.popup) do
+        if shown(name) then return frameByName(name), name end
+    end
+    return nil
+end
+
+local function partShown(f, key)
+    local ok, v = call(f and f[key], "IsShown")
+    return ok and plain(v) == true
+end
+
+-- A shown popup with this part up (nil: any).
+local function popupWith(key)
+    for _, name in ipairs(TARGETS.popup) do
+        local f = frameByName(name)
+        if shown(name) and (key == nil or partShown(f, key)) then return f, name end
+    end
+    return nil
+end
+
+local function bgAlpha(f, key)
+    local bg = f and f.BG
+    local ok, a = call(bg and bg[key], "GetAlpha")
+    return ok and plain(a) or nil
+end
+
+-- The skin's switch line, and the shown popup's art and parts.
+local function popupState(label)
+    local G = glassUI()
+    local status = G and G.Engine and G.Engine.Status("popups") or "Glass UI not loaded"
+    local f, name = popupShown()
+    local parts = { "popup=" .. show(name) }
+    if f then
+        parts[#parts + 1] = "which=" .. show(plain(f.which))
+        parts[#parts + 1] = "Top=" .. num(bgAlpha(f, "Top")) .. " Bottom=" .. num(bgAlpha(f, "Bottom"))
+        for _, key in ipairs({ "EditBox", "MoneyInputFrame", "ItemFrame", "ConfirmText" }) do
+            parts[#parts + 1] = key .. "=" .. tostring(partShown(f, key))
+        end
+    end
+    local line = status .. "; " .. table.concat(parts, " ") .. " combat=" .. tostring(InCombatLockdown())
+    say("P " .. label .. ": " .. line)
+    record("P." .. label, line)
+    return status, line
+end
+
+-- A shown popup is faded (true) or stock (false).
+local function popupFaded(want, key)
+    local f = popupWith(key)
+    if not f then return false, "no popup shown" end
+    local top, bottom = bgAlpha(f, "Top"), bgAlpha(f, "Bottom")
+    local alpha = want and 0 or 1
+    return top == alpha and bottom == alpha, "Top=" .. num(top) .. " Bottom=" .. num(bottom)
+end
+
+-- W1.1/W1.2 for the popups on this build, with the skin off.
+local function popupMeasure()
+    local build = table.concat({ GetBuildInfo() }, " ", 1, 2)
+    for _, name in ipairs(TARGETS.popup) do
+        local f = frameByName(name)
+        if f then record("P.W1.1." .. name, frameLine(f, "P W1.1 " .. name)) end
+    end
+    local lines = tree("popup")
+    local tried, ignored = fade("popup")
+    local f = popupShown()
+    local hasConfirm = f ~= nil and f.ConfirmText ~= nil
+    say("P measure on " .. build .. ": " .. tostring(lines) .. " lines, " .. tostring(tried) .. " textures, "
+        .. tostring(ignored) .. " ignore SetAlpha, ConfirmText " .. tostring(hasConfirm))
+    record("P.measure", { build = build, lines = lines, tried = tried, ignored = ignored, confirmText = hasConfirm })
+    return ignored == 0, tried, ignored
+end
+
+Probe:Steps("popup", {
+    title = "Glass UI: the popups",
+    { text = "Turns on script errors and the taint log (Logs\\taint.log), and reads the skin's switch. "
+          .. "With the taint log on, Blizzard's own code throws 'attempt to call a nil value' errors "
+          .. "(tooltips, the bag bar): ignore those. A /reload turns the log off again.",
+      auto = true, run = function()
+          return setCVar("scriptErrors", "1"), setCVar("taintLog", "1"), popupState("start")
+      end,
+      check = function() local s = popupState("check"); return s == "on", s end },
+    { text = "First the popups as Blizzard draws them, measured on this build. Turns the popup skin off.",
+      button = "Skin off", run = function() return switchSkin("popups", false) end,
+      check = function() local s = popupState("off for the measure"); return s == "off", s end },
+    { text = "Drag a grey item out of your bags and drop it on the ground, so the delete popup shows. "
+          .. "Don't confirm it. Then press Measure.", button = "Measure", run = popupMeasure,
+      screenshot = "popup, stock",
+      check = function() return popupFaded(false) end },
+    { text = "Turns the skin on again, live, with the popup open.", button = "Skin on",
+      run = function() return switchSkin("popups", true), popupState("on live") end,
+      screenshot = "popup, skinned",
+      check = function() return popupFaded(true) end },
+    { text = "Can you read the popup's text clearly on the glass?", ask = true },
+    { text = "Do the red Yes and No buttons look right on the glass? Say what you'd change in the Note box.",
+      ask = true },
+    { text = "Smoked glass, for a screenshot.", button = "Smoked", run = function() return themeTry("smoked") end,
+      screenshot = "popup, smoked" },
+    { text = "Class colour glass.", button = "Class", run = function() return themeTry("class") end,
+      screenshot = "popup, class" },
+    { text = "Puts your theme back.", button = "Restore", run = themeRestore },
+    { text = "Press No on the popup. Is the item still in your bags?", ask = true },
+    { text = "A popup with a typing box: open your friends list (O), go to its ignore list and press "
+          .. "'Ignore Player' with nobody targeted, or right-click a chat tab and pick 'Create New Window'. "
+          .. "Then press Next.", screenshot = "popup, edit box",
+      check = function() return popupFaded(true, "EditBox") end },
+    { text = "Type a few letters in the box. Do they show, and read well?", ask = true },
+    { text = "Press Cancel. Did the popup close?", ask = true },
+    { text = "Money: at a guild bank, press Deposit or Withdraw, so the amount popup shows. Then press "
+          .. "Next. (Skip if you can't: on Forever the backpack's gold opens the currency tab instead, "
+          .. "ContainerFrame.xml:204.)", screenshot = "popup, money",
+      check = function() return popupFaded(true, "MoneyInputFrame") end },
+    { text = "Type 1 in its copper box: does it show and read well? Then press Cancel. Did the popup close?",
+      ask = true },
+    { text = "The delete confirmation: drag a blue (rare) or better item out of your bags. The popup asks "
+          .. "you to type a word to confirm. Don't type it: press Next. (Skip if you have none.)",
+      screenshot = "popup, delete confirmation",
+      check = function() return popupFaded(true, "EditBox"), popupState("delete confirmation") end },
+    { text = "Press No. Is the item still in your bags?", ask = true },
+    { text = "Optional, Skip if you can't: at a vendor that sells for tokens or items instead of gold, "
+          .. "buy one, so a popup with the item's picture shows. Press Next before answering it.",
+      screenshot = "popup, item",
+      check = function() return popupFaded(true, "ItemFrame"), popupState("item") end },
+    { text = "Press No (or Yes if you want it). Did the popup close as it should?", ask = true },
+    { text = "Off and on, live: drag a grey item out again, so the delete popup shows, then press Skin off.",
+      button = "Skin off", run = function() return switchSkin("popups", false), popupState("off live") end,
+      screenshot = "popup, skin off",
+      check = function() return popupFaded(false) end },
+    { text = "Does the popup look exactly like Blizzard's own again?", ask = true },
+    { text = "Turns the skin on again, live.", button = "Skin on",
+      run = function() return switchSkin("popups", true), popupState("on again") end,
+      screenshot = "popup, skin on again",
+      check = function() return popupFaded(true) end },
+    { text = "Press No on the popup, then reload.", reload = true },
+    { text = "After the reload: drag a grey item out once more, then press Next.", screenshot = "popup, after reload",
+      check = function() return popupFaded(true), popupState("after reload") end },
+    { text = "Press No." },
+    { text = "In combat: pull something, and while fighting drag out a grey item you don't want. "
+          .. "Press Next while the popup is up (Skip if it isn't easy).", screenshot = "popup, in combat",
+      check = function()
+          local ok, detail = popupFaded(true)
+          return InCombatLockdown() and ok, popupState("combat"), detail
+      end },
+    { text = "Press Yes. Was the item destroyed?", ask = true },
+    { text = "Type /reload to save the results (after the fight).", reload = true },
 })
 
 --------------------------------------------------------------------------------
@@ -781,4 +937,5 @@ NS._test = { Probe = Probe, state = state, tree = tree, fade = fade, slashOwners
              gamepad = gamepad, panelsOn = panelsOn, panelsOff = panelsOff, borderFade = borderFade,
              borderRestore = borderRestore, gradientOn = gradientOn, gradientOff = gradientOff,
              panels = panels, faded = faded, cardAtlas = cardAtlas, cardOn = cardOn, cardOff = cardOff,
-             themeTry = themeTry, themeRestore = themeRestore }
+             themeTry = themeTry, themeRestore = themeRestore, switchSkin = switchSkin,
+             popupState = popupState, popupFaded = popupFaded, popupMeasure = popupMeasure }

@@ -37,13 +37,24 @@ WoW.merchantTab(1)
 WoW.hideMerchant()
 WoW.showMerchant()
 WoW.flushTimers(0)
-for _, cmd in ipairs({ "skin merchant off", "skin merchant on", "off", "on", "theme smoked", "theme class",
-                       "theme clear", "skins", "skin held off" }) do
+-- The popups: two at once, one reused for another dialog, one raised in combat.
+WoW.showPopup(1, "DELETE_ITEM")
+WoW.showPopup(2, "ADD_IGNORE", { editBox = true })
+WoW.hidePopup(1)
+WoW.showPopup(1, "PICKUP_MONEY", { money = true })
+WoW.asBlizzard(function() StaticPopup1.BG.Bottom:SetAlpha(0.5) end)
+WoW.combat = true
+WoW.showPopup(3, "DELETE_ITEM", { item = true })
+WoW.combat = false
+for _, cmd in ipairs({ "skin merchant off", "skin merchant on", "skin popups off", "skin popups on", "off", "on",
+                       "theme smoked", "theme class", "theme clear", "skins", "skin held off" }) do
     GUI._test.slash(cmd)
 end
 WoW.flushTimers(0)
 WoW.hideMerchant()
 WoW.showMerchant()
+WoW.hidePopup(2)
+WoW.showPopup(4, "DELETE_ITEM")
 WoW.loadAddOn("SomeAddOn")
 
 -- The record is live: the session did call into Blizzard's objects.
@@ -74,9 +85,13 @@ MerchantFrame.NineSlice.glassy = true
 MerchantFrame.selectedTab = 2
 MerchantFrame:UpdateMerchant()
 MerchantFrame.Bg:SetTexture("Interface\\Buttons\\WHITE8X8")
+StaticPopup1.which = "OURS"
+StaticPopup1:GetEditBox()
 local caught = table.concat(WoW.fieldChanges(), ",")
 check(caught:find("glassy", 1, true) and caught:find("selectedTab", 1, true), "the guard sees new and changed fields")
+check(caught:find("which", 1, true), "and a popup's own field")
 eq(WoW.luaCalls[1], "UpdateMerchant", "the guard sees a Lua method call")
+eq(WoW.luaCalls[2], "GetEditBox", "and a popup's mixin method")
 eq(WoW.textureArgs[#WoW.textureArgs][3], "Interface\\Buttons\\WHITE8X8", "the guard sees a texture argument")
 
 done("test_contract")
