@@ -361,4 +361,9 @@ end
 
 function Options.Open() return API.OpenSettings(category) end
 
+-- Suite's change notice: redraw only while the page is open.
+function Options.Refresh()
+    if Options.built and panel:IsShown() then refreshAll() end
+end
+
 Options._test = { panel = panel, refreshers = refreshers, rows = {} }

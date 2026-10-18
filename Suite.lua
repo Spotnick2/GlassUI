@@ -93,6 +93,13 @@ function Suite.Theme(addon)
 end
 
 -- v when it is of that kind, else nil (false survives: not and/or).
+-- The settings page, redrawn when what it shows changes while it is open
+-- (a report, a switch set from /glassui). Never errors.
+local function changed()
+    local O = GUI.Options
+    if type(O) == "table" and type(O.Refresh) == "function" then pcall(O.Refresh) end
+end
+
 local function plain(v, kind)
     if type(v) == kind then return v end
     return nil
@@ -119,6 +126,7 @@ function Suite.Report(addon, state)
     if not member[addon] or type(state) ~= "table" then return end
     -- The caller's table may be anything (a proxy that throws): never ours to crash on.
     pcall(copyReport, addon, state)
+    changed()
 end
 
 function Suite.SetFollow(addon, on)
@@ -128,6 +136,7 @@ function Suite.SetFollow(addon, on)
     s.follow[addon] = on and true or nil
     if next(s.follow) == nil then s.follow = nil end
     GUI.db.suite = next(s) and s or nil
+    changed()
     return true
 end
 

@@ -246,6 +246,14 @@ rows.GlassRaidFrames.follow:SetChecked(false)
 rows.GlassRaidFrames.follow:Click()
 eq(O.note:GetText(), "Appearance changes apply after reloading.", "switching it back: nothing pending")
 
+-- Live: a new report or a switch set from the command line redraws the open page.
+Suite.Report("GlassRaidFrames", { api = 1, clickCast = { open = function() end, others = false } })
+eq(O.clickCast:GetText(), "Bindings on other addons' frames: Disabled", "GRF's report again: the open page redraws at once")
+GUI._test.slash("suite follow glassraidframes on")
+eq(rows.GlassRaidFrames.follow:GetChecked(), true, "a switch set by /glassui suite shows on the open page")
+GUI._test.slash("suite follow glassraidframes off")
+Suite.Report("GlassRaidFrames", { api = 1, options = function() error("its own bug") end,
+                                   clickCast = { open = function() ccOpened = ccOpened + 1 end, others = true } })
 -- The Reload UI button: ForeverProbe's measured secure /reload, never ours.
 O.spot._cx, O.spot._cy, O.spot._effScale = 640, 120, 0.8
 O.panel:Hide(); O.panel:Show()

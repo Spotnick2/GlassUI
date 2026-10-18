@@ -64,14 +64,14 @@ The look is judged from the procedure's screenshots; `Logs\taint.log` is read af
 
 | # | Question | Result |
 |---|---|---|
-| S.1 | Startup: Glass UI alone, GUF alone, GRF alone, both without Glass UI, Glass UI + each, all three (own look, then following) | not run |
-| S.2 | Load order: is every addon's `Theme` answered after Glass UI's `ADDON_LOADED` (`OptionalDeps: GlassUI`)? | not run |
-| S.3 | Follow on, then off, with a Smoked body and a non-default slider: the local look and saved keys come back unchanged | not run |
-| S.4 | Live repaint under Pearl: target colours, font, cast colours | not run |
-| S.5 | Gradients: the fill and the health-loss overlay on bright and dark scenery | not run |
-| S.6 | Low health: remaining against missing, on unit frames and raid cells | not run |
-| S.7 | Combat: Follow switched in combat waits for the reload; a /reload in combat; no blocked action | not run |
-| S.8 | The page's click-casting line and buttons; GRF's editor on Pearl | not run |
+| S.1 | Startup: Glass UI alone, GUF alone, GRF alone, both without Glass UI, Glass UI + each, all three (own look, then following) | **70450, LibGlass r11 (MINOR 11): all eight pass** (runs #211-#219). Without Glass UI, or not following, each addon keeps its own look: GUF Clean, GRF Classic + Smoked (both saved). Following, both are Pearl: preset `pearl`, gloss 0.15, frost 0.06, wash 0.10, innerShadow 0.15. No Glass UI failure, nothing blocked. |
+| S.2 | Load order: is every addon's `Theme` answered after Glass UI's `ADDON_LOADED` (`OptionalDeps: GlassUI`)? | **70450: yes.** In every combination with Glass UI, every answer was given after `Ready()`: Glass UI's `ADDON_LOADED` runs before an `OptionalDeps` dependent's own. |
+| S.3 | Follow on, then off, with a Smoked body and a non-default slider: the local look and saved keys come back unchanged | **70450: passes on the data.** After following, "all, own again" matches "all, own": the same STYLE, and the same saved look keys (GUF `look=clean`; GRF `look=classic`, `glassBody=smoked`). The GUF Smoked/slider step left no trace in its saved keys, so only GRF's Smoked body was exercised. The owner answered "not sure" to "exactly as before" (the screenshot shows the own look back). |
+| S.4 | Live repaint under Pearl: target colours, font, cast colours | **70450: yes** to all three (owner, screenshots of a target and a cast bar). |
+| S.5 | Gradients: the fill and the health-loss overlay on bright and dark scenery | **70450: yes** (owner). Screenshots over a bright sky and a dark interior: the fills read on both. Priest white is the faintest over bright sky. |
+| S.6 | Low health: remaining against missing, on unit frames and raid cells | **70450: yes** (owner, `/glass preview`). A real 91/337 (27%) reads clearly: the remaining part bright, the missing part see-through. |
+| S.7 | Combat: Follow switched in combat waits for the reload; a /reload in combat; no blocked action | **70450: not established.** Nothing was blocked and Glass UI recorded no failure. The step that waits for `/glassui suite follow glassraidframes off` in combat was completed by hand with GRF still set to follow. The slash path works offline, so the command most likely never reached Glass UI. The reload after it came out of combat (the record says `combat=false`), so the reload-in-combat case was not exercised either. The one error was Blizzard's `PetActionBar.lua:123` taint-log noise (134 times). To redo, in short. |
+| S.8 | The page's click-casting line and buttons; GRF's editor on Pearl | **70450: yes.** The page (after the owner's mockup) fits the window at this UI scale. Both cards read "Glass UI preset: Pearl". GUF's Settings opens its page, showing the look set in Glass UI. Configure bindings opens GRF's editor, which reads well on Pearl. The click-casting line matches GRF's setting. **The page's own Reload UI button reloaded with nothing blocked** (run #219 to #220): the secure macro path works inside Settings. Found: the click-casting line didn't redraw while the page was open when GRF reported again; fixed, the page now redraws on every report and switch. Owner: the orb is "not the pearl artwork" of the mockup. |
 
 ## Blizzard's own glass (#17)
 
