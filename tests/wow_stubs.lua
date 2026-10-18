@@ -382,6 +382,8 @@ C_AddOns = {
     end,
 }
 WoW.GUID = "Player-4618-0ABCDEF0"
+C_Item = { GetItemIconByID = function(id) return WoW.itemIcons[id] end }
+WoW.itemIcons = { [5500] = 134122 }
 function UnitGUID(unit) return unit == "player" and WoW.GUID or nil end
 function issecretvalue(v) return false end
 function InCombatLockdown() return WoW.combat end

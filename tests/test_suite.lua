@@ -214,6 +214,8 @@ local O = GUI.Options._test
 O.panel:Show()
 local rows = O.rows
 eq(O.presetName:GetText(), "Pearl", "the suite preset card names the theme")
+check(O.pearl ~= nil, "the preset card shows a pearl")
+eq(O.pearl:GetTexture(), 134122, "the Iridescent Pearl's own icon, read from the client by item")
 eq(rows.GlassUnitFrames.card:IsShown(), true, "a card for a member that speaks the API")
 eq(rows.GlassChat.card:IsShown(), false, "no card for one that doesn't")
 eq(rows.GlassUnitFrames.line:GetText(), "Glass UI preset: Pearl", "a follower's card: Glass UI preset: Pearl")
@@ -294,6 +296,15 @@ GUI.Options.Open = function() error("Settings refused") end
 check(pcall(Suite.Open), "Suite.Open never errors")
 eq(Suite.Open(), false, "and says false when it couldn't")
 GUI.Options.Open = realOpen
+
+-- No icon from the client (not cached, another build): the bare glass disc, no error.
+WoW.itemIcons = {}
+GUI = loadAddon()
+GUI.Options._test.panel:Show()
+eq(GUI.Options._test.pearl, nil, "no pearl icon: the bare disc")
+eq(next(GUI.failures), nil, "and nothing failed")
+GUI.Options._test.panel:Hide()
+WoW.itemIcons = { [5500] = 134122 }
 
 -- Never another addon's SavedVariables: the strict globals would throw on a
 -- read, and nothing was written.

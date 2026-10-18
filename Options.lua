@@ -36,6 +36,11 @@ local refreshers = {}
 local SPEAKS = { early = true, silent = true, failed = true, following = true, own = true }
 local PAD = 16
 local CARD_BACKING = { 0.05, 0.06, 0.08, 0.55 }
+-- The pearl in the preset card: the Iridescent Pearl's own icon (item 5500),
+-- read from the client (never a guessed file name), clipped round inside the
+-- glass disc. No icon: the bare disc.
+local PEARL_ITEM = 5500
+local ICON_TRIM = 0.08   -- the icon's square frame, cut away
 
 local function refreshAll()
     for _, refresh in ipairs(refreshers) do refresh() end
@@ -223,7 +228,21 @@ local function build()
     local orb = CreateFrame("Frame", nil, presetContent)
     orb:SetSize(48, 48)
     orb:SetPoint("RIGHT", presetContent, "RIGHT", -22, 0)
-    pcall(pageGlass().Disc, orb, "disc")
+    local okDisc = pcall(pageGlass().Disc, orb, "disc")
+    local okIcon, icon = pcall(C_Item.GetItemIconByID, PEARL_ITEM)
+    icon = okIcon and API.Plain(icon) or nil
+    if okDisc and icon then
+        local face = CreateFrame("Frame", nil, orb)
+        face:SetAllPoints(orb)
+        face:SetFrameLevel(pageGlass().ContentLevel(orb))
+        local t = face:CreateTexture(nil, "ARTWORK")
+        t:SetPoint("TOPLEFT", orb, "TOPLEFT", 3, -3)
+        t:SetPoint("BOTTOMRIGHT", orb, "BOTTOMRIGHT", -3, 3)
+        t:SetTexture(icon)
+        t:SetTexCoord(ICON_TRIM, 1 - ICON_TRIM, ICON_TRIM, 1 - ICON_TRIM)
+        t:AddMaskTexture(pageGlass().Mask(face, "disc_mask", nil, 3, orb))
+        Options._test.pearl = t
+    end
     Options._test.presetName = presetName
 
     local sep1 = rule()
