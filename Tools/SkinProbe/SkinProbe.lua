@@ -978,15 +978,22 @@ for i, c in ipairs(COMBOS) do
 end
 local more = {
     -- All three loaded and following: the looks and the live behaviour.
-    { text = "Both are on Pearl now. Open Glass UI's page (/glassui options). Do Glass Unit Frames and Glass "
-          .. "Raid Frames read 'following Glass UI (Pearl)', and the others 'not yet integrated' or not "
-          .. "installed?", ask = true, screenshot = "suite, Glass UI page" },
-    { text = "Open Glass Unit Frames' own options (its Options button on the page). Does its Look section say it "
-          .. "follows Glass UI, with the look controls greyed out?", ask = true, screenshot = "suite, GUF options" },
-    { text = "S.8: back on Glass UI's page, press Click-casting. Did Glass Raid Frames' editor open, and does it "
-          .. "read well on Pearl (its preview health bar included)?", ask = true, screenshot = "suite, click-cast editor" },
-    { text = "Does the page's click-casting line (on/off) match Glass Raid Frames' 'other addons' frames' "
-          .. "setting?", ask = true },
+    { text = "Both are on Pearl now. Open Glass UI's page (/glassui options). Do both cards read 'Glass UI "
+          .. "preset: Pearl' with 'Use Glass UI appearance' checked?", ask = true, screenshot = "suite, Glass UI page" },
+    { text = "Does the page look like your mockup: the Pearl card with its orb, the two glass cards, and "
+          .. "'Theme sync unavailable' folded (click it: does it list the other Glass addons)? Is it all inside "
+          .. "the window, nothing cut off at the bottom?", ask = true, screenshot = "suite, page unfolded" },
+    { text = "Press Glass Unit Frames' Settings button. Does its Look section say it follows Glass UI, with the "
+          .. "look controls greyed out?", ask = true, screenshot = "suite, GUF options" },
+    { text = "S.8: back on Glass UI's page, press Configure bindings. Did Glass Raid Frames' editor open, and does "
+          .. "it read well on Pearl (its preview health bar included)?", ask = true, screenshot = "suite, click-cast editor" },
+    { text = "Does the page's click-casting line (Enabled/Disabled) match Glass Raid Frames' 'other addons' "
+          .. "frames' setting?", ask = true },
+    { text = "Open Glass UI's page again and press its own Reload UI button, at the bottom right (not this "
+          .. "panel's). Did the UI reload, with no 'blocked' message?", reload = true },
+    { text = "Reads the session after Glass UI's own reload: still all three on Pearl, nothing blocked.",
+      auto = true, run = function() return suiteState("after the page's reload").blocked end,
+      check = function() return suiteCheck("after the page's reload", ALL, true) end },
     { text = "S.4: target a player of another class, then a hostile NPC, then a friendly NPC. Did the bars change "
           .. "colour at once each time?", ask = true, screenshot = "suite, a target on Pearl" },
     { text = "Change Glass Unit Frames' font (its options, Font). Did the text change at once?", ask = true },

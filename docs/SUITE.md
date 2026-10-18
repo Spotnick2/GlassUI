@@ -202,12 +202,25 @@ open.
 ## Glass UI's page
 
 Glass UI gets its first Settings page (`Options.lua`, Blizzard's Settings through
-`API.RegisterSettingsPanel`, built at its first `OnShow`). It holds:
-- **Suite theme: Pearl.** One choice for now; the field is a name, so the catalogue can grow.
-- **The family list:** each member's state, an "Options" button for one that reported its options,
-  and a "Follow Glass UI" checkbox for the integrated ones.
-- **The click-casting line.**
-- A "Reload" button whenever something is pending.
+`API.RegisterSettingsPanel`, built at its first `OnShow`). It follows the owner's mockup
+(2026-10-18). From top to bottom:
+- **The suite preset card:** "Pearl", with an orb of our glass. One choice for now; the field is a
+  name, so the catalogue can grow.
+- **Addon appearance:** one glass card per member that speaks the API. Each shows the member's
+  state ("Glass UI preset: Pearl", "Using addon settings", a failure, "reload to ..."), a "Use Glass
+  UI appearance" checkbox (its Follow switch) and a Settings button when it reported one.
+- **"Theme sync unavailable (n)":** the rest of the roster, folded, each with its state.
+- **Click-casting:** "Managed by Glass Raid Frames", its setting for other addons' frames, and
+  "Configure bindings".
+- **The footer:** "Appearance changes apply after reloading" (or that changes are waiting), and
+  a **Reload UI** button.
+  - The button is ForeverProbe's measured secure `/reload` macro button, on a frame parented to
+    nothing, positioned over the footer and never anchored to it. Its attributes are set once, out
+    of combat, and none of our code runs on its click. A protected frame inside Blizzard's
+    Settings panel would make the panel's own show and hide protected in combat.
+  - It hides as combat starts and comes back after; in combat the footer says to type `/reload`.
+
+The cards use the Pearl recipe, so the page shows the theme it offers.
 
 `/glassui suite` prints the same, and `/glassui suite follow <addon> on|off` sets the switch.
 

@@ -1,16 +1,23 @@
 -- Options.lua: Glass UI's page in Esc > Options > AddOns: the suite theme and
--- the Glass family (docs/SUITE.md, "Glass UI's page"). Glass Mail's recipe
--- (the porting guide's): a plain Frame with .name, hidden at creation,
--- controls built on the first OnShow, every value re-read on every OnShow,
--- registered once at PLAYER_LOGIN from GlassUI.lua.
+-- the Glass family (docs/SUITE.md, "Glass UI's page"; the owner's mockup,
+-- 2026-10-18). Glass Mail's recipe (the porting guide's): a plain Frame with
+-- .name, hidden at creation, controls built on the first OnShow, every value
+-- re-read on every OnShow, registered once at PLAYER_LOGIN from GlassUI.lua.
 --
--- Each member's line is Suite.Line, the same as /glassui suite. A member
--- that speaks the suite API gets a Follow checkbox, and an Options button
--- when it reported one. Every change applies at the next /reload: the page
--- only saves it, and says to type /reload. ReloadUI() from addon code is
--- protected on Forever (porting guide; ForeverProbe's reload is a secure macro
--- button), and a secure button inside Blizzard's Settings panel would make the
--- panel's own show and hide protected in combat: so no Reload button.
+-- Top to bottom: the suite preset card; one card per addon that speaks the
+-- suite API (its state, "Use Glass UI appearance", its Settings); the others
+-- folded under "Theme sync unavailable (n)"; click-casting; the reload
+-- footer. The cards are our own glass, built with the Pearl recipe, so the
+-- page shows what it sells.
+--
+-- Every change applies at the next /reload. ReloadUI() from addon code is
+-- protected on Forever, so the Reload UI button is ForeverProbe's measured
+-- one (AltStable's): a SecureActionButtonTemplate running the /reload macro,
+-- on a frame of its own parented to nothing (a protected frame inside the
+-- Settings panel would make the panel's own show and hide protected in
+-- combat), positioned over the footer, never anchored to it, attributes set
+-- once out of combat, nothing of ours on its click, hidden as combat starts
+-- and shown only outside it. In combat the footer says to type /reload.
 
 GlassUI = GlassUI or {}
 local GUI = GlassUI
@@ -27,97 +34,314 @@ local refreshers = {}
 
 -- The states of a member that speaks the suite API (Suite.State).
 local SPEAKS = { early = true, silent = true, failed = true, following = true, own = true }
+local PAD = 16
+local CARD_BACKING = { 0.05, 0.06, 0.08, 0.55 }
+
+local function refreshAll()
+    for _, refresh in ipairs(refreshers) do refresh() end
+end
+
+-- The page's glass: Pearl when the running LibGlass has it (r11), else ours.
+local function pageGlass()
+    if Options.glass then return Options.glass end
+    local ok, inst = pcall(function() return LibStub("LibGlass-1.0"):New({ preset = "pearl" }) end)
+    Options.glass = ok and inst or GUI.Glass
+    return Options.glass
+end
 
 local function label(parent, text, font)
     local fs = parent:CreateFontString(nil, "ARTWORK", font or "GameFontHighlight")
     fs:SetText(text)
+    fs:SetJustifyH("LEFT")
     return fs
 end
 
 local function button(parent, text, width, onClick)
     local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    b:SetSize(width, 22)
+    b:SetSize(width, 24)
     b:SetText(text)
     b:SetScript("OnClick", onClick)
     return b
 end
 
--- A family member's row: its line, and the controls its state allows.
-local function memberRow(m, anchor)
+-- Across the page, under `anchor`.
+local function span(region, anchor, gap)
+    region:ClearAllPoints()
+    region:SetPoint("TOP", anchor, "BOTTOM", 0, -gap)
+    region:SetPoint("LEFT", panel, "LEFT", PAD, 0)
+    region:SetPoint("RIGHT", panel, "RIGHT", -PAD, 0)
+end
+
+-- A glass card `height` tall: the card, and the frame its content goes on
+-- (above the glass body).
+local function card(height)
+    local c = CreateFrame("Frame", nil, panel)
+    c:SetHeight(height)
+    local Glass = pageGlass()
+    local ok, g = pcall(Glass.Apply, c, "small")
+    if ok and type(g) == "table" then
+        local backing = c:CreateTexture(nil, "BACKGROUND", nil, -7)
+        backing:SetAllPoints(c)
+        backing:SetColorTexture(CARD_BACKING[1], CARD_BACKING[2], CARD_BACKING[3], CARD_BACKING[4])
+        if g.mask then backing:AddMaskTexture(g.mask) end
+    end
+    local content = CreateFrame("Frame", nil, c)
+    content:SetAllPoints(c)
+    content:SetFrameLevel(c:GetFrameLevel() + 2)
+    return c, content
+end
+
+local function rule()
+    local t = panel:CreateTexture(nil, "ARTWORK")
+    t:SetColorTexture(1, 1, 1, 0.12)
+    t:SetHeight(1)
+    return t
+end
+
+--------------------------------------------------------------------------------
+-- The Reload UI button (the header comment says why it is built this way)
+--------------------------------------------------------------------------------
+
+local reload   -- { frame, button }
+-- From PLAYER_REGEN_DISABLED to PLAYER_REGEN_ENABLED. InCombatLockdown() is
+-- still false while PLAYER_REGEN_DISABLED runs, and the page redraws then:
+-- without this the redraw would show the button again as combat begins.
+local fighting = false
+
+local function combat() return fighting or InCombatLockdown() end
+
+local function buildReload()
+    if reload or combat() then return reload end
+    local f = CreateFrame("Frame", nil, nil)
+    f:SetFrameStrata("DIALOG")
+    f:SetSize(150, 26)
+    local b = CreateFrame("Button", nil, f, "SecureActionButtonTemplate, UIPanelButtonTemplate")
+    b:SetAllPoints(f)
+    b:SetText("Reload UI")
+    b:SetAttribute("type", "macro")
+    b:SetAttribute("macrotext", "/reload")
+    b:RegisterForClicks("AnyUp", "AnyDown")
+    f:Hide()
+    reload = { frame = f, button = b }
+    Options._test.reload = reload
+    return reload
+end
+
+-- Over `spot` (our footer placeholder), at its screen position and scale.
+-- Only outside combat; never anchored to it.
+local function showReload(spot)
+    if combat() then return end
+    local r = buildReload()
+    if not r then return end
+    local cx, cy = spot:GetCenter()
+    if not (cx and cy) then r.frame:Hide() return end
+    r.frame:SetScale(spot:GetEffectiveScale())
+    r.frame:ClearAllPoints()
+    r.frame:SetPoint("CENTER", nil, "BOTTOMLEFT", cx, cy)
+    r.frame:Show()
+end
+
+local function hideReload()
+    if reload and not combat() then reload.frame:Hide() end
+end
+
+-- Hidden as combat starts (before the lockdown); the footer is redrawn
+-- either way, and after combat the button comes back if the page is open.
+local combatWatch = CreateFrame("Frame")
+API.RegisterEvents(combatWatch, { "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED" }, "options")
+combatWatch:SetScript("OnEvent", function(_, event)
+    fighting = event == "PLAYER_REGEN_DISABLED"
+    if fighting and reload then reload.frame:Hide() end
+    if Options.built and panel:IsShown() then refreshAll() end
+end)
+
+--------------------------------------------------------------------------------
+-- The page
+--------------------------------------------------------------------------------
+
+-- A member's card: its name, its state, "Use Glass UI appearance", Settings.
+-- The refresher returns whether it speaks the API, and whether a reload
+-- would change what it builds.
+local function memberCard(m)
     local Suite = GUI.Suite
-    local row = CreateFrame("Frame", nil, panel)
-    row:SetSize(560, 26)
-    row:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -2)
-    local follow = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
-    follow:SetSize(24, 24)
-    follow:SetPoint("LEFT", row, "LEFT", 0, 0)
-    local line = label(row, "")
-    line:SetPoint("LEFT", follow, "RIGHT", 4, 0)
-    line:SetJustifyH("LEFT")
-    local open = button(row, "Options", 80, function()
+    local c, content = card(54)
+    local name = label(content, m.title, "GameFontHighlightLarge")
+    name:SetPoint("TOPLEFT", content, "TOPLEFT", 14, -10)
+    local status = label(content, "", "GameFontDisable")
+    status:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -4)
+    local open = button(content, "Settings", 110, function()
         local r = Suite.ReportOf(m.name)
         if r and r.options then API.Try("suite:options:" .. m.name, r.options) end
     end)
-    open:SetPoint("RIGHT", row, "RIGHT", 0, 0)
-    line:SetPoint("RIGHT", open, "LEFT", -8, 0)
+    open:SetPoint("RIGHT", content, "RIGHT", -12, 0)
+    local follow = CreateFrame("CheckButton", nil, content, "UICheckButtonTemplate")
+    follow:SetSize(26, 26)
+    follow:SetPoint("RIGHT", open, "LEFT", -190, 0)
+    local text = label(content, "Use Glass UI appearance")
+    text:SetPoint("LEFT", follow, "RIGHT", 6, 0)
     follow:SetScript("OnClick", function()
         Suite.SetFollow(m.name, follow:GetChecked() == true)
-        for _, refresh in ipairs(refreshers) do refresh() end
+        refreshAll()
     end)
-    refreshers[#refreshers + 1] = function()
-        local text, state = Suite.Line(m)
-        line:SetText(text)
-        follow:SetShown(SPEAKS[state] == true)
-        follow:SetChecked(Suite.Following(m.name))
+    Options._test.rows[m.name] = { card = c, follow = follow, line = status, open = open }
+    return c, function()
+        local state, pending = Suite.State(m.name)
         local r = Suite.ReportOf(m.name)
+        local theme = Suite.THEMES[Suite.ThemeName()].label
+        local s
+        if state == "following" then s = "Glass UI preset: " .. theme
+        elseif state == "failed" then s = theme .. " failed (" .. ((r and r.reason) or "?") .. "): using addon settings"
+        elseif state == "early" then s = "Started before Glass UI: using addon settings"
+        elseif state == "silent" then s = "No report from it: see its errors"
+        else s = "Using addon settings" end
+        if pending then
+            s = s .. " - reload to " .. (Suite.Following(m.name) and ("use " .. theme) or "use its own settings")
+        end
+        status:SetText(s)
+        follow:SetChecked(Suite.Following(m.name))
         open:SetShown(r ~= nil and r.options ~= nil)
+        return SPEAKS[state] == true, pending
     end
-    Options._test.rows[m.name] = { follow = follow, line = line, open = open }
-    return row
 end
 
 local function build()
     local Suite = GUI.Suite
-    local title = label(panel, "Glass UI", "GameFontNormalHuge")
-    title:SetPoint("TOPLEFT", panel, "TOPLEFT", 16, -16)
-    local version = label(panel, "", "GameFontDisableSmall")
-    version:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -6)
-    local theme = label(panel, "", "GameFontNormal")
-    theme:SetPoint("TOPLEFT", version, "BOTTOMLEFT", 0, -16)
-    local note = label(panel, "An addon that follows Glass UI takes the suite theme, and its own look "
-        .. "settings wait, unchanged, until it stops. Changes apply after a /reload.", "GameFontDisableSmall")
-    note:SetPoint("TOPLEFT", theme, "BOTTOMLEFT", 0, -6)
-    note:SetWidth(560)
-    note:SetJustifyH("LEFT")
-    refreshers[#refreshers + 1] = function()
-        version:SetText("Version " .. GUI.VersionText() .. " for World of Warcraft: Forever, by Spotnick")
-        theme:SetText("Suite theme: " .. Suite.THEMES[Suite.ThemeName()].label)
-    end
-    local prev = note
-    for _, m in ipairs(Suite.ROSTER) do prev = memberRow(m, prev) end
+    local title = label(panel, "Glass UI", "GameFontHighlightHuge")
+    title:SetPoint("TOPLEFT", panel, "TOPLEFT", PAD + 4, -PAD)
+    local tagline = label(panel, "One appearance for your Glass addons.")
+    tagline:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -6)
 
-    local cc = label(panel, "", "GameFontHighlight")
-    cc:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, -16)
-    local ccOpen = button(panel, "Click-casting", 110, function()
+    -- The suite preset, with a pearl of our glass beside it.
+    local preset, presetContent = card(78)
+    span(preset, tagline, 14)
+    local kicker = label(presetContent, "SUITE PRESET", "GameFontHighlightSmall")
+    kicker:SetPoint("TOPLEFT", presetContent, "TOPLEFT", 16, -12)
+    local presetName = label(presetContent, "", "GameFontHighlightHuge")
+    presetName:SetPoint("TOPLEFT", kicker, "BOTTOMLEFT", 0, -4)
+    local presetNote = label(presetContent, "Used by addons linked to Glass UI.", "GameFontDisable")
+    presetNote:SetPoint("TOPLEFT", presetName, "BOTTOMLEFT", 0, -4)
+    local orb = CreateFrame("Frame", nil, presetContent)
+    orb:SetSize(48, 48)
+    orb:SetPoint("RIGHT", presetContent, "RIGHT", -22, 0)
+    pcall(pageGlass().Disc, orb, "disc")
+    Options._test.presetName = presetName
+
+    local sep1 = rule()
+    span(sep1, preset, 14)
+    local appearance = label(panel, "Addon appearance", "GameFontHighlightLarge")
+    appearance:SetPoint("TOPLEFT", sep1, "BOTTOMLEFT", 4, -12)
+    local choose = label(panel, "Choose which addons use the Glass UI appearance.", "GameFontDisable")
+    choose:SetPoint("TOPLEFT", appearance, "BOTTOMLEFT", 0, -6)
+
+    -- A card per roster member; only those that speak the API are shown,
+    -- stacked in roster order.
+    local cards = {}
+    for _, m in ipairs(Suite.ROSTER) do
+        local c, refresh = memberCard(m)
+        cards[#cards + 1] = { c = c, refresh = refresh, m = m }
+    end
+    local restore = label(panel, "Turn off to restore an addon's saved appearance settings.", "GameFontDisable")
+
+    -- Theme sync unavailable: the rest, folded.
+    local fold = CreateFrame("Button", nil, panel)
+    fold:SetHeight(28)
+    local arrow = label(fold, "", "GameFontHighlight")
+    arrow:SetPoint("LEFT", fold, "LEFT", 12, 0)
+    local foldText = label(fold, "", "GameFontHighlight")
+    foldText:SetPoint("LEFT", fold, "LEFT", 30, 0)
+    local hl = fold:CreateTexture(nil, "HIGHLIGHT")
+    hl:SetAllPoints(fold)
+    hl:SetColorTexture(1, 1, 1, 0.05)
+    local list = label(panel, "", "GameFontDisable")
+    list:SetJustifyV("TOP")
+    local keepOwn = label(panel, "These addons keep their own appearance settings.", "GameFontDisable")
+    Options.expanded = false
+    fold:SetScript("OnClick", function()
+        Options.expanded = not Options.expanded
+        refreshAll()
+    end)
+    Options._test.fold, Options._test.foldText, Options._test.list = fold, foldText, list
+
+    -- Click-casting.
+    local sep2 = rule()
+    local cc = label(panel, "Click-casting", "GameFontHighlightLarge")
+    cc:SetPoint("TOPLEFT", sep2, "BOTTOMLEFT", 4, -12)
+    local ccOwner = label(panel, "", "GameFontHighlight")
+    ccOwner:SetPoint("TOPLEFT", cc, "BOTTOMLEFT", 0, -6)
+    local ccLine = label(panel, "", "GameFontHighlight")
+    ccLine:SetPoint("TOPLEFT", ccOwner, "BOTTOMLEFT", 0, -4)
+    local ccOpen = button(panel, "Configure bindings", 170, function()
         local c = Suite.ClickCast()
         if c and c.open then API.Try("suite:clickcast", c.open) end
     end)
-    ccOpen:SetPoint("LEFT", cc, "RIGHT", 8, 0)
-    local reload = label(panel, "Type /reload to apply the changes.", "GameFontNormal")
-    reload:SetPoint("TOPLEFT", cc, "BOTTOMLEFT", 0, -16)
+    ccOpen:SetPoint("RIGHT", panel, "RIGHT", -PAD, 0)
+    ccOpen:SetPoint("TOP", cc, "TOP", 0, -6)
+    Options._test.clickCast, Options._test.clickCastOpen = ccLine, ccOpen
+
+    -- The footer: the note, and the spot the Reload UI button sits over.
+    local sep3 = rule()
+    span(sep3, ccLine, 14)
+    local note = label(panel, "", "GameFontHighlight")
+    note:SetPoint("TOPLEFT", sep3, "BOTTOMLEFT", 4, -14)
+    local spot = CreateFrame("Frame", nil, panel)
+    spot:SetSize(150, 26)
+    spot:SetPoint("RIGHT", panel, "RIGHT", -PAD, 0)
+    spot:SetPoint("TOP", sep3, "BOTTOM", 0, -8)
+    local credit = label(panel, "", "GameFontDisableSmall")
+    credit:SetPoint("TOPRIGHT", spot, "BOTTOMRIGHT", 0, -6)
+    Options._test.note, Options._test.spot = note, spot
+
     refreshers[#refreshers + 1] = function()
-        local c = Suite.ClickCast()
-        cc:SetText(c and ("Click-casting: Glass Raid Frames; its bindings on other addons' frames: "
-            .. (c.others and "on" or "off")) or "Click-casting: not reported")
-        ccOpen:SetShown(c ~= nil and c.open ~= nil)
-        local any = false
-        for _, m in ipairs(Suite.ROSTER) do
-            local _, _, pending = Suite.Line(m)
-            any = any or pending
+        presetName:SetText(Suite.THEMES[Suite.ThemeName()].label)
+        local prev, anyPending, others = choose, false, {}
+        for _, e in ipairs(cards) do
+            local speaks, pending = e.refresh()
+            anyPending = anyPending or pending
+            if speaks then
+                span(e.c, prev, prev == choose and 10 or 6)
+                e.c:Show()
+                prev = e.c
+            else
+                e.c:Hide()
+                others[#others + 1] = (Suite.Line(e.m))
+            end
         end
-        reload:SetShown(any)
+        restore:ClearAllPoints()
+        restore:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", prev == choose and 0 or 4, -8)
+        span(fold, restore, 10)
+        fold:SetShown(#others > 0)
+        foldText:SetText("Theme sync unavailable (" .. #others .. ")")
+        arrow:SetText(Options.expanded and "v" or ">")
+        list:SetText(table.concat(others, "\n"))
+        list:ClearAllPoints()
+        list:SetPoint("TOPLEFT", fold, "BOTTOMLEFT", 30, -2)
+        list:SetShown(Options.expanded and #others > 0)
+        keepOwn:ClearAllPoints()
+        local after = Options.expanded and list or fold
+        keepOwn:SetPoint("TOPLEFT", after, "BOTTOMLEFT", after == fold and 4 or -26, -6)
+        keepOwn:SetShown(#others > 0)
+        span(sep2, #others > 0 and keepOwn or restore, 14)
+
+        local c = Suite.ClickCast()
+        if c then
+            ccOwner:SetText("Managed by Glass Raid Frames")
+            ccLine:SetText("Bindings on other addons' frames: " .. (c.others and "Enabled" or "Disabled"))
+        else
+            ccOwner:SetText("Managed by Glass Raid Frames, when it is loaded")
+            ccLine:SetText("Glass Raid Frames hasn't reported this session.")
+        end
+        ccOpen:SetShown(c ~= nil and c.open ~= nil)
+
+        if anyPending then
+            note:SetText(combat() and "Changes are waiting: type /reload when combat ends."
+                or "Changes are waiting: reload to apply them.")
+        else
+            note:SetText("Appearance changes apply after reloading.")
+        end
+        Options.pending = anyPending
+        credit:SetText((GUI.IsDev() and "Development build" or ("Version " .. GUI.VersionText())) .. " - Spotnick")
+        showReload(spot)
     end
-    Options._test.clickCast, Options._test.clickCastOpen, Options._test.reload = cc, ccOpen, reload
 end
 
 panel:SetScript("OnShow", function()
@@ -125,8 +349,9 @@ panel:SetScript("OnShow", function()
         Options.built = true
         build()
     end
-    for _, refresh in ipairs(refreshers) do refresh() end
+    refreshAll()
 end)
+panel:SetScript("OnHide", hideReload)
 
 -- Called once at PLAYER_LOGIN by GlassUI.lua.
 function Options.Register()

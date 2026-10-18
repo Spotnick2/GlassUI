@@ -150,6 +150,8 @@ function Methods.GetFrameStrata(w) return w._strata or "MEDIUM" end
 function Methods.GetName(w) return w._name end
 function Methods.GetParentKey(w) return w._parentKey end
 function Methods.GetParent(w) return w._parent end
+function Methods.SetAttribute(w, k, v) w._attrs = w._attrs or {}; w._attrs[k] = v end
+function Methods.GetAttribute(w, k) return w._attrs and w._attrs[k] end
 function Methods.SetParent(w, p)
     if w._parent and w._parent._children then
         for i, c in ipairs(w._parent._children) do
