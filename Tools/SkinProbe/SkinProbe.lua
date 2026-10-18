@@ -17,6 +17,7 @@
 --
 -- Each skin's acceptance, on the real addon, with screenshots:
 --   #4 merchant                                              /fp steps skin merchant
+--   #24 the suite theme across GUF and GRF (S.1-S.8)          /fp steps skin suite
 -- And Blizzard's own glass, the login ruleset card beside ours (#17): /fp steps skin card
 --
 -- The only writes to Blizzard objects are SetAlpha, always put back at once
@@ -670,6 +671,370 @@ Probe:Steps("merchant", {
 })
 
 --------------------------------------------------------------------------------
+-- The suite theme (#24, docs/SUITE.md "In-game validation", S.1-S.8): Glass
+-- UI coordinating Glass Unit Frames and Glass Raid Frames. It reads only
+-- public state: Glass UI's Suite record, each addon's glass instance (its
+-- STYLE and preset through the addon's own forwarding table), its saved look
+-- keys, and LibGlass's MINOR. It switches addon combinations for THIS
+-- character only (the GUID: a name changes nothing, porting guide C_AddOns),
+-- after saving the three addons' enable states and the follow switches in
+-- SkinProbeDB.suiteWas; its last step, or /fp skin suite restore, puts them
+-- back.
+--------------------------------------------------------------------------------
+
+local SUITE_ADDONS = { "GlassUI", "GlassUnitFrames", "GlassRaidFrames" }
+local MEMBERS = { "GlassUnitFrames", "GlassRaidFrames" }
+local NAMESPACE = { GlassUnitFrames = "GlassUF", GlassRaidFrames = "GlassRaidFrames" }
+-- The saved keys following must leave untouched (the plan's suspension list).
+local SAVED = {
+    GlassUnitFrames = { db = "GlassUnitFramesDB",
+                        keys = { "look", "glassBody", "fill", "rim", "track", "fade", "edge", "trackRamp" } },
+    GlassRaidFrames = { db = "GlassRaidFramesDB", keys = { "look", "glassBody" } },
+}
+local STYLE_KEYS = { "gloss", "frost", "wash", "innerShadow" }
+
+local function suite()
+    local G = glassUI()
+    return G and type(G.Suite) == "table" and G.Suite or nil
+end
+
+local function guid()
+    local ok, g = pcall(UnitGUID, "player")
+    g = ok and plain(g) or nil
+    return type(g) == "string" and g or nil
+end
+
+local function enableState(name)
+    local g = guid()
+    if not g then return nil end
+    local ok, s = pcall(C_AddOns.GetAddOnEnableState, name, g)
+    s = ok and plain(s) or nil
+    return type(s) == "number" and s or nil
+end
+
+local function setEnabled(name, on)
+    local g = guid()
+    if not g then return false end
+    return (pcall(on and C_AddOns.EnableAddOn or C_AddOns.DisableAddOn, name, g))
+end
+
+-- Saved once, before the first change; kept across the procedure's reloads.
+local function suiteSnapshot()
+    if type(SkinProbeDB) ~= "table" then return false, "no saved table" end
+    if type(SkinProbeDB.suiteWas) == "table" then return true, "already saved" end
+    local was = { enabled = {}, follow = {} }
+    for _, n in ipairs(SUITE_ADDONS) do was.enabled[n] = enableState(n) end
+    local S = suite()
+    for _, n in ipairs(MEMBERS) do was.follow[n] = S and S.Following and S.Following(n) or false end
+    SkinProbeDB.suiteWas = was
+    say("SUITE saved: GlassUI=" .. show(was.enabled.GlassUI) .. " GlassUnitFrames=" .. show(was.enabled.GlassUnitFrames)
+        .. " GlassRaidFrames=" .. show(was.enabled.GlassRaidFrames))
+    return true, "saved"
+end
+
+-- Enable exactly the addons in `set` (for this character), reading each back;
+-- with `follow` given, also set both members' Follow switch (Glass UI must be
+-- loaded now for that).
+local function suiteSet(set, follow)
+    local saved, why = suiteSnapshot()
+    if not saved then return false, why end
+    if follow ~= nil then
+        local S = suite()
+        if not (S and S.SetFollow) then return false, "Glass UI isn't loaded: can't set Follow" end
+        for _, n in ipairs(MEMBERS) do S.SetFollow(n, follow) end
+    end
+    local ok, parts = true, {}
+    for _, n in ipairs(SUITE_ADDONS) do
+        setEnabled(n, set[n] == true)
+        local s = enableState(n)
+        ok = ok and s ~= nil and (s > 0) == (set[n] == true)
+        parts[#parts + 1] = n .. "=" .. show(s)
+    end
+    local detail = table.concat(parts, " ") .. (follow == nil and "" or (" follow=" .. tostring(follow)))
+    say("SUITE set " .. detail)
+    return ok, detail
+end
+
+local function suiteRestore()
+    local was = type(SkinProbeDB) == "table" and SkinProbeDB.suiteWas or nil
+    if type(was) ~= "table" then return true, "nothing to restore" end
+    local S = suite()
+    if S and S.SetFollow then
+        for _, n in ipairs(MEMBERS) do S.SetFollow(n, was.follow[n] == true) end
+    end
+    local ok, parts = true, {}
+    for _, n in ipairs(SUITE_ADDONS) do
+        local want = was.enabled[n]
+        if type(want) == "number" then
+            setEnabled(n, want > 0)
+            local s = enableState(n)
+            ok = ok and s ~= nil and (s > 0) == (want > 0)
+            parts[#parts + 1] = n .. "=" .. show(s)
+        end
+    end
+    -- The follow switches live in GlassUIDB: kept for when Glass UI is back.
+    if S then SkinProbeDB.suiteWas = nil end
+    local detail = table.concat(parts, " ") .. (S and "" or "; follow not restored (Glass UI not loaded)")
+    say("SUITE restored " .. detail)
+    return ok, detail
+end
+
+local function field(t, k)
+    local ok, v = pcall(function() return t[k] end)
+    return ok and plain(v) or nil
+end
+
+-- One member as this session sees it: loaded, its instance, its saved keys,
+-- and what Glass UI recorded.
+local function memberState(name)
+    local m = { loaded = loaded(name) }
+    local ns = rawget(_G, NAMESPACE[name])
+    local glass = type(ns) == "table" and field(ns, "Glass") or nil
+    if type(glass) == "table" then
+        m.preset = field(glass, "preset")
+        local st = field(glass, "STYLE")
+        if type(st) == "table" then
+            for _, k in ipairs(STYLE_KEYS) do m[k] = field(st, k) end
+        end
+    end
+    local db = rawget(_G, SAVED[name].db)
+    if type(db) == "table" then
+        m.saved = {}
+        for _, k in ipairs(SAVED[name].keys) do
+            local v = field(db, k)
+            m.saved[k] = (type(v) == "number" or type(v) == "string" or type(v) == "boolean") and v or nil
+        end
+    end
+    local S = suite()
+    if S then
+        m.state = S.State and select(1, S.State(name)) or nil
+        local a = S.AnswerOf and S.AnswerOf(name)
+        if a then m.answerReady, m.answerPreset, m.answerReason = a.ready, a.preset, a.reason end
+        local r = S.ReportOf and S.ReportOf(name)
+        if r then m.reported, m.built, m.reason, m.minor = true, r.built, r.reason, r.minor end
+    end
+    return m
+end
+
+local function memberLine(name, m)
+    local parts = { name .. ": loaded=" .. tostring(m.loaded) }
+    for _, k in ipairs({ "state", "answerReady", "answerPreset", "answerReason", "built", "reason", "minor", "preset" }) do
+        if m[k] ~= nil then parts[#parts + 1] = k .. "=" .. show(m[k]) end
+    end
+    for _, k in ipairs(STYLE_KEYS) do
+        if m[k] ~= nil then parts[#parts + 1] = k .. "=" .. num(m[k]) end
+    end
+    if m.saved then
+        for _, k in ipairs(SAVED[name].keys) do
+            if m.saved[k] ~= nil then parts[#parts + 1] = "db." .. k .. "=" .. show(m.saved[k]) end
+        end
+    end
+    return table.concat(parts, " ")
+end
+
+local function libMinor()
+    local LS = rawget(_G, "LibStub")
+    if not LS then return nil end
+    local ok, _, minor = pcall(LS.GetLibrary, LS, "LibGlass-1.0", true)
+    return ok and plain(minor) or nil
+end
+
+-- Every member, Glass UI and the library: logged, and saved as S.<label>.
+local function suiteState(label)
+    local rec = { glassUI = loaded("GlassUI"), minor = libMinor(), combat = InCombatLockdown() == true }
+    local G = glassUI()
+    local failures = G and type(G.failures) == "table" and G.failures or {}
+    rec.failures = 0
+    for _ in pairs(failures) do rec.failures = rec.failures + 1 end
+    rec.blocked = type(SkinProbeDB) == "table" and SkinProbeDB.suiteBlocked or 0
+    say("S " .. label .. ": GlassUI=" .. tostring(rec.glassUI) .. " LibGlass MINOR=" .. show(rec.minor)
+        .. " failures=" .. rec.failures .. " blocked=" .. rec.blocked .. " combat=" .. tostring(rec.combat))
+    for _, n in ipairs(MEMBERS) do
+        rec[n] = memberState(n)
+        say("S " .. label .. ": " .. memberLine(n, rec[n]))
+    end
+    record("S." .. label, rec)
+    return rec
+end
+
+-- S.1/S.2/S.3: does this session match the combination? `follow` is whether
+-- the loaded members should be on Pearl; `same` the label of an earlier
+-- session whose own look and saved keys this one must match exactly.
+local function suiteCheck(label, set, follow, same)
+    local rec = suiteState(label)
+    local bad = {}
+    local function fail(msg) bad[#bad + 1] = msg end
+    if rec.glassUI ~= (set.GlassUI == true) then fail("GlassUI loaded=" .. tostring(rec.glassUI)) end
+    if rec.failures > 0 then fail("Glass UI recorded " .. rec.failures .. " failure(s): /glassui failures") end
+    local earlier = same and type(SkinProbeDB) == "table" and SkinProbeDB.results and SkinProbeDB.results["S." .. same]
+    for _, n in ipairs(MEMBERS) do
+        local m = rec[n]
+        if m.loaded ~= (set[n] == true) then fail(n .. " loaded=" .. tostring(m.loaded)) end
+        if set[n] and set.GlassUI then
+            if m.answerReady ~= true then fail(n .. " asked before Glass UI was ready, or never asked (S.2)") end
+            if not m.reported then fail(n .. " didn't report") end
+            local want = follow and "pearl" or nil
+            if m.built ~= want then fail(n .. " built " .. show(m.built) .. ", wanted " .. show(want)) end
+            if m.state ~= (follow and "following" or "own") then fail(n .. " state " .. show(m.state)) end
+        end
+        if set[n] and m.preset ~= nil and (m.preset == "pearl") ~= (follow == true and set.GlassUI == true) then
+            fail(n .. " instance preset " .. show(m.preset))
+        end
+        local e = type(earlier) == "table" and earlier[n] or nil
+        if set[n] and type(e) == "table" then
+            for _, k in ipairs(STYLE_KEYS) do
+                if m[k] ~= e[k] then fail(n .. " " .. k .. " " .. num(m[k]) .. " vs " .. num(e[k]) .. " in " .. same) end
+            end
+            for _, k in ipairs(SAVED[n].keys) do
+                local now, was = m.saved and m.saved[k], e.saved and e.saved[k]
+                if now ~= was then fail(n .. " db." .. k .. " " .. show(now) .. " vs " .. show(was) .. " in " .. same) end
+            end
+        end
+    end
+    return #bad == 0, #bad == 0 and "as expected" or table.concat(bad, "; ")
+end
+
+-- The combinations, in order (S.1; "all, own" and "all, own again" are S.3).
+-- `follow`: whether the loaded members should be on Pearl. Both switches are
+-- off from the first step on; only "all, following" turns them on, from the
+-- "all, own" session, where Glass UI is loaded to take the change.
+local ALL = { GlassUI = true, GlassUnitFrames = true, GlassRaidFrames = true }
+local COMBOS = {
+    { label = "Glass UI alone", set = { GlassUI = true } },
+    { label = "Unit Frames alone", set = { GlassUnitFrames = true } },
+    { label = "Raid Frames alone", set = { GlassRaidFrames = true } },
+    { label = "both, no Glass UI", set = { GlassUnitFrames = true, GlassRaidFrames = true } },
+    { label = "Glass UI + Unit Frames", set = { GlassUI = true, GlassUnitFrames = true } },
+    { label = "Glass UI + Raid Frames", set = { GlassUI = true, GlassRaidFrames = true } },
+    { label = "all, own", set = ALL },
+    { label = "all, following", set = ALL, follow = true },
+}
+
+-- ADDON_ACTION_BLOCKED / FORBIDDEN this session (S.7), counted, never kept.
+local blockedWatch = CreateFrame("Frame")
+Probe:RegisterEvents(blockedWatch, { "ADDON_ACTION_BLOCKED", "ADDON_ACTION_FORBIDDEN" })
+blockedWatch:SetScript("OnEvent", function(_, event, who)
+    if type(SkinProbeDB) ~= "table" then return end
+    SkinProbeDB.suiteBlocked = (SkinProbeDB.suiteBlocked or 0) + 1
+    say("S " .. event .. " " .. show(plain(who)))
+end)
+
+local suiteSteps = {
+    title = "Glass UI: the suite theme (Pearl) across Glass Unit Frames and Glass Raid Frames",
+    { text = "Turns on script errors, saves which of Glass UI, Glass Unit Frames and Glass Raid Frames are "
+          .. "enabled for this character (and their Follow switches), and reads the suite as it is now. The "
+          .. "procedure turns them on and off for this character only, one combination per /reload, and puts "
+          .. "everything back at the end.",
+      auto = true, run = function()
+          if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
+          local saved = suiteSnapshot()
+          local S = suite()
+          if S and S.SetFollow then for _, n in ipairs(MEMBERS) do S.SetFollow(n, false) end end
+          return setCVar("scriptErrors", "1"), saved, suiteState("start").glassUI
+      end,
+      check = function()
+          local S = suite()
+          return S ~= nil and S.API == 1, S and "Glass UI's suite API is here; both Follow switches off for now"
+              or "Glass UI (with its suite API) must be loaded to start: enable it, /reload, and start again"
+      end },
+    { text = "For the look check later (S.3): in Glass Unit Frames' options, set its Body to Smoked and move "
+          .. "one Look slider (say Rim). Type what you changed in the Note box, so you can put it back at the "
+          .. "end. Skip if you'd rather not." },
+}
+for i, c in ipairs(COMBOS) do
+    local nextStep = { text = "Next combination: " .. c.label .. ". Sets it for this character.",
+                       button = c.label, run = function() return suiteSet(c.set, c.follow) end }
+    suiteSteps[#suiteSteps + 1] = nextStep
+    suiteSteps[#suiteSteps + 1] = { text = "Reload, to start with " .. c.label .. ".", reload = true }
+    suiteSteps[#suiteSteps + 1] = {
+        text = "Reads " .. c.label .. ": who loaded, what Glass UI answered and when, what each built.",
+        auto = true, run = function() return suiteState(c.label).minor end,
+        check = function() return suiteCheck(c.label, c.set, c.follow == true) end }
+    if i == 1 then
+        suiteSteps[#suiteSteps + 1] = { text = "Type /glassui suite. Does it list Glass Unit Frames and Glass "
+            .. "Raid Frames as not loaded, and the other Glass addons as not installed, disabled or not yet "
+            .. "integrated?", ask = true }
+    end
+end
+local more = {
+    -- All three loaded and following: the looks and the live behaviour.
+    { text = "Both are on Pearl now. Open Glass UI's page (/glassui options). Do Glass Unit Frames and Glass "
+          .. "Raid Frames read 'following Glass UI (Pearl)', and the others 'not yet integrated' or not "
+          .. "installed?", ask = true, screenshot = "suite, Glass UI page" },
+    { text = "Open Glass Unit Frames' own options (its Options button on the page). Does its Look section say it "
+          .. "follows Glass UI, with the look controls greyed out?", ask = true, screenshot = "suite, GUF options" },
+    { text = "S.8: back on Glass UI's page, press Click-casting. Did Glass Raid Frames' editor open, and does it "
+          .. "read well on Pearl (its preview health bar included)?", ask = true, screenshot = "suite, click-cast editor" },
+    { text = "Does the page's click-casting line (on/off) match Glass Raid Frames' 'other addons' frames' "
+          .. "setting?", ask = true },
+    { text = "S.4: target a player of another class, then a hostile NPC, then a friendly NPC. Did the bars change "
+          .. "colour at once each time?", ask = true, screenshot = "suite, a target on Pearl" },
+    { text = "Change Glass Unit Frames' font (its options, Font). Did the text change at once?", ask = true },
+    { text = "Cast a spell with a cast time. Did the cast bar show its colour?", ask = true,
+      screenshot = "suite, cast bar on Pearl" },
+    { text = "S.5: stand where the scenery behind the frames is bright (snow, sand, sky). Press Next for a "
+          .. "screenshot.", screenshot = "suite, bright scenery" },
+    { text = "Now where it is dark (a cave, a forest, night). Press Next for a screenshot.",
+      screenshot = "suite, dark scenery" },
+    { text = "On both: do the bar fills read right, and the health-loss overlay (take a hit to see it)?", ask = true },
+    { text = "S.6: type /glass preview (sample data on every frame), then press Next for a screenshot.",
+      screenshot = "suite, preview" },
+    { text = "Can you tell remaining from missing health at a glance, on unit frames and raid cells, including "
+          .. "the low ones? Type /glass preview again to stop it.", ask = true },
+    { text = "Optional, Skip if it isn't easy: get your own health below 30% (a fight, a fall), then press Next "
+          .. "for a screenshot.", screenshot = "suite, low health" },
+    -- S.7: a toggle in combat waits for the reload; a reload in combat.
+    { text = "S.7: turns the taint log on (Logs\\taint.log). With it on, Blizzard's own code throws 'attempt to "
+          .. "call a nil value' errors: ignore those. The next /reload turns it off.",
+      auto = true, run = function() return setCVar("taintLog", "1") end },
+    { text = "Get into combat (pull something weak) and stay in it.", wait = function() return InCombatLockdown() end,
+      timeout = 600 },
+    { text = "In combat, type: /glassui suite follow glassraidframes off",
+      wait = function()
+          local S = suite()
+          return S and not S.Following("GlassRaidFrames"), "Raid Frames still set to follow"
+      end, timeout = 300,
+      check = function()
+          local rec = suiteState("toggled in combat")
+          local m = rec.GlassRaidFrames
+          return m.built == "pearl" and m.state == "following",
+              "still Pearl this session: built=" .. show(m.built) .. " state=" .. show(m.state)
+      end },
+    { text = "Still in combat if you can, type /reload.", reload = true },
+    { text = "After the reload: Raid Frames on its own look, Unit Frames still on Pearl, its build waited for "
+          .. "combat to end if it was still on.",
+      auto = true, run = function() return suiteState("reload in combat").combat end,
+      check = function()
+          local rec = suiteState("after combat reload")
+          local u, r = rec.GlassUnitFrames, rec.GlassRaidFrames
+          local ok = u.built == "pearl" and u.state == "following" and r.built == nil and r.state == "own"
+              and rec.blocked == 0 and rec.failures == 0
+          return ok, "GUF " .. show(u.built) .. "/" .. show(u.state) .. ", GRF " .. show(r.built) .. "/"
+              .. show(r.state) .. ", blocked=" .. rec.blocked .. ", failures=" .. rec.failures
+      end },
+    { text = "Did you see any error, or a 'blocked' or 'interface action failed' message?", ask = true },
+    -- S.3: off again, against "all, own".
+    { text = "Last combination: all three, both back on their own look.", button = "Own look again",
+      run = function() return suiteSet(ALL, false) end },
+    { text = "Reload.", reload = true },
+    { text = "Reads it, and compares each addon's look and saved settings with the 'all, own' session.",
+      auto = true, run = function() return suiteState("all, own again").minor end,
+      check = function() return suiteCheck("all, own again", ALL, false, "all, own") end },
+    { text = "Do both look exactly as they did before following (the Smoked body and slider you set too)?",
+      ask = true, screenshot = "suite, own look again" },
+    { text = "Puts back which addons were enabled and their Follow switches.", button = "Restore",
+      run = suiteRestore },
+    { text = "Put back what you changed in Glass Unit Frames' options at the start (your Note says what), then "
+          .. "type /reload to save the results.", reload = true },
+}
+for _, s in ipairs(more) do suiteSteps[#suiteSteps + 1] = s end
+Probe:Steps("suite", suiteSteps)
+
+Probe:Command("suite", function(args)
+    if args == "restore" then suiteRestore() else suiteState("now") end
+end, "the suite theme: each member's state (restore: put back the enable states the procedure saved)")
+
+--------------------------------------------------------------------------------
 -- Blizzard's own glass (#17): the ruleset screen's card at login
 -- (Blizzard_GlueXML\Mainline\SuperDistrict.xml:8) beside our panels
 --------------------------------------------------------------------------------
@@ -781,4 +1146,5 @@ NS._test = { Probe = Probe, state = state, tree = tree, fade = fade, slashOwners
              gamepad = gamepad, panelsOn = panelsOn, panelsOff = panelsOff, borderFade = borderFade,
              borderRestore = borderRestore, gradientOn = gradientOn, gradientOff = gradientOff,
              panels = panels, faded = faded, cardAtlas = cardAtlas, cardOn = cardOn, cardOff = cardOff,
-             themeTry = themeTry, themeRestore = themeRestore }
+             themeTry = themeTry, themeRestore = themeRestore, suiteSet = suiteSet, suiteRestore = suiteRestore,
+             suiteState = suiteState, suiteCheck = suiteCheck, suiteSnapshot = suiteSnapshot }

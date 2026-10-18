@@ -13,6 +13,8 @@ local say = API.Print
 --   enabled  the master switch (false: every skin off)
 --   skins    { [key] = false } for each skin switched off (Engine.SetEnabled)
 --   theme    Theme.NAMES
+--   suite    { theme = Suite.THEMES key, follow = { [addon] = true } }, or nil
+--            when nobody follows (Suite.SetFollow keeps it sparse)
 local DEFAULTS = { enabled = true, theme = "clear" }
 GUI.DEFAULTS = DEFAULTS
 
@@ -56,6 +58,9 @@ local function helpLines()
         "/glassui skin <name> on|off - one skin",
         "/glassui on|off - every skin (the master switch)",
         "/glassui theme clear|smoked|class - the glass",
+        "/glassui suite - the Glass addons and whether each follows the suite theme",
+        "/glassui suite follow <addon> on|off - an addon follows Glass UI (after /reload)",
+        "/glassui options - the settings page",
         "/glassui failures - what failed to build or register",
         "/glassui version - client build vs the measured one",
     }
@@ -71,12 +76,36 @@ local function skins()
     end
 end
 
+local function suite(a, b, c)
+    local Suite = GUI.Suite
+    if a == "follow" then
+        local m
+        for _, x in ipairs(Suite.ROSTER) do
+            if x.name:lower() == b or x.title:lower():gsub(" ", "") == b then m = x end
+        end
+        if not m or (c ~= "on" and c ~= "off") then
+            say("/glassui suite follow <addon> on|off, e.g. GlassUnitFrames")
+            return
+        end
+        Suite.SetFollow(m.name, c == "on")
+        say(Suite.Line(m))
+        return
+    end
+    say("suite theme: " .. Suite.THEMES[Suite.ThemeName()].label)
+    for _, m in ipairs(Suite.ROSTER) do say(Suite.Line(m)) end
+    local cc = Suite.ClickCast()
+    if cc then
+        say("click-casting: Glass Raid Frames; its bindings on other addons' frames: "
+            .. (cc.others and "on" or "off"))
+    end
+end
+
 local function reloadNote(result)
     if result == "reload" then say("/reload to finish: a skin that isn't live can't be undone in place") end
 end
 
 local function slash(msg)
-    local cmd, a, b = (msg or ""):lower():match("^%s*(%S*)%s*(%S*)%s*(%S*)")
+    local cmd, a, b, c = (msg or ""):lower():match("^%s*(%S*)%s*(%S*)%s*(%S*)%s*(%S*)")
     local Engine = GUI.Engine
     if cmd == "skins" then
         skins()
@@ -93,6 +122,10 @@ local function slash(msg)
         say("theme: " .. GUI.Theme.LABELS[a])
     elseif cmd == "theme" then
         say("/glassui theme " .. table.concat(GUI.Theme.NAMES, "|") .. " (now " .. GUI.Theme.Name() .. ")")
+    elseif cmd == "options" then
+        if not GUI.Options.Open() then say("the settings page isn't available") end
+    elseif cmd == "suite" then
+        suite(a, b, c)
     elseif cmd == "failures" then
         failures()
     elseif cmd == "version" then
@@ -110,11 +143,16 @@ SlashCmdList.GLASSUI = slash
 local boot = CreateFrame("Frame")
 boot:SetScript("OnEvent", function(_, event, arg1)
     if event == "ADDON_LOADED" then
-        if arg1 == ADDON then GUI.db = ensureDefaults() end
+        if arg1 == ADDON then
+            GUI.db = ensureDefaults()
+            -- The suite's answers are ours to give from here on (docs/SUITE.md).
+            GUI.Suite.MarkReady()
+        end
     elseif event == "PLAYER_LOGIN" then
         -- SavedVariables are read here at the latest (porting guide: not at file scope).
-        if not GUI.db then GUI.db = ensureDefaults() end
+        if not GUI.db then GUI.db = ensureDefaults(); GUI.Suite.MarkReady() end
         GUI.Theme.Refresh()
+        GUI.Options.Register()
         GUI.Engine.Start()
     elseif event == "PLAYER_ENTERING_WORLD" then
         GUI.Theme.Retry()

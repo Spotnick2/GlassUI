@@ -17,7 +17,7 @@
 --   machinery. WoW.asBlizzard runs code as Blizzard's own.
 
 WoW = {}
-WoW.DUMP = os.getenv("GLASSQT_API_DUMP") or "C:/Projects/WoW/References/forever-api-1.60.1.70450.md"
+WoW.DUMP = os.getenv("GLASSQT_API_DUMP") or "C:/Projects/WoW/References/Forever/api/forever-api-1.60.1.70450.md"
 
 --------------------------------------------------------------------------------
 -- Known events (from the dump when present)
@@ -334,6 +334,10 @@ function WoW.reset()
     WoW.class = "MAGE"
     WoW.combat = false
     WoW.loaded = {}
+    -- Installed addons and their enable state for this character
+    -- ([name] = 0 none, 1 some, 2 all); the GUID the state was asked for.
+    WoW.installed = {}
+    WoW.enableAskedFor = nil
     WoW.onLoaded = {}
     WoW.style = 0
     WoW.blizz, WoW.blizzCalls, WoW.luaCalls, WoW.fieldWrites, WoW.textureArgs = {}, {}, {}, {}, {}
@@ -368,7 +372,14 @@ C_AddOns = {
         return nil
     end,
     IsAddOnLoaded = function(name) return WoW.loaded[name] == true end,
+    DoesAddOnExist = function(name) return WoW.installed[name] ~= nil or WoW.loaded[name] == true end,
+    GetAddOnEnableState = function(name, character)
+        WoW.enableAskedFor = character
+        return WoW.installed[name] or (WoW.loaded[name] and 2) or 0
+    end,
 }
+WoW.GUID = "Player-4618-0ABCDEF0"
+function UnitGUID(unit) return unit == "player" and WoW.GUID or nil end
 function issecretvalue(v) return false end
 function InCombatLockdown() return WoW.combat end
 -- hooksecurefunc(table, name, fn) or hooksecurefunc(globalName, fn).

@@ -14,7 +14,8 @@ milestones), not on the probe's copy.
    `/console scriptErrors 1` and `/reload` in game.
 2. `/fp steps skin wave1`, then `/fp steps skin map`, then `/fp steps skin gradient`. Each is a
    panel of buttons: do what a step says, answer its questions, type anything odd into its Note box.
-   Each ends with `/reload`, which saves the results to disk; nothing needs pasting.
+   Each ends with `/reload`, which saves the results to disk; nothing needs pasting. The suite
+   theme's validation is `/fp steps skin suite` (below).
 3. One-off commands: `/fp skin` lists them (`state`, `tree <target> [depth]`, `fade <target>`,
    `panels on|off`, `border fade|restore`, `gradient on|off`, `clear`). Targets: `merchant`,
    `popup`, `character`, `map`.
@@ -43,6 +44,34 @@ The look is judged from the procedure's screenshots; `Logs\taint.log` is read af
 | Skin | Procedure | Result |
 |---|---|---|
 | Merchant (#4) | `/fp steps skin merchant`: the looks side by side (clear at 0.85, 0.6 and 0.35 backing, smoked, class); buy, sell, buyback, repair; skin off and on live; after /reload; in combat (optional) | **70425: passes.** Buy, sell and buyback work; repair not tested (nothing to repair). The screenshots show the gold shell gone, glass under the window and tabs, and the item rows keeping Blizzard's red. Off live: exactly stock (owner: yes); on live: faded again; after /reload: on, faded at the first show. No `ADDON_ACTION_BLOCKED`/`FORBIDDEN` in the three sessions. Combat skipped (a plain, unprotected window). **Looks:** all five read well, and 0.35 looks the most like glass (owner): clear and class now use backing 0.35, smoked keeps 0.92. **Taint pass on 70450 (typed `/console taintLog 1`, buy/sell/buyback, full exit):** the log was on (BugGrabber: the bag-bar error 84 times that session, see the facts below), and `Logs	aint.log` was not rewritten. At level 1 the client writes only when something is blocked, so nothing was. A level-2 pass over every wave-1 skin goes into the v0.1.0 release check (#9). |
+
+## The suite theme (#24, docs/SUITE.md)
+
+`/fp steps skin suite`, once Glass UI (this branch), LibGlass r11 (LibGlass#64), GlassUnitFrames
+(#129) and GlassRaidFrames (#67) are deployed.
+
+- **Combinations:** the procedure switches between them itself, for this character only:
+  - it calls `C_AddOns.EnableAddOn`/`DisableAddOn` with the GUID;
+  - it saves each addon's enable state and the Follow switches first, in `SkinProbeDB.suiteWas`;
+  - its Restore step puts them back, and so does `/fp skin suite restore` after a stopped run.
+- **Each session:**
+  - Glass UI's record of what it answered each addon, and whether it was ready yet (S.2);
+  - what each addon reported;
+  - its instance's preset and STYLE (gloss, frost, wash, innerShadow);
+  - its saved look keys and LibGlass's MINOR.
+  These are saved as `SkinProbeDB.results["S.<combination>"]`, and `/fp skin suite` prints the
+  same.
+
+| # | Question | Result |
+|---|---|---|
+| S.1 | Startup: Glass UI alone, GUF alone, GRF alone, both without Glass UI, Glass UI + each, all three (own look, then following) | not run |
+| S.2 | Load order: is every addon's `Theme` answered after Glass UI's `ADDON_LOADED` (`OptionalDeps: GlassUI`)? | not run |
+| S.3 | Follow on, then off, with a Smoked body and a non-default slider: the local look and saved keys come back unchanged | not run |
+| S.4 | Live repaint under Pearl: target colours, font, cast colours | not run |
+| S.5 | Gradients: the fill and the health-loss overlay on bright and dark scenery | not run |
+| S.6 | Low health: remaining against missing, on unit frames and raid cells | not run |
+| S.7 | Combat: Follow switched in combat waits for the reload; a /reload in combat; no blocked action | not run |
+| S.8 | The page's click-casting line and buttons; GRF's editor on Pearl | not run |
 
 ## Blizzard's own glass (#17)
 

@@ -91,15 +91,15 @@ For Glass UI, good things to hand Codex:
 - anything that writes to SavedVariables.
 
 **Always hand it `CLAUDE.md` and `docs/PLAN.md` alongside the diff or plan**, plus
-`C:/Projects/WoW/References/PORTING-TBC-TO-FOREVER.md` and `docs/FOREVER-PROBE.md`. Those findings
+`C:/Projects/WoW/References/Docs/PORTING-TBC-TO-FOREVER.md` and `docs/FOREVER-PROBE.md`. Those findings
 were measured on the live client. Without them, a cold reviewer argues from Classic-era or Retail
 behaviour that doesn't hold here (that Classic's `SpellBookFrame` or `PVEFrame` exist, that a
 Blizzard window's own methods are harmless to call).
-`C:/Projects/WoW/References/forever-api-1.60.1.70450.md` is the full API surface when a question
+`C:/Projects/WoW/References/Forever/api/forever-api-1.60.1.70450.md` is the full API surface when a question
 turns on whether something exists, and `C:/Projects/WoW/wow-ui-source` (branch `forever`) is the
 client's own FrameXML. The design references are
-`C:/Projects/WoW/References/EllesmereUI-v9.5.5/EllesmereUIBlizzardSkin` and
-`C:/Projects/WoW/References/elvui-16.00`: behaviour references only, their code is never copied.
+`C:/Projects/WoW/References/Addons/UISuites/EllesmereUI/EllesmereUIBlizzardSkin` and
+`C:/Projects/WoW/References/Addons/UISuites/ElvUI`: behaviour references only, their code is never copied.
 
 Say what you have already established and ask it not to repeat that work. A clean "no defect found"
 is a useful answer - ask for it explicitly, or you invite an invented finding.

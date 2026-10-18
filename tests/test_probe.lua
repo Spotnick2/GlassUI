@@ -219,8 +219,119 @@ T.cardOn()
 check(logHas("CARD shown"), "after Remove, Show builds the cards again: nothing was left behind")
 T.cardOff()
 
+-- #24, the suite procedure: addon combinations for this character only (the
+-- GUID), saved first and restored; each session read from Glass UI's record
+-- and the addons' own glass; a session that doesn't match is a FAIL.
+local calls = {}
+rawset(C_AddOns, "EnableAddOn", function(name, character)
+    calls[#calls + 1] = { "enable", name, character }
+    WoW.installed[name] = 2
+end)
+rawset(C_AddOns, "DisableAddOn", function(name, character)
+    calls[#calls + 1] = { "disable", name, character }
+    WoW.installed[name] = 0
+end)
+WoW.installed = { GlassUI = 2, GlassUnitFrames = 2, GlassRaidFrames = 0 }
+local follow, answers, reports, states = {}, {}, {}, {}
+local function fakeSuite()
+    rawset(_G, "GlassUI", { failures = {}, Suite = {
+        API = 1,
+        Following = function(n) return follow[n] == true end,
+        SetFollow = function(n, on) follow[n] = on or nil; return true end,
+        State = function(n) return states[n] end,
+        AnswerOf = function(n) return answers[n] end,
+        ReportOf = function(n) return reports[n] end,
+    } })
+end
+local function member(ns, db, preset, gloss)
+    rawset(_G, ns, { Glass = setmetatable({}, { __index = { preset = preset, STYLE = { gloss = gloss, frost = 0.1,
+        wash = 0.18, innerShadow = 0.15 } } }) })
+    rawset(_G, db, { look = "clean", glassBody = "smoked", rim = 0.9 })
+end
+fakeSuite()
+follow.GlassUnitFrames = true
+eq(T.suiteSnapshot(), true, "the enable states and Follow switches are saved")
+eq(SkinProbeDB.suiteWas.enabled.GlassRaidFrames, 0, "with each addon's state for this character")
+eq(SkinProbeDB.suiteWas.follow.GlassUnitFrames, true, "and its Follow switch")
+WoW.installed.GlassRaidFrames = 2
+T.suiteSnapshot()
+eq(SkinProbeDB.suiteWas.enabled.GlassRaidFrames, 0, "a second snapshot keeps the first: it is what to restore")
+local okSet, detail = T.suiteSet({ GlassUnitFrames = true })
+check(okSet, "a combination is set and read back: " .. tostring(detail))
+eq(WoW.installed.GlassUI, 0, "Glass UI off for it")
+eq(WoW.installed.GlassRaidFrames, 0, "Raid Frames off")
+eq(WoW.installed.GlassUnitFrames, 2, "Unit Frames on")
+local byGUID = #calls > 0
+for _, c in ipairs(calls) do byGUID = byGUID and c[3] == WoW.GUID end
+check(byGUID, "every change names this character's GUID (a name changes nothing, none means every character)")
+rawset(_G, "GlassUI", nil)
+local n = #calls
+eq((T.suiteSet({ GlassUI = true }, true)), false, "Follow can't be set without Glass UI")
+eq(#calls, n, "and then nothing changes")
+-- A session that matches "all, following", and the ways one doesn't.
+fakeSuite()
+local ALLSET = { GlassUI = true, GlassUnitFrames = true, GlassRaidFrames = true }
+WoW.loaded.GlassUI, WoW.loaded.GlassUnitFrames, WoW.loaded.GlassRaidFrames = true, true, true
+member("GlassUF", "GlassUnitFramesDB", "pearl", 0.12)
+member("GlassRaidFrames", "GlassRaidFramesDB", "pearl", 0.12)
+for _, nm in ipairs({ "GlassUnitFrames", "GlassRaidFrames" }) do
+    answers[nm] = { ready = true, preset = "pearl" }
+    reports[nm] = { built = "pearl", minor = 11 }
+    states[nm] = "following"
+end
+local pass, why = T.suiteCheck("all, following", ALLSET, true)
+check(pass, "a matching session passes: " .. tostring(why))
+eq(SkinProbeDB.results["S.all, following"].GlassUnitFrames.built, "pearl", "the session is kept in the results")
+answers.GlassRaidFrames.ready = false
+pass, why = T.suiteCheck("all, following", ALLSET, true)
+check(not pass and why:find("before Glass UI was ready", 1, true), "S.2: an answer given before ready fails")
+answers.GlassRaidFrames.ready = true
+reports.GlassUnitFrames.built = nil
+pass, why = T.suiteCheck("all, following", ALLSET, true)
+check(not pass and why:find("GlassUnitFrames built", 1, true), "a member that didn't build Pearl fails")
+reports.GlassUnitFrames.built = "pearl"
+GlassUI.failures.x = "boom"
+pass, why = T.suiteCheck("all, following", ALLSET, true)
+check(not pass and why:find("failure", 1, true), "a Glass UI failure fails the session")
+GlassUI.failures.x = nil
+pass = T.suiteCheck("all, following", { GlassUI = true, GlassUnitFrames = true }, true)
+eq(pass, false, "a member loaded that shouldn't be fails")
+-- S.3: own look again, against an earlier session.
+for _, nm in ipairs({ "GlassUnitFrames", "GlassRaidFrames" }) do
+    reports[nm] = { built = nil }
+    answers[nm] = { ready = true, reason = "not-following" }
+    states[nm] = "own"
+end
+member("GlassUF", "GlassUnitFramesDB", "clean", 0.25)
+member("GlassRaidFrames", "GlassRaidFramesDB", "clean", 0.25)
+pass, why = T.suiteCheck("all, own", ALLSET, false)
+check(pass, "own look passes: " .. tostring(why))
+pass, why = T.suiteCheck("all, own again", ALLSET, false, "all, own")
+check(pass, "the same look and saved keys again passes: " .. tostring(why))
+GlassUnitFramesDB.rim = 0.5
+pass, why = T.suiteCheck("all, own again", ALLSET, false, "all, own")
+check(not pass and why:find("db.rim", 1, true), "a saved key that changed fails S.3")
+GlassUnitFramesDB.rim = 0.9
+member("GlassRaidFrames", "GlassRaidFramesDB", "clean", 0.2)
+pass, why = T.suiteCheck("all, own again", ALLSET, false, "all, own")
+check(not pass and why:find("gloss", 1, true), "a look that differs from the earlier session fails S.3")
+-- ADDON_ACTION_BLOCKED is counted.
+SkinProbeDB.suiteBlocked = 0
+WoW.fire("ADDON_ACTION_BLOCKED", "GlassUI", "CastSpell")
+eq(SkinProbeDB.suiteBlocked, 1, "a blocked action is counted for S.7")
+SkinProbeDB.suiteBlocked = 0
+-- Restore: the saved states and switches come back.
+follow.GlassUnitFrames = nil
+local okRestore = T.suiteRestore()
+check(okRestore, "restore reads its changes back")
+eq(WoW.installed.GlassRaidFrames, 0, "Raid Frames back to disabled, as saved")
+eq(WoW.installed.GlassUI, 2, "Glass UI back on")
+eq(follow.GlassUnitFrames, true, "the Follow switch is back")
+eq(SkinProbeDB.suiteWas, nil, "and the snapshot is cleared")
+T.suiteSnapshot()
+
 -- The procedures are defined and every step's run and check works here.
-for _, name in ipairs({ "wave1", "map", "gradient", "merchant", "card" }) do
+for _, name in ipairs({ "wave1", "map", "gradient", "merchant", "card", "suite" }) do
     local p = FP.procedures["SkinProbe/" .. name]
     check(p ~= nil, "procedure " .. name .. " is defined")
     if p then
@@ -237,6 +348,8 @@ for _, name in ipairs({ "wave1", "map", "gradient", "merchant", "card" }) do
     end
 end
 T.panelsOff(); T.borderRestore(); T.gradientOff()
+T.suiteRestore()
+rawset(_G, "GlassUI", nil)
 eq(#WoW.chat, 0, "still nothing in chat after every procedure step")
 
 done("test_probe")
