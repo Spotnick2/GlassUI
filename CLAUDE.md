@@ -25,9 +25,13 @@ file doesn't cover something, check how those handle it before you invent a new 
 - `/glassui` and `/gui` (`/glass` is GlassUnitFrames'). v0.1.0 = wave 1 + hub v1; 1.0.0 at Forever's
   launch. Private repo for now; CurseForge project 1745875.
 
-**Status:** milestone 3: the engine, kit and theme (#3) are in, and the merchant skin (#4)
-passed its in-game acceptance (70425, taint pass on 70450). Measured on 1.60.1.70450. Next: popups
-(#5), re-measured first (their FrameXML changed after 70374).
+**Status (scope correction, owner, 2026-10-18):** Glass UI is first the **suite orchestrator**,
+[docs/SUITE.md](docs/SUITE.md) (Codex consensus, round 3). The first step is #24: the Pearl suite
+theme, with GlassUnitFrames (GUF#129) and GlassRaidFrames (GRF#67) following it, and LibGlass's
+`pearl` preset (LibGlass#64). The skins are parked: the engine, kit, theme and merchant (#3, #4,
+70425/70450) are on `main`, the popups (#5) on branch `popups`, all to be revisited. Measured on
+1.60.1.70450. Next after #24: the group layout (a continuous GRF grid sized to the group, GUF
+beside it, moves animated like GUF's combat zoom).
 
 ## The skin contract (non-negotiable)
 
@@ -54,23 +58,26 @@ audited exceptions and the reasons are in docs/PLAN.md, "The skin contract". In 
 | `Skin\Engine.lua` | `Register`, `Active`, owners/yields/handover, the switches, deferral and the combat wait, gamepad and suite stand-downs, `Status` |
 | `Skin\Kit.lua` | per-skin touches (`Fade` with read-back, `Blank`/`Tint`/`Shade` for `live = false`), `Panel`, widget kinds (`Shell`, `Inset`, `Tab`) |
 | `Skin\Merchant.lua` | the merchant window (live) |
+| `Suite.lua` | the suite contract (docs/SUITE.md): `GlassUI.Suite` (`API`, `Ready`, `Theme`, `Report`), the roster, the follow switches, each member's state |
+| `Options.lua` | the settings page: the suite theme, the family and its Follow switches, click-casting |
 | `GlassUI.lua` | bootstrap, `GlassUIDB`, `/glassui` |
 
-Planned, per docs/PLAN.md: `Skin\<Window>.lua` for the rest, `Hub.lua`, `Options.lua`.
+Planned, per docs/PLAN.md: `Skin\<Window>.lua` for the rest, `Hub.lua`.
 `Tools\SkinProbe\` is the ForeverProbe module (never shipped): `/fp skin`, the measurements
-`/fp steps skin wave1|map|gradient` and each skin's acceptance (`/fp steps skin merchant`);
+`/fp steps skin wave1|map|gradient`, each skin's acceptance (`/fp steps skin merchant`) and the
+suite's (`/fp steps skin suite`, #24);
 docs/FOREVER-PROBE.md says how to run it.
 
 ## References
 
-- `..\References\PORTING-TBC-TO-FOREVER.md`: Edit Mode systems, secure code, secret values,
+- `..\References\Docs\PORTING-TBC-TO-FOREVER.md`: Edit Mode systems, secure code, secret values,
   options-page recipe, packaging.
-- `..\References\forever-api-1.60.1.70450.md`: does an API exist? Presence is not a contract.
+- `..\References\Forever\api\forever-api-1.60.1.70450.md`: does an API exist? Presence is not a contract.
 - `..\wow-ui-source` (branch `forever`; 70450 is on `origin/forever`, the checkout may lag): the client's own FrameXML. The authority on frame
   names, templates and `[AllowLoadGameType camelot]` variants.
-- `..\References\RELEASING.md`, `..\References\LIBGLASS-MIGRATION.md`, `..\References\EMBEDDED-LIBRARIES.md`,
-  `..\References\PROBES.md` and `..\ForeverProbe\docs\GUIDE.md` (probes).
-- `..\References\EllesmereUI-v9.5.5\EllesmereUIBlizzardSkin`, `..\References\elvui-16.00`: how two
+- `..\References\Docs\RELEASING.md`, `..\References\Docs\LIBGLASS-MIGRATION.md`, `..\References\Docs\EMBEDDED-LIBRARIES.md`,
+  `..\References\Docs\PROBES.md` and `..\ForeverProbe\docs\GUIDE.md` (probes).
+- `..\References\Addons\UISuites\EllesmereUI\EllesmereUIBlizzardSkin`, `..\References\Addons\UISuites\ElvUI`: how two
   suites skin these windows on Forever, and what they found broken. Behaviour references only.
 - `..\LibGlass\docs\GLASS-MATERIAL.md`: the material and its region fields.
 
@@ -110,7 +117,7 @@ skin's in-game acceptance. **`test_probe` runs locally only:** ForeverProbe is p
   `-m gpt-6-astra` at high effort, looping until consensus, without overengineering.
 - **Sibling repos are never edited from this session.** The hub pilot's changes to GlassUnitFrames
   and GlassActionBars are issues and PRs in those repos.
-- Releases: `..\References\RELEASING.md`.
+- Releases: `..\References\Docs\RELEASING.md`.
 
 ## Conventions
 

@@ -17,7 +17,7 @@
 --   machinery. WoW.asBlizzard runs code as Blizzard's own.
 
 WoW = {}
-WoW.DUMP = os.getenv("GLASSQT_API_DUMP") or "C:/Projects/WoW/References/forever-api-1.60.1.70450.md"
+WoW.DUMP = os.getenv("GLASSQT_API_DUMP") or "C:/Projects/WoW/References/Forever/api/forever-api-1.60.1.70450.md"
 
 --------------------------------------------------------------------------------
 -- Known events (from the dump when present)
@@ -42,7 +42,8 @@ do
         -- CI has no dump: the events this addon registers, checked locally against it.
         for _, e in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD",
                              "EDIT_MODE_LAYOUTS_UPDATED",
-                             "PLAYER_REGEN_ENABLED", "CVAR_UPDATE" }) do
+                             "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED", "CVAR_UPDATE",
+                             "PLAYER_LOGOUT", "ADDON_ACTION_BLOCKED", "ADDON_ACTION_FORBIDDEN" }) do
             WoW.KNOWN_EVENTS[e] = true
         end
     end
@@ -150,6 +151,8 @@ function Methods.GetFrameStrata(w) return w._strata or "MEDIUM" end
 function Methods.GetName(w) return w._name end
 function Methods.GetParentKey(w) return w._parentKey end
 function Methods.GetParent(w) return w._parent end
+function Methods.SetAttribute(w, k, v) w._attrs = w._attrs or {}; w._attrs[k] = v end
+function Methods.GetAttribute(w, k) return w._attrs and w._attrs[k] end
 function Methods.SetParent(w, p)
     if w._parent and w._parent._children then
         for i, c in ipairs(w._parent._children) do
@@ -334,6 +337,10 @@ function WoW.reset()
     WoW.class = "MAGE"
     WoW.combat = false
     WoW.loaded = {}
+    -- Installed addons and their enable state for this character
+    -- ([name] = 0 none, 1 some, 2 all); the GUID the state was asked for.
+    WoW.installed = {}
+    WoW.enableAskedFor = nil
     WoW.onLoaded = {}
     WoW.style = 0
     WoW.blizz, WoW.blizzCalls, WoW.luaCalls, WoW.fieldWrites, WoW.textureArgs = {}, {}, {}, {}, {}
@@ -368,7 +375,14 @@ C_AddOns = {
         return nil
     end,
     IsAddOnLoaded = function(name) return WoW.loaded[name] == true end,
+    DoesAddOnExist = function(name) return WoW.installed[name] ~= nil or WoW.loaded[name] == true end,
+    GetAddOnEnableState = function(name, character)
+        WoW.enableAskedFor = character
+        return WoW.installed[name] or (WoW.loaded[name] and 2) or 0
+    end,
 }
+WoW.GUID = "Player-4618-0ABCDEF0"
+function UnitGUID(unit) return unit == "player" and WoW.GUID or nil end
 function issecretvalue(v) return false end
 function InCombatLockdown() return WoW.combat end
 -- hooksecurefunc(table, name, fn) or hooksecurefunc(globalName, fn).

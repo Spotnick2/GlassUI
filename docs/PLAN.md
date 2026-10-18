@@ -1,5 +1,9 @@
 # Glass UI: plan (v0.1.0 and the waves after it)
 
+> **Scope correction (owner, 2026-10-18):** Glass UI is first the suite orchestrator:
+> [docs/SUITE.md](SUITE.md). The skins below are parked (merchant on `main`, popups on branch
+> `popups`) and will be revisited.
+
 ## Context
 WoW: Forever 1.60.1 (Interface 16001, Lua 5.1) is Vanilla content on the Retail (Mainline) client.
 The owner has a family of independent Glass addons (GlassActionBars, GlassChat, GlassMail,
@@ -148,7 +152,7 @@ lines in each TOC are the authoritative list of Forever-only variants (FV below)
 
 ### File layout (TOC order)
 ```
-Libs\LibGlass-1.0\LibGlass-1.0.xml   (.pkgmeta external, tag r8)
+Libs\LibGlass-1.0\LibGlass-1.0.xml   (.pkgmeta external, tag r11)
 Compat.lua        API.*: Fail/Try, RegisterEvents, IsSecret/Plain, ClassColor, CVarBool,
                   WhenOutOfCombat, Settings helpers (GlassQuestTracker's, plus GUF's whenOutOfCombat)
 Glass.lua         our LibGlass instance, preset "clean"
@@ -287,8 +291,10 @@ end
 ```
 Versioned like GlassMiniMapBar's `PUBLIC_API_VERSION` (`PublicAPI.lua:19`): Glass UI ignores a
 higher `api` it doesn't know, pcalls every callback, and never reads a sibling's SavedVariables.
-**Later capabilities, each its own decision:** follow the Glass UI theme (opt-in per addon; the
-values are copied into the sibling's own DB, so removing Glass UI changes nothing), one "unlock
+**Later capabilities, each its own decision:** following the Glass UI theme is now the suite
+contract (docs/SUITE.md, 2026-10-18), which supersedes copying values into a sibling's DB: Glass
+UI saves the switch, the sibling asks once at its own load, and nothing is written to its
+settings. Still later: one "unlock
 everything" that fans out to each addon's own movers (they keep their combat guards), and settings
 bundles (each addon exports an allowlist; Glass UI only packages them).
 
@@ -333,7 +339,7 @@ question.
    /reload, in combat where it applies, and with its neighbour addon loaded.
 4. **Hub v1:** settings tree, family page, compartment entry, adapter v1. Pilot with GlassUnitFrames
    and GlassActionBars (an issue in each). Acceptance: both work unchanged with Glass UI absent.
-5. **Release v0.1.0** (`..\References\RELEASING.md`): wave 1 + hub v1. The repo must be connected to
+5. **Release v0.1.0** (`..\References\Docs\RELEASING.md`): wave 1 + hub v1. The repo must be connected to
    CurseForge for the tag webhook; RELEASING.md assumes a public repo, so the owner decides then.
 6. **Later waves**, each gated by its probe pass:
    - **Wave 2, everyday surfaces:** bags, tooltips, menus, the Escape menu. Menus are gated on: root
