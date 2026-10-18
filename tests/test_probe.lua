@@ -355,7 +355,7 @@ eq(SkinProbeDB.suiteWas[WoW.GUID], nil, "and this character's snapshot is cleare
 T.suiteSnapshot()
 
 -- The procedures are defined and every step's run and check works here.
-for _, name in ipairs({ "wave1", "map", "gradient", "merchant", "card", "suite" }) do
+for _, name in ipairs({ "wave1", "map", "gradient", "merchant", "card", "suite", "suitecombat" }) do
     local p = FP.procedures["SkinProbe/" .. name]
     check(p ~= nil, "procedure " .. name .. " is defined")
     if p then

@@ -18,6 +18,7 @@
 -- Each skin's acceptance, on the real addon, with screenshots:
 --   #4 merchant                                              /fp steps skin merchant
 --   #24 the suite theme across GUF and GRF (S.1-S.8)          /fp steps skin suite
+--   #24 S.7 again, combat only                                 /fp steps skin suitecombat
 -- And Blizzard's own glass, the login ruleset card beside ours (#17): /fp steps skin card
 --
 -- The only writes to Blizzard objects are SetAlpha, always put back at once
@@ -1056,6 +1057,67 @@ local more = {
 }
 for _, s in ipairs(more) do suiteSteps[#suiteSteps + 1] = s end
 Probe:Steps("suite", suiteSteps)
+
+-- S.7 again, on its own (the first run's in-combat switch never reached Glass
+-- UI, and its reload came after combat): both following, Raid Frames switched
+-- off on Glass UI's page while fighting, a /reload while still fighting, then
+-- Raid Frames back on.
+local function bothFollowing()
+    local S = suite()
+    return S ~= nil and S.Following("GlassUnitFrames") and S.Following("GlassRaidFrames")
+end
+Probe:Steps("suitecombat", {
+    title = "Glass UI: the suite theme in combat (S.7)",
+    { text = "Needs Glass UI, Glass Unit Frames and Glass Raid Frames loaded, both following Glass UI. Turns on "
+          .. "script errors and the taint log (Blizzard's own 'attempt to call a nil value' errors then are "
+          .. "noise: ignore them).",
+      auto = true, run = function()
+          if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
+          return setCVar("scriptErrors", "1"), setCVar("taintLog", "1"), suiteState("combat start").glassUI
+      end,
+      check = function()
+          local rec = suiteState("combat start check")
+          local ok = bothFollowing() and rec.GlassUnitFrames.built == "pearl" and rec.GlassRaidFrames.built == "pearl"
+          return ok, ok and "both on Pearl" or "both must be loaded and following, on Pearl: tick them on Glass "
+              .. "UI's page, /reload, and start again"
+      end },
+    { text = "Open Glass UI's page now (/glassui options) and leave it open. Then get into combat with something "
+          .. "weak and stay in it.", wait = function() return InCombatLockdown() end, timeout = 600 },
+    { text = "In combat, on Glass UI's page, untick 'Use Glass UI appearance' for Glass Raid Frames (if the "
+          .. "page won't open in combat, type /glassui suite follow glassraidframes off instead).",
+      wait = function()
+          local S = suite()
+          return S and not S.Following("GlassRaidFrames"), "Raid Frames still set to follow"
+      end, timeout = 300, screenshot = "combat, switched on the page",
+      check = function()
+          local rec = suiteState("combat switched")
+          local m = rec.GlassRaidFrames
+          return rec.combat and m.built == "pearl" and m.state == "following",
+              "in combat=" .. tostring(rec.combat) .. ", still Pearl this session: built=" .. show(m.built)
+      end },
+    { text = "Does the page say a change is waiting, and to type /reload when combat ends (no Reload UI button "
+          .. "while fighting)?", ask = true },
+    { text = "Still fighting: type /reload now, before combat ends.", reload = true },
+    { text = "After the reload: Raid Frames on its own look, Unit Frames still on Pearl.",
+      auto = true, run = function() return suiteState("combat reloaded").combat end,
+      check = function()
+          local rec = suiteState("combat reloaded check")
+          local u, r = rec.GlassUnitFrames, rec.GlassRaidFrames
+          local ok = u.built == "pearl" and r.built == nil and r.state == "own" and rec.blocked == 0 and rec.failures == 0
+          return ok, "reloaded in combat=" .. tostring(rec.combat) .. "; GUF " .. show(u.built) .. ", GRF "
+              .. show(r.built) .. "/" .. show(r.state) .. ", blocked=" .. rec.blocked .. ", failures=" .. rec.failures
+      end },
+    { text = "When combat ends: do your raid frames show (built after combat), on their own look?", ask = true,
+      screenshot = "combat, raid frames after" },
+    { text = "Any 'blocked' or 'interface action failed' message (Blizzard's 'nil value' errors aside)?", ask = true },
+    { text = "Puts Glass Raid Frames back to following Glass UI.", button = "Follow again",
+      run = function()
+          local S = suite()
+          if not (S and S.SetFollow) then return false, "Glass UI isn't loaded" end
+          return S.SetFollow("GlassRaidFrames", true)
+      end },
+    { text = "Type /reload to save the results (and turn the taint log off).", reload = true },
+})
 
 Probe:Command("suite", function(args)
     if args == "restore" then suiteRestore() else suiteState("now") end
