@@ -152,7 +152,7 @@ lines in each TOC are the authoritative list of Forever-only variants (FV below)
 
 ### File layout (TOC order)
 ```
-Libs\LibGlass-1.0\LibGlass-1.0.xml   (.pkgmeta external, tag r8)
+Libs\LibGlass-1.0\LibGlass-1.0.xml   (.pkgmeta external, tag r11)
 Compat.lua        API.*: Fail/Try, RegisterEvents, IsSecret/Plain, ClassColor, CVarBool,
                   WhenOutOfCombat, Settings helpers (GlassQuestTracker's, plus GUF's whenOutOfCombat)
 Glass.lua         our LibGlass instance, preset "clean"
