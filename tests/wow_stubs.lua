@@ -42,7 +42,8 @@ do
         -- CI has no dump: the events this addon registers, checked locally against it.
         for _, e in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD",
                              "EDIT_MODE_LAYOUTS_UPDATED",
-                             "PLAYER_REGEN_ENABLED", "CVAR_UPDATE" }) do
+                             "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED", "CVAR_UPDATE",
+                             "PLAYER_LOGOUT", "ADDON_ACTION_BLOCKED", "ADDON_ACTION_FORBIDDEN" }) do
             WoW.KNOWN_EVENTS[e] = true
         end
     end
