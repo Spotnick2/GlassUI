@@ -315,8 +315,10 @@ blocked, and after combat everything glides once to the new footprint. The owner
 - **Interruptions:** another change retargets from the on-screen point, and any canonical place
   snaps. A cell-size change snaps the size and glides the position.
 - **No reverse dependency:** no protected frame ever anchors to an animated visual.
-- **Nothing glides until the loading screen has lifted,** in every addon. Every placement before
-  `LOADING_SCREEN_DISABLED`, and the first one after it, snaps.
+- **Nothing glides behind a loading screen,** in every addon, at login or on any later zone change.
+  - Every placement between `LOADING_SCREEN_ENABLED` (or the load itself) and
+    `LOADING_SCREEN_DISABLED`, and the first one after it, snaps.
+  - GRF#74 holds the glide again on each zone change, and GUF does the same.
   - There's no earlier on-screen place worth gliding from, and a slide at every login would be noise.
   - "Only the first placement snaps" isn't enough. GRF measured on a full login (70450, GRF
     FOREVER-PROBE item 16) that its first announcement can have width 0, because the party isn't
@@ -527,3 +529,15 @@ the row (with `"hide"` under the columns).
 
 **After GRF's grid run (GRF#72, 70450, run 2026-10-19):** the side grid clears GAB's side bars (§5c),
 the first placement waits for UIParent's real size, and the first placement of a session snaps.
+
+**The glide and the tier preview pass (GRF#74, the owner's `/fp steps raid glide`, 70450, run #270;
+GRF FOREVER-PROBE item 17):**
+- **The preview's footprints** announced each tier on the baseline (168.9): 10 is 268x324, 20 is
+  472x324, and 40 is 822x324 (8 columns of 80 plus 2 pet columns for 12 pets).
+- **GUF followed:** its player and target glided out beside each tier, at their own height, and back
+  when the preview ended.
+- **Names at 80 wide** read well, and the client shortens long ones ("Drakuza…").
+- **The cells' glide** is as smooth as GUF's zoom (owner).
+- **Combat** ends the preview at once. Nothing was blocked, and nothing was announced in combat.
+- **Still to check in game, with GRF's real grid:** both load orders, GRF absent, and a /reload in
+  combat (GUF's side).
