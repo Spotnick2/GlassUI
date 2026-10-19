@@ -202,6 +202,15 @@ blocked, and after combat everything glides once to the new footprint. The owner
     - Further columns (more than 10 pets) can still appear in combat. They are reconciled after
       combat.
   - **Side mode:** the same shapes, with the baseline at the role's side position.
+    - The side default's left edge is **30 right of GlassActionBars' left-docked bars** (§5c), or 30
+      from the screen's edge with none. A dragged `layoutPos` stays as saved.
+    - The owner, after GRF's grid run on 70450: "the grid on the left will have to coordinate with
+      GAB to not be on top of it if there is a bar left or right". At x 30 it covered GAB's
+      vertical bars at the left edge (MultiBar5/6, x 2-87).
+  - **The first placement waits for the real UIParent size.** Right after a load, UIParent can
+    still report its pre-scale size (1365x768 instead of 2133x1200, GRF run on 70450), and a refresh
+    corrected it 1.1 s later. GRF places and announces only once the size is real (GRF measures which
+    event marks that).
 - **The mover** moves the baseline, saved per role as `profiles[role].layoutPos`. While the layout
   is on, Reset clears `layoutPos`. `pos`, `petPos` and the legacy geometry stay set aside,
   untouched.
@@ -302,6 +311,8 @@ blocked, and after combat everything glides once to the new footprint. The owner
 - **Interruptions:** another change retargets from the on-screen point, and any canonical place
   snaps. A cell-size change snaps the size and glides the position.
 - **No reverse dependency:** no protected frame ever anchors to an animated visual.
+- **The first placement of a session snaps,** in every addon: there's no earlier on-screen place
+  worth gliding from, and a slide at every login would be noise.
 - **In combat:** v1 animates only out-of-combat changes. In combat, the header's own reflow snaps
   (section 1).
 - **No shared code yet:** each addon keeps its own small `Glide`. A shared copy becomes a LibGlass
@@ -350,6 +361,22 @@ the addon that owns its frame follows. There is no dependency either way.
   measurement.
 - **Glass UI** shows GAB's state in the "Group layout" line, from an optional `Report` field
   `layout = { following }`, if GAB speaks the suite API by then.
+
+### 5c. GlassActionBars announces its side bars' edges (owner, 2026-10-19)
+
+Bars docked to the screen's left or right edge (`MultiBar5`/`MultiBar6` placed there, or any GAB bar
+at an edge) take room the side grid must not cover. Same pattern as the rest of the suite: GAB owns
+those bars and announces, GRF follows. No dependency either way.
+
+- **GAB announces:**
+  - `GlassActionBars.EdgeState()` returns `{ left = <the right edge of the bars docked at the left,
+    or 0>, right = <the left edge of the bars docked at the right, or UIParent's width> }`, in
+    UIParent units, or nil before GAB has read its bars;
+  - plus an `EventRegistry` event `GlassActionBars.EdgesChanged` (left, right), out of combat, when
+    either changes (an Edit Mode change, a bar shown or hidden, a scale change).
+- **GRF follows:** the side default's left edge becomes `left + 30`. The HUD is unaffected, and a
+  dragged `layoutPos` stays as saved.
+- **Without GAB:** `left = 0`, as today.
 
 ### 6. Glass UI
 
@@ -481,3 +508,6 @@ The stance bar follows the player frame too, so the announcement carries both `d
 
 **M4, run #240:** `[@raid1,exists] hide; show` holds in combat, and it is the party-pet driver under
 the row (with `"hide"` under the columns).
+
+**After GRF's grid run (GRF#72, 70450, run 2026-10-19):** the side grid clears GAB's side bars (§5c),
+the first placement waits for UIParent's real size, and the first placement of a session snaps.
