@@ -48,6 +48,13 @@ eq(p:GetFrameLevel(), t:GetFrameLevel() - 1, "one level under the tracker")
 eq(QT._test.glass[t].top:GetFrameLevel(), t:GetFrameLevel(), "its rim at the tracker's level")
 check(QT._test.glass[t].top:GetFrameLevel() < m:GetFrameLevel(), "under the modules, which draw above the glass")
 check(p:IsShown(), "shown")
+-- The meter's recipe: a small band over the header, the body under it.
+local band = QT._test.bands[t]
+check(band ~= nil and band ~= p, "a header band of its own")
+eq(band:GetParent(), t, "the band on the tracker too")
+eq(band:GetFrameLevel(), t:GetFrameLevel() - 1, "at the body's level, beside it, not over it")
+check(band:IsShown(), "the band shown")
+eq(QT._test.bandGlass[t].top:GetFrameLevel(), t:GetFrameLevel(), "its rim at the tracker's level too")
 
 -- A layout with every pooled extra.
 WoW.layout("QuestObjectiveTracker", { blocks = 2, items = 1, groups = 1, bars = 1 })
@@ -79,9 +86,9 @@ eq(t.NineSlice:GetAlpha(), 0, "Edit Mode's Opacity doesn't bring the NineSlice b
 
 -- Placement by state: the corner's anchor as { relativeTo, relativePoint, x, y }.
 local O = QT._test.offsets
-local function at(point, rel, relPoint, x, y, msg)
+local function at(point, rel, relPoint, x, y, msg, frame)
     local a
-    for _, pt in ipairs(p._points) do
+    for _, pt in ipairs((frame or p)._points) do
         if pt[1] == point then a = { pt[2], pt[3], pt[4], pt[5] } end
     end
     a = a or {}
@@ -90,17 +97,25 @@ local function at(point, rel, relPoint, x, y, msg)
                         tostring(x), tostring(y), tostring(a[1]), tostring(a[2]), tostring(a[3]), tostring(a[4])))
 end
 eq(QT.state, "populated", "a shown module: populated")
-at("TOPLEFT", t.NineSlice, "TOPLEFT", O.LEFT, 0, "populated")
-at("BOTTOMRIGHT", t.NineSlice, "BOTTOMRIGHT", O.RIGHT, O.BOTTOM, "populated")
+at("TOPLEFT", t.NineSlice, "TOPLEFT", O.LEFT, 0, "the band from the NineSlice's top", band)
+at("BOTTOMRIGHT", t.Header, "BOTTOMRIGHT", O.HEADER_RIGHT, O.HEADER_BOTTOM, "to the header's bottom", band)
+at("TOPLEFT", band, "BOTTOMLEFT", 0, -O.GAP, "populated: the body under the band")
+at("BOTTOMRIGHT", t.NineSlice, "BOTTOMRIGHT", O.RIGHT, O.BOTTOM, "populated: to the NineSlice's bottom")
 eq(#p._points, 2, "two anchors, made afresh each time")
+eq(#band._points, 2, "the band's too")
+check(p:IsShown(), "populated: the body shown")
+eq(O.HEADER_RIGHT - O.RIGHT, 5, "the band's right edge is the body's (the NineSlice runs 5 past the Header)")
 WoW.collapse(true)
 eq(QT.state, "header", "the container collapsed: the header at once, though the NineSlice keeps its size")
-at("BOTTOMRIGHT", t.Header, "BOTTOMRIGHT", O.HEADER_RIGHT, O.HEADER_BOTTOM, "collapsed")
+check(not p:IsShown(), "collapsed: no body")
+check(band:IsShown(), "the band alone")
+at("BOTTOMRIGHT", t.Header, "BOTTOMRIGHT", O.HEADER_RIGHT, O.HEADER_BOTTOM, "collapsed", band)
 WoW.layout("QuestObjectiveTracker", { blocks = 2 })
 eq(QT.state, "header", "a layout while collapsed stays on the header")
 WoW.collapse(false)
 WoW.layout("QuestObjectiveTracker", { blocks = 2 })
 eq(QT.state, "populated", "expanded and laid out: populated again")
+check(p:IsShown(), "and the body back")
 WoW.editMode(true)
 WoW.layout("QuestObjectiveTracker", { shown = false })
 eq(QT.state, "header", "empty in Edit Mode: the header")
@@ -120,7 +135,7 @@ eq(bar.Bar.BorderMid:GetAlpha(), 1, "the progress bar's border back")
 check(not qn:IsDesaturated(), "the minimize untinted")
 eq(select(1, qn:GetVertexColor()), 1, "white again")
 eq(qn:GetAtlas(), "ui-questtrackerbutton-secondary-collapse", "untint leaves Blizzard's current atlas")
-check(not p:IsShown(), "the panel hidden")
+check(not p:IsShown() and not band:IsShown(), "both panels hidden")
 WoW.asBlizzard(function() t.NineSlice:SetAlpha(0.3) end)
 near(t.NineSlice:GetAlpha(), 0.3, "off: Blizzard's alpha writes stand")
 
@@ -140,7 +155,8 @@ eq(QT.state, "populated", "nor by leaving Edit Mode")
 -- On again: a full pass, what changed meanwhile included.
 GUI._test.slash("skin tracker on")
 eq(E.Status("tracker"), "on", "on again")
-check(p:IsShown(), "the panel shown again")
+check(band:IsShown(), "the band shown again")
+check(not p:IsShown(), "collapsed: the body stays hidden")
 eq(QT.state, "header", "collapsed while off: placed on the header")
 eq(t.NineSlice:GetAlpha(), 0, "the NineSlice faded again")
 eq(m.Header.Background:GetAtlas(), nil, "the module header blanked again")
@@ -183,9 +199,10 @@ eq(QuestObjectiveTracker.Header.Background:GetAtlas(), "UI-QuestTracker-Secondar
 -- And loading after us: handed over, our panel hidden, nothing restored over it.
 GUI = loadAddon()
 p = GUI.QuestTracker._test.panels[ObjectiveTrackerFrame]
+band = GUI.QuestTracker._test.bands[ObjectiveTrackerFrame]
 WoW.loaded.GlassQuestTracker = true
 WoW.fire("ADDON_LOADED", "GlassQuestTracker")
-check(not p:IsShown(), "GQT loading later: our panel hides")
+check(not p:IsShown() and not band:IsShown(), "GQT loading later: our panels hide")
 check(GUI.Engine.Status("tracker"):find("/reload to finish", 1, true), "and a /reload finishes the handover")
 WoW.layout("QuestObjectiveTracker", { blocks = 1, items = 1 })
 eq(QuestObjectiveTracker.usedRightEdgeFrames.item1:GetNormalTexture():GetAlpha(), 1, "our hooks stop")

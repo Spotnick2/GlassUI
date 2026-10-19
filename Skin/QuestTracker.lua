@@ -24,13 +24,17 @@
 -- Text keeps Blizzard's colours and fonts (difficulty colours carry
 -- information); the POI buttons and auto-quest popups stay stock.
 --
--- The panel is placed by state, never by reading a position, after every
--- layout, collapse and Edit Mode exit:
---   populated            to the NineSlice's bottom, which Blizzard anchors under
---                        the last module after every layout (Container.lua:117)
---   collapsed or empty   to the Header's bottom: collapsed, the NineSlice keeps
---                        its old full size (70374), and empty (Edit Mode only)
---                        it has top anchors only.
+-- The glass is the damage meter's recipe (the owner, 2026-10-19: GQT's single
+-- panel put the minimize buttons on its rim): a small band over the "All
+-- Objectives" header, and the body under it. Both are placed by state, never
+-- by reading a position, after every layout, collapse and Edit Mode exit:
+--   the band             always, from the NineSlice's top to the Header's bottom
+--   populated            the body under the band, to the NineSlice's bottom,
+--                        which Blizzard anchors under the last module after
+--                        every layout (Container.lua:117)
+--   collapsed or empty   the band alone: collapsed, the NineSlice keeps its old
+--                        full size (70374), and empty (Edit Mode only) it has
+--                        top anchors only.
 
 local GUI = GlassUI
 local API = GUI.API
@@ -47,14 +51,19 @@ local MODULES = { "ScenarioObjectiveTracker", "UIWidgetObjectiveTracker", "Campa
 local TINT = { 0.75, 0.9, 1 }
 
 -- From the NineSlice, whose left runs 30 px past the tracker for the POI
--- buttons and whose right runs 5 px past it; the right edge stops 2 px inside
--- the tracker (GQT: beside the action bars it merged with their glass). The
--- header offsets keep that right edge when collapsed.
-local LEFT, RIGHT, BOTTOM = 16, -7, 0
-local HEADER_RIGHT, HEADER_BOTTOM = -2, -4
+-- buttons and whose right runs 5 px past it. The right edge is the NineSlice's,
+-- so the minimize buttons sit inside the glass: GQT stopped 2 px inside the
+-- tracker (beside the action bars it merged with their glass), which put them
+-- on the rim (70450). The band's right is the Header's, which is the
+-- tracker's, plus 5 for the same edge. GAP: between the band and the body.
+local LEFT, RIGHT, BOTTOM = 16, 0, 0
+local HEADER_RIGHT, HEADER_BOTTOM = 5, -4
+local GAP = 2
 
-local panels = setmetatable({}, { __mode = "k" })   -- tracker -> our panel
-local glass = setmetatable({}, { __mode = "k" })    -- tracker -> the panel's LibGlass regions
+local panels = setmetatable({}, { __mode = "k" })   -- tracker -> the body panel
+local bands = setmetatable({}, { __mode = "k" })    -- tracker -> the header band
+local glass = setmetatable({}, { __mode = "k" })    -- tracker -> the body's LibGlass regions
+local bandGlass = setmetatable({}, { __mode = "k" }) -- tracker -> the band's
 local hooked = setmetatable({}, { __mode = "k" })   -- module or header -> true
 local QT = { state = nil }                          -- "populated" | "header", after the last place
 
@@ -87,15 +96,20 @@ local function populated(t)
 end
 
 local function place(t)
-    local panel, nine, header = panels[t], tbl(t.NineSlice), tbl(t.Header)
-    if not (panel and nine and header) then return end
-    panel:ClearAllPoints()
-    panel:SetPoint("TOPLEFT", nine, "TOPLEFT", LEFT, 0)
+    local body, band, nine, header = panels[t], bands[t], tbl(t.NineSlice), tbl(t.Header)
+    if not (body and band and nine and header) then return end
+    band:ClearAllPoints()
+    band:SetPoint("TOPLEFT", nine, "TOPLEFT", LEFT, 0)
+    band:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", HEADER_RIGHT, HEADER_BOTTOM)
+    body:ClearAllPoints()
+    body:SetPoint("TOPLEFT", band, "BOTTOMLEFT", 0, -GAP)
+    body:SetPoint("BOTTOMRIGHT", nine, "BOTTOMRIGHT", RIGHT, BOTTOM)
+    -- Our own frames: Show and Hide are ours to call.
     if API.Plain(t.isCollapsed) == true or not populated(t) then
-        panel:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", HEADER_RIGHT, HEADER_BOTTOM)
+        body:Hide()
         QT.state = "header"
     else
-        panel:SetPoint("BOTTOMRIGHT", nine, "BOTTOMRIGHT", RIGHT, BOTTOM)
+        body:Show()
         QT.state = "populated"
     end
 end
@@ -187,10 +201,13 @@ GUI.Engine.Register({
     live = true,
     frames = function() return rawget(_G, "ObjectiveTrackerFrame") end,
     install = function(kit, t)
-        local panel, g = kit:Panel(t)
-        panels[t], glass[t] = panel, g
-        -- The rim at the tracker's level, under its modules (GQT, 70374).
-        if g and g.top then g.top:SetFrameLevel(t:GetFrameLevel()) end
+        local band, gb = kit:Panel(t, "small")
+        local body, g = kit:Panel(t)
+        panels[t], bands[t], glass[t], bandGlass[t] = body, band, g, gb
+        -- The rims at the tracker's level, under its modules (GQT, 70374).
+        for _, x in ipairs({ g, gb }) do
+            if x and x.top then x.top:SetFrameLevel(t:GetFrameLevel()) end
+        end
         -- Collapsing the container lays out no module: placed from here.
         hook("collapse:container", tbl(t.Header), "SetCollapsed", function()
             if not GUI.Engine.Active("tracker") then return end
@@ -219,5 +236,5 @@ GUI.Engine.Register({
 })
 
 GUI.QuestTracker = QT
-QT._test = { panels = panels, glass = glass, offsets = { LEFT = LEFT, RIGHT = RIGHT, BOTTOM = BOTTOM, HEADER_RIGHT = HEADER_RIGHT,
-             HEADER_BOTTOM = HEADER_BOTTOM }, tint = TINT }
+QT._test = { panels = panels, bands = bands, glass = glass, bandGlass = bandGlass, offsets = { LEFT = LEFT, RIGHT = RIGHT, BOTTOM = BOTTOM,
+             HEADER_RIGHT = HEADER_RIGHT, HEADER_BOTTOM = HEADER_BOTTOM, GAP = GAP }, tint = TINT }
