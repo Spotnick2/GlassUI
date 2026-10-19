@@ -167,10 +167,14 @@ blocked, and after combat everything glides once to the new footprint. The owner
     - **M4 (70450, run #238): `[group:raid] hide; show` does not update in combat.** A party
       converted to a raid mid-fight kept the holder shown until combat ended, so the pet showed
       twice: under `raid1`, and in the raid-pet column. Out of combat the condition is right.
-    - The candidate is `[@raid1,exists] hide; show`. `[exists]` updates in combat (GRF probe item
-      11), but this condition is **measured before it is used**, in the same probe.
-    - If no condition holds in combat, the fixed party-pet set is disabled out of combat **in both
-      modes** (HUD and side) rather than risk a pet shown twice or under the wrong owner.
+    - **The driver is `[@raid1,exists] hide; show`** (measured, GRF run #240, 70450):
+      - in a party out of combat, the holder is shown;
+      - converted to a raid **in combat**, it hid within 0.3 s, while `[group:raid]` still parsed
+        "show";
+      - with the other player gone, still in combat (solo), it was shown again;
+      - out of combat afterwards, shown. Nothing was blocked.
+    - Should it ever stop holding on a later build, the fallback stays: the fixed party-pet set is
+      disabled out of combat **in both modes** rather than risk a pet shown twice.
   - **Only with the row.** The holder is used only while the row set is applied, and that is decided
     out of combat. The driver stays the only owner of its visibility: whenever the set changes, GRF
     re-registers it with `"hide"` while the columns are applied, and with the measured party
@@ -371,7 +375,7 @@ settings.
 - **M4:** the five party-pet buttons, and their visibility driver on 70450. Do they show under their
   owners, and hide in a raid, in combat too?
   - **Run #238:** `[group:raid]` does not update in combat (above).
-  - `[@raid1,exists] hide; show` is measured next.
+  - **Run #240:** `[@raid1,exists] hide; show` holds in combat. It is the driver.
 - **M5:** the visual glide on a cell and on GUF's frames, out of combat. Does it read like the zoom
   (owner), with nothing blocked?
 
@@ -464,3 +468,6 @@ The stance bar follows the player frame too, so the announcement carries both `d
 - **M4:**
   - `[group:raid]` does not update in combat, so `[@raid1,exists]` is measured next;
   - one pet column is reserved in a raid.
+
+**M4, run #240:** `[@raid1,exists] hide; show` holds in combat, and it is the party-pet driver under
+the row (with `"hide"` under the columns).
