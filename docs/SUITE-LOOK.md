@@ -143,6 +143,15 @@ unchanged.
 
 ## Glass UI's page
 
+**Built (GlassUI#44):**
+- `Suite.Look`, `SetLook`, `SetLookPreset` and `LookPreset`;
+- the `GlassUI.Suite.LookChanged` event through EventRegistry;
+- the "Suite look" subpage (radios for the tint, preset, hover, press and empty slots, plus who
+  follows), and `/glassui look`;
+- the reports' `look`, `own` and `tenants` copied for the page, the GAB card and
+  `/glassui suite`.
+
+
 - **Where:** the suite look gets its own Settings subpage under Glass UI, "Suite look". The main
   page is full.
 - **The tint:** a radio, Clear / Smoked / Class.

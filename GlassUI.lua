@@ -60,6 +60,7 @@ local function helpLines()
         "/glassui theme clear|smoked|class - the glass",
         "/glassui suite - the Glass addons and whether each follows the suite theme",
         "/glassui suite follow <addon> on|off - an addon follows Glass UI (after /reload)",
+        "/glassui look - the suite look (tint and button feedback); look tint smoked, look preset soft",
         "/glassui options - the settings page",
         "/glassui failures - what failed to build or register",
         "/glassui version - client build vs the measured one",
@@ -93,6 +94,9 @@ local function suite(a, b, c)
     end
     say("suite theme: " .. Suite.THEMES[Suite.ThemeName()].label)
     for _, m in ipairs(Suite.ROSTER) do say(Suite.Line(m)) end
+    for _, m in ipairs(Suite.ROSTER) do
+        for _, t in ipairs(Suite.Tenants(m.name)) do say(t .. ": follows " .. m.title) end
+    end
     local layout = Suite.LayoutLine()
     if layout then say(layout) end
     local cc = Suite.ClickCast()
@@ -100,6 +104,35 @@ local function suite(a, b, c)
         say("click-casting: Glass Raid Frames; its bindings on other addons' frames: "
             .. (cc.others and "on" or "off"))
     end
+end
+
+-- /glassui look [tint|hover|press|empty|preset <value>]
+local LOOK_ALIAS = { tint = "tint", hover = "hover", press = "press", empty = "emptySlots" }
+local function look(a, b)
+    local Suite = GUI.Suite
+    if a == "preset" and Suite.SetLookPreset(b) then
+        say("suite look: " .. Suite.LOOK_LABELS[b] .. " feedback")
+        return
+    end
+    local key = LOOK_ALIAS[a]
+    if key and Suite.SetLook(key, b) then
+        say("suite look: " .. Suite.LOOK_LABELS[key]:lower() .. " " .. Suite.LOOK_LABELS[b])
+        return
+    end
+    if a ~= "" then
+        say("/glassui look tint|hover|press|empty|preset <value>")
+    end
+    local l = Suite.Look() or Suite.LOOK_DEFAULTS
+    local parts = {}
+    for _, k in ipairs(Suite.LOOK_KEYS) do
+        parts[#parts + 1] = Suite.LOOK_LABELS[k]:lower() .. " " .. Suite.LOOK_LABELS[l[k]]
+    end
+    say("suite look (" .. Suite.LOOK_LABELS[Suite.LookPreset()] .. "): " .. table.concat(parts, ", "))
+    for _, k in ipairs(Suite.LOOK_KEYS) do
+        local name = k == "emptySlots" and "empty" or k
+        say("  " .. name .. ": " .. table.concat(Suite.LOOK_VALUES[k], "|"))
+    end
+    say("  preset: " .. table.concat(Suite.LOOK_PRESET_NAMES, "|"))
 end
 
 local function reloadNote(result)
@@ -126,6 +159,8 @@ local function slash(msg)
         say("/glassui theme " .. table.concat(GUI.Theme.NAMES, "|") .. " (now " .. GUI.Theme.Name() .. ")")
     elseif cmd == "options" then
         if not GUI.Options.Open() then say("the settings page isn't available") end
+    elseif cmd == "look" then
+        look(a, b)
     elseif cmd == "suite" then
         suite(a, b, c)
     elseif cmd == "failures" then

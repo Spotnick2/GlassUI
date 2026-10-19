@@ -341,6 +341,7 @@ function WoW.reset()
     -- ([name] = 0 none, 1 some, 2 all); the GUID the state was asked for.
     WoW.installed = {}
     WoW.enableAskedFor = nil
+    WoW.triggered = {}
     WoW.onLoaded = {}
     WoW.style = 0
     WoW.blizz, WoW.blizzCalls, WoW.luaCalls, WoW.fieldWrites, WoW.textureArgs = {}, {}, {}, {}, {}
@@ -381,6 +382,17 @@ C_AddOns = {
         return WoW.installed[name] or (WoW.loaded[name] and 2) or 0
     end,
 }
+-- EventRegistry (Blizzard_SharedXMLBase): callbacks get (owner, ...); every
+-- trigger is recorded in WoW.triggered.
+EventRegistry = { callbacks = {} }
+function EventRegistry:RegisterCallback(event, fn, owner)
+    self.callbacks[event] = self.callbacks[event] or {}
+    table.insert(self.callbacks[event], { fn = fn, owner = owner })
+end
+function EventRegistry:TriggerEvent(event, ...)
+    table.insert(WoW.triggered, { event = event, args = { ... } })
+    for _, c in ipairs(self.callbacks[event] or {}) do c.fn(c.owner, ...) end
+end
 WoW.GUID = "Player-4618-0ABCDEF0"
 C_Item = { GetItemIconByID = function(id) return WoW.itemIcons[id] end }
 WoW.itemIcons = { [5500] = 134122 }

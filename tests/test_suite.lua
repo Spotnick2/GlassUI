@@ -333,6 +333,121 @@ Suite.Report("GlassUnitFrames", { api = 1, layout = { linked = true, placing = f
 eq(GUI.Options._test.layoutLine:GetText(), "Group layout: centred above the action bars; player and target in their own places", "and redraws when a report changes it")
 GUI.Options._test.panel:Hide()
 
+-- The suite look (docs/SUITE-LOOK.md): Look(), the live event, sparse
+-- saving, presets, what followers report, and the "Suite look" subpage.
+GUI = loadAddon({ before = function() early.look = GlassUI.Suite.Look() end })
+Suite = GUI.Suite
+eq(early.look, nil, "Look() is nil before Glass UI is ready")
+local L = Suite.Look()
+check(L and L.tint == "clear" and L.hover == "glow" and L.press == "flash" and L.emptySlots == "frosted",
+      "the defaults are GAB's own look: clear, glow, flash, frosted")
+L.tint = "smoked"
+eq(Suite.Look().tint, "clear", "Look() is a fresh table: changing one doesn't reach the suite")
+eq(Suite.LookPreset(), "glass", "the defaults match the Glass preset")
+WoW.triggered = {}
+check(Suite.SetLook("tint", "smoked"), "SetLook accepts a known value")
+eq(GlassUIDB.suite.look.tint, "smoked", "saved")
+eq(#WoW.triggered, 1, "and announced once")
+eq(WoW.triggered[1].event, "GlassUI.Suite.LookChanged", "on GlassUI.Suite.LookChanged")
+eq(WoW.triggered[1].args[1].tint, "smoked", "with the whole look")
+eq(WoW.triggered[1].args[1].hover, "glow", "including the unchanged keys")
+eq(Suite.SetLook("tint", "gold"), false, "an unknown value is refused")
+eq(Suite.SetLook("sparkle", "on"), false, "and an unknown key")
+eq(#WoW.triggered, 1, "and neither is announced")
+-- A follower that registers late pulls Look() rather than waiting for a replay.
+local seen
+EventRegistry:RegisterCallback("GlassUI.Suite.LookChanged", function(owner, look) seen = look end, "test")
+eq(Suite.Look().tint, "smoked", "a late follower pulls the current look")
+WoW.combat = true
+check(Suite.SetLookPreset("soft"), "a preset applies, in combat too (textures only, followers' care)")
+WoW.combat = false
+eq(seen and seen.hover, "halo", "the follower got the preset's hover")
+eq(seen and seen.press, "ripple", "and press")
+eq(Suite.LookPreset(), "soft", "the preset is recognised")
+Suite.SetLook("emptySlots", "full")
+eq(Suite.LookPreset(), "custom", "a mixed set reads as custom")
+Suite.SetLookPreset("glass")
+Suite.SetLook("tint", "clear")
+eq(GlassUIDB.suite, nil, "back to the defaults: nothing saved")
+eq(Suite.SetLookPreset("sparkly"), false, "an unknown preset is refused")
+-- A reload keeps it, and a junk saved value falls back to the default.
+GUI = loadAddon({ db = { suite = { look = { tint = "class", hover = "neon" } } } })
+Suite = GUI.Suite
+eq(Suite.Look().tint, "class", "the saved tint after a reload")
+eq(Suite.Look().hover, "glow", "a junk saved value falls back to the default")
+
+-- What a follower reports (GAB): its effective look, its overrides, its tenants.
+setup({ suite = { follow = { GlassActionBars = true } } })
+WoW.installed.GlassActionBars, WoW.loaded.GlassActionBars = 2, true
+ask("GlassActionBars")
+Suite.Report("GlassActionBars", { api = 1, built = "pearl",
+    look = { tint = "smoked", hover = "glow", press = "flash", emptySlots = "frosted", extra = "x" },
+    own = { tint = true, hover = "yes" }, tenants = { "Apotheca", 42, "" }, options = function() end })
+local rr = Suite.ReportOf("GlassActionBars")
+eq(rr.look.tint, "smoked", "the effective look is copied")
+eq(rr.look.extra, nil, "only the known keys")
+eq(rr.own.tint, true, "an override is copied")
+eq(rr.own.hover, nil, "a non-boolean override is dropped")
+eq(#rr.tenants, 1, "only plain, non-empty tenant names")
+eq(rr.tenants[1], "Apotheca", "Apotheca is GAB's tenant")
+eq(Suite.LookLine("GlassActionBars"), "suite look, its own tint Smoked", "the look line names the override")
+local out
+GUI._test.slash("suite")
+out = chat()
+check(out:find("Glass Action Bars: following Glass UI (Pearl); suite look, its own tint Smoked", 1, true),
+      "/glassui suite: GAB follows, with its override")
+check(out:find("Apotheca: follows Glass Action Bars", 1, true), "/glassui suite: the tenant line")
+-- The main page's GAB card says the same, briefly.
+GUI.Options._test.panel:Show()
+check(GUI.Options._test.rows.GlassActionBars.line:GetText():find("its own tint; Apotheca follow it", 1, true),
+      "the GAB card names its overrides and its tenants")
+GUI.Options._test.panel:Hide()
+
+-- /glassui look
+GUI._test.slash("look tint smoked")
+eq(Suite.Look().tint, "smoked", "/glassui look tint smoked")
+GUI._test.slash("look empty hidden")
+eq(Suite.Look().emptySlots, "hidden", "/glassui look empty <value> sets emptySlots")
+GUI._test.slash("look preset minimal")
+eq(Suite.LookPreset(), "minimal", "/glassui look preset minimal")
+chat()
+GUI._test.slash("look tint gold")
+check(chat():find("/glassui look tint|hover|press|empty|preset <value>", 1, true), "a bad value prints the usage")
+GUI._test.slash("look")
+out = chat()
+check(out:find("suite look (Minimal): tint Smoked, hover Off, press Flash, empty slots Hidden", 1, true),
+      "/glassui look prints the look and its preset")
+check(out:find("tint: clear|smoked|class", 1, true) and out:find("tint:", 1, true) < out:find("hover:", 1, true),
+      "and the choices, in a fixed order")
+
+-- The "Suite look" subpage: registered under Glass UI, radios that set and show the look.
+check(GUI.Options.lookCategory and GUI.Options.lookCategory.parent == WoW.settingsCategory,
+      "the subpage is registered under Glass UI's page")
+local O = GUI.Options._test
+O.lookPanel:Show()
+local tintRow = O.lookRows["Tint"]
+eq(#tintRow, 3, "three tints")
+eq(tintRow[2]:GetChecked(), true, "the current tint (smoked) is checked")
+tintRow[3]:Click()
+eq(Suite.Look().tint, "class", "a tint radio sets the suite tint")
+eq(tintRow[3]:GetChecked(), true, "and the radios follow")
+eq(tintRow[2]:GetChecked(), false, "only one checked")
+local presetRow = O.lookRows["Button feedback"]
+presetRow[2]:Click()
+eq(Suite.LookPreset(), "soft", "a preset radio applies the preset")
+eq(O.lookRows["Hover"][3]:GetChecked(), true, "and the hover row shows its halo")
+O.lookRows["Empty slots"][4]:Click()
+eq(Suite.LookPreset(), "custom", "a single key can make it custom")
+eq(O.lookCustom:GetText(), "(custom)", "and the page says so")
+for _, rb in ipairs(presetRow) do check(not rb:GetChecked(), "no preset checked while custom") end
+check(O.lookFollowers:GetText():find("Glass Action Bars: suite look, its own tint Smoked", 1, true),
+      "the subpage lists the followers and their overrides")
+check(O.lookFollowers:GetText():find("Apotheca: follows Glass Action Bars", 1, true), "and the tenants")
+Suite.Report("GlassActionBars", { api = 1, built = "pearl",
+    look = { tint = "class", hover = "halo", press = "ripple", emptySlots = "full" }, own = {} })
+eq(O.lookFollowers:GetText(), "Glass Action Bars: suite look", "a new report redraws the open subpage")
+O.lookPanel:Hide()
+
 -- Never another addon's SavedVariables: the strict globals would throw on a
 -- read, and nothing was written.
 for _, name in ipairs({ "GlassUnitFramesDB", "GlassRaidFramesDB", "GlassRaidFramesCharDB" }) do

@@ -119,6 +119,26 @@ local function copyReport(addon, state)
     if type(cc) == "table" then
         r.clickCast = { open = plain(cc.open, "function"), others = plain(cc.others, "boolean") }
     end
+    -- The suite look as the follower applies it (docs/SUITE-LOOK.md): its
+    -- effective values, the keys it overrides, and the addons wearing its skin.
+    local look = state.look
+    if type(look) == "table" then
+        r.look = {}
+        for _, k in ipairs(Suite.LOOK_KEYS) do r.look[k] = plain(look[k], "string") end
+    end
+    local own = state.own
+    if type(own) == "table" then
+        r.own = {}
+        for _, k in ipairs(Suite.LOOK_KEYS) do r.own[k] = own[k] == true or nil end
+    end
+    local tenants = state.tenants
+    if type(tenants) == "table" then
+        r.tenants = {}
+        for i = 1, math.min(#tenants, 20) do
+            local t = plain(tenants[i], "string")
+            if t and t ~= "" then r.tenants[#r.tenants + 1] = t end
+        end
+    end
     -- The group layout's state (docs/GROUP-LAYOUT.md §6): GRF's { on, mode },
     -- GUF's { linked, placing }. What they applied, shown, never acted on.
     local l = state.layout
@@ -145,6 +165,131 @@ function Suite.SetFollow(addon, on)
     GUI.db.suite = next(s) and s or nil
     changed()
     return true
+end
+
+--------------------------------------------------------------------------------
+-- The suite look (docs/SUITE-LOOK.md): the tint and the button feedback,
+-- owned here and changed live. Followers read it once at their start
+-- (Look) and then listen to LookChanged; a key they override stays theirs.
+-- The vocabulary is GlassActionBars' (its `theme` is our `tint`), and the
+-- defaults are its own look, so nothing changes until the player changes it.
+--------------------------------------------------------------------------------
+
+Suite.LOOK_EVENT = "GlassUI.Suite.LookChanged"
+Suite.LOOK_KEYS = { "tint", "hover", "press", "emptySlots" }
+Suite.LOOK_VALUES = {
+    tint = { "clear", "smoked", "class" },
+    hover = { "off", "glow", "halo" },
+    press = { "off", "flash", "ripple" },
+    emptySlots = { "hidden", "faint", "half", "full", "frosted" },
+}
+Suite.LOOK_DEFAULTS = { tint = "clear", hover = "glow", press = "flash", emptySlots = "frosted" }
+Suite.LOOK_PRESETS = {
+    glass = { hover = "glow", press = "flash", emptySlots = "frosted" },
+    soft = { hover = "halo", press = "ripple", emptySlots = "frosted" },
+    minimal = { hover = "off", press = "flash", emptySlots = "hidden" },
+}
+Suite.LOOK_PRESET_NAMES = { "glass", "soft", "minimal" }
+Suite.LOOK_LABELS = {
+    tint = "Tint", hover = "Hover", press = "Press", emptySlots = "Empty slots",
+    clear = "Clear", smoked = "Smoked", class = "Class colour",
+    off = "Off", glow = "Glow", halo = "Halo", flash = "Flash", ripple = "Ripple",
+    hidden = "Hidden", faint = "Faint", half = "Half", full = "Full", frosted = "Frosted",
+    glass = "Glass", soft = "Soft", minimal = "Minimal", custom = "Custom",
+}
+
+local validLook = {}
+for k, list in pairs(Suite.LOOK_VALUES) do
+    validLook[k] = {}
+    for _, v in ipairs(list) do validLook[k][v] = true end
+end
+
+function Suite.LookValid(key, value)
+    return validLook[key] ~= nil and validLook[key][value] == true
+end
+
+local function savedLook()
+    local s = saved()
+    return s and type(s.look) == "table" and s.look or nil
+end
+
+-- The suite look as a fresh table (the defaults until the player changes
+-- them), or nil before we are ready. Never errors.
+function Suite.Look()
+    if not ready then return nil end
+    local l, out = savedLook(), {}
+    for _, k in ipairs(Suite.LOOK_KEYS) do
+        local v = l and l[k]
+        out[k] = Suite.LookValid(k, v) and v or Suite.LOOK_DEFAULTS[k]
+    end
+    return out
+end
+
+-- The preset the feedback keys match, or "custom".
+function Suite.LookPreset()
+    local look = Suite.Look() or Suite.LOOK_DEFAULTS
+    for _, name in ipairs(Suite.LOOK_PRESET_NAMES) do
+        local p, all = Suite.LOOK_PRESETS[name], true
+        for k, v in pairs(p) do if look[k] ~= v then all = false end end
+        if all then return name end
+    end
+    return "custom"
+end
+
+local function announceLook()
+    local look = Suite.Look()
+    if look then API.TriggerEvent(Suite.LOOK_EVENT, look) end
+    changed()
+end
+
+local function storeLook(key, value)
+    local s = saved() or {}
+    s.look = type(s.look) == "table" and s.look or {}
+    s.look[key] = (value ~= Suite.LOOK_DEFAULTS[key]) and value or nil
+    if next(s.look) == nil then s.look = nil end
+    GUI.db.suite = next(s) and s or nil
+end
+
+-- Set one key of the suite look; saved sparsely, announced at once (in or
+-- out of combat: followers apply it combat-safely).
+function Suite.SetLook(key, value)
+    if not GUI.db or not Suite.LookValid(key, value) then return false end
+    storeLook(key, value)
+    announceLook()
+    return true
+end
+
+-- Set the three feedback keys from a preset, announced once.
+function Suite.SetLookPreset(name)
+    local p = Suite.LOOK_PRESETS[name]
+    if not GUI.db or not p then return false end
+    for k, v in pairs(p) do storeLook(k, v) end
+    announceLook()
+    return true
+end
+
+-- What a follower's report says about the look, for the page and
+-- /glassui suite: nil when it reported none.
+function Suite.LookLine(addon)
+    local r = reports[addon]
+    if not (r and r.look) then return nil end
+    local own = {}
+    for _, k in ipairs(Suite.LOOK_KEYS) do
+        if r.own and r.own[k] and r.look[k] then
+            own[#own + 1] = Suite.LOOK_LABELS[k]:lower() .. " " .. (Suite.LOOK_LABELS[r.look[k]] or r.look[k])
+        end
+    end
+    local text = Suite.Following(addon) and "suite look" or "its own look"
+    if #own > 0 then text = text .. ", its own " .. table.concat(own, ", ") end
+    return text
+end
+
+-- The addons wearing a follower's skin ("Apotheca: follows Glass Action Bars").
+function Suite.Tenants(addon)
+    local r = reports[addon]
+    local out = {}
+    if r and r.tenants then for i, t in ipairs(r.tenants) do out[i] = t end end
+    return out
 end
 
 -- Is the addon there, and loaded? "missing", "disabled", "loaded", or
@@ -208,6 +353,8 @@ function Suite.Line(m)
     if state ~= "missing" and state ~= "other" and Suite.Following(m.name) and state ~= "following" then
         text = text .. "; set to follow"
     end
+    local look = Suite.LookLine(m.name)
+    if look and (state == "following" or state == "own") then text = text .. "; " .. look end
     if pending then text = text .. " - /reload to apply" end
     return m.title .. ": " .. text, state, pending
 end
