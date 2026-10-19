@@ -115,6 +115,10 @@ What comes over from GQT is measured: taint passes A and B clean on 70374, the l
   - collapsed or empty: to the Header's bottom-right (-2, -4).
 - **The surface.** The meter's recipe: `kit:Panel`, the suite preset (part 1), Glass UI's Theme and
   backing. GQT's reflective shell (`Glass.Reflect`, the custom surface alphas) is not carried over.
+  - **The meter's layout too** (the owner, 2026-10-19, after the first acceptance: the single panel put
+    the minimize buttons on its rim): a small band over the "All Objectives" header and the body
+    under it, the right edge out to the NineSlice's so the buttons sit inside the glass. Collapsed or
+    empty, the band alone.
   - Open: a quest list is mostly text, and clear's backing is 0.35, where GQT's default was 0.55. The
     acceptance screenshots over bright ground decide whether the tracker needs a denser backing.
     That would be a per-skin backing in Theme, if needed.
