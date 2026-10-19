@@ -128,6 +128,18 @@ function API.RegisterSettingsSubpanel(parent, panel, name)
     return S.RegisterCanvasLayoutSubcategory(parent, panel, name)
 end
 
+-- A UIPanelScrollFrameTemplate's bar, shown only while there is something to
+-- scroll (GlassPanel's, measured on its options page).
+function API.AutoHideScrollBar(scroll)
+    local bar = scroll.ScrollBar
+    if not bar then return end
+    local function sync(self, _, yrange)
+        bar:SetShown(math.floor(yrange or self:GetVerticalScrollRange() or 0) > 0)
+    end
+    scroll:HookScript("OnScrollRangeChanged", sync)
+    sync(scroll)
+end
+
 -- EventRegistry's TriggerEvent under pcall: a listener's error stays its own.
 function API.TriggerEvent(event, ...)
     local R = rawget(_G, "EventRegistry")

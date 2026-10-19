@@ -18,6 +18,10 @@
 -- combat), positioned over the footer, never anchored to it, attributes set
 -- once out of combat, nothing of ours on its click, hidden as combat starts
 -- and shown only outside it. In combat the footer says to type /reload.
+--
+-- The page scrolls, the footer under it doesn't (owner, 2026-10-19: with four
+-- addons following, the page ran past the window). A footer that stays put
+-- also keeps the Reload UI button, placed over it, where the footer is.
 
 GlassUI = GlassUI or {}
 local GUI = GlassUI
@@ -28,6 +32,7 @@ GUI.Options = Options
 local panel = CreateFrame("Frame")
 panel.name = "Glass UI"
 panel:Hide()
+local scroll, page   -- the scroll frame and its child, the page's content (built on the first show)
 
 local category
 local refreshers = {}
@@ -35,6 +40,7 @@ local refreshers = {}
 -- The states of a member that speaks the suite API (Suite.State).
 local SPEAKS = { early = true, silent = true, failed = true, following = true, own = true }
 local PAD = 16
+local FOOTER = 64    -- the footer's height under the scrolled page: the note, the Reload UI button, the credit
 local CARD_BACKING = { 0.05, 0.06, 0.08, 0.55 }
 -- The pearl in the preset card: the Iridescent Pearl's own icon (item 5500),
 -- read from the client (never a guessed file name), clipped round inside the
@@ -73,14 +79,14 @@ end
 local function span(region, anchor, gap)
     region:ClearAllPoints()
     region:SetPoint("TOP", anchor, "BOTTOM", 0, -gap)
-    region:SetPoint("LEFT", panel, "LEFT", PAD, 0)
-    region:SetPoint("RIGHT", panel, "RIGHT", -PAD, 0)
+    region:SetPoint("LEFT", page, "LEFT", PAD, 0)
+    region:SetPoint("RIGHT", page, "RIGHT", -PAD, 0)
 end
 
 -- A glass card `height` tall: the card, and the frame its content goes on
 -- (above the glass body).
 local function card(height)
-    local c = CreateFrame("Frame", nil, panel)
+    local c = CreateFrame("Frame", nil, page)
     c:SetHeight(height)
     local Glass = pageGlass()
     local ok, g = pcall(Glass.Apply, c, "small")
@@ -96,8 +102,8 @@ local function card(height)
     return c, content
 end
 
-local function rule()
-    local t = panel:CreateTexture(nil, "ARTWORK")
+local function rule(parent)
+    local t = (parent or page):CreateTexture(nil, "ARTWORK")
     t:SetColorTexture(1, 1, 1, 0.12)
     t:SetHeight(1)
     return t
@@ -222,11 +228,29 @@ local function memberCard(m)
     end
 end
 
+-- The page as tall as its content (from its top to `last`'s bottom), so the
+-- scroll range is what overflows. Rects are read, so it waits for the layout.
+local function fit(last)
+    local top, bottom = page:GetTop(), last:GetBottom()
+    if not (top and bottom) then return end
+    page:SetHeight(math.max(1, top - bottom + PAD))
+end
+
 local function build()
     local Suite = GUI.Suite
-    local title = label(panel, "Glass UI", "GameFontHighlightHuge")
-    title:SetPoint("TOPLEFT", panel, "TOPLEFT", PAD + 4, -PAD)
-    local tagline = label(panel, "One appearance for your Glass addons.")
+    scroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -4)
+    scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -26, FOOTER + 4)
+    page = CreateFrame("Frame", nil, scroll)
+    page:SetSize(1, 1)
+    scroll:SetScrollChild(page)
+    scroll:HookScript("OnSizeChanged", function(_, w) page:SetWidth(w) end)
+    API.AutoHideScrollBar(scroll)
+    Options._test.scroll, Options._test.page = scroll, page
+
+    local title = label(page, "Glass UI", "GameFontHighlightHuge")
+    title:SetPoint("TOPLEFT", page, "TOPLEFT", PAD + 4, -PAD)
+    local tagline = label(page, "One appearance for your Glass addons.")
     tagline:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -6)
 
     -- The suite preset, with a pearl of our glass beside it.
@@ -260,9 +284,9 @@ local function build()
 
     local sep1 = rule()
     span(sep1, preset, 14)
-    local appearance = label(panel, "Addon appearance", "GameFontHighlightLarge")
+    local appearance = label(page, "Addon appearance", "GameFontHighlightLarge")
     appearance:SetPoint("TOPLEFT", sep1, "BOTTOMLEFT", 4, -12)
-    local choose = label(panel, "Choose which addons use the Glass UI appearance.", "GameFontDisable")
+    local choose = label(page, "Choose which addons use the Glass UI appearance.", "GameFontDisable")
     choose:SetPoint("TOPLEFT", appearance, "BOTTOMLEFT", 0, -6)
 
     -- A card per roster member; only those that speak the API are shown,
@@ -272,10 +296,10 @@ local function build()
         local c, refresh = memberCard(m)
         cards[#cards + 1] = { c = c, refresh = refresh, m = m }
     end
-    local restore = label(panel, "Turn off to restore an addon's saved appearance settings.", "GameFontDisable")
+    local restore = label(page, "Turn off to restore an addon's saved appearance settings.", "GameFontDisable")
 
     -- Theme sync unavailable: the rest, folded.
-    local fold = CreateFrame("Button", nil, panel)
+    local fold = CreateFrame("Button", nil, page)
     fold:SetHeight(28)
     local arrow = label(fold, "", "GameFontHighlight")
     arrow:SetPoint("LEFT", fold, "LEFT", 12, 0)
@@ -284,9 +308,9 @@ local function build()
     local hl = fold:CreateTexture(nil, "HIGHLIGHT")
     hl:SetAllPoints(fold)
     hl:SetColorTexture(1, 1, 1, 0.05)
-    local list = label(panel, "", "GameFontDisable")
+    local list = label(page, "", "GameFontDisable")
     list:SetJustifyV("TOP")
-    local keepOwn = label(panel, "These addons keep their own appearance settings.", "GameFontDisable")
+    local keepOwn = label(page, "These addons keep their own appearance settings.", "GameFontDisable")
     Options.expanded = false
     fold:SetScript("OnClick", function()
         Options.expanded = not Options.expanded
@@ -297,24 +321,26 @@ local function build()
     -- Raid frames: the group layout and click-casting, both Glass Raid
     -- Frames' (shown here, set there).
     local sep2 = rule()
-    local cc = label(panel, "Raid frames", "GameFontHighlightLarge")
+    local cc = label(page, "Raid frames", "GameFontHighlightLarge")
     cc:SetPoint("TOPLEFT", sep2, "BOTTOMLEFT", 4, -12)
-    local layoutLine = label(panel, "", "GameFontHighlight")
+    local layoutLine = label(page, "", "GameFontHighlight")
     layoutLine:SetPoint("TOPLEFT", cc, "BOTTOMLEFT", 0, -6)
-    local ccLine = label(panel, "", "GameFontHighlight")
+    local ccLine = label(page, "", "GameFontHighlight")
     ccLine:SetPoint("TOPLEFT", layoutLine, "BOTTOMLEFT", 0, -4)
     Options._test.layoutLine = layoutLine
-    local ccOpen = button(panel, "Configure bindings", 170, function()
+    local ccOpen = button(page, "Configure bindings", 170, function()
         local c = Suite.ClickCast()
         if c and c.open then API.Try("suite:clickcast", c.open) end
     end)
-    ccOpen:SetPoint("RIGHT", panel, "RIGHT", -PAD, 0)
+    ccOpen:SetPoint("RIGHT", page, "RIGHT", -PAD, 0)
     ccOpen:SetPoint("TOP", cc, "TOP", 0, -6)
     Options._test.clickCast, Options._test.clickCastOpen = ccLine, ccOpen
 
-    -- The footer: the note, and the spot the Reload UI button sits over.
-    local sep3 = rule()
-    span(sep3, ccLine, 14)
+    -- The footer, on the panel under the scrolled page: the note, and the
+    -- spot the Reload UI button sits over.
+    local sep3 = rule(panel)
+    sep3:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", PAD, FOOTER)
+    sep3:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -PAD, FOOTER)
     local note = label(panel, "", "GameFontHighlight")
     note:SetPoint("TOPLEFT", sep3, "BOTTOMLEFT", 4, -14)
     local spot = CreateFrame("Frame", nil, panel)
@@ -374,6 +400,9 @@ local function build()
         Options.pending = anyPending
         credit:SetText((GUI.IsDev() and "Development build" or ("Version " .. GUI.VersionText())) .. " - Spotnick")
         showReload(spot)
+        page:SetWidth(scroll:GetWidth())
+        fit(ccLine)
+        C_Timer.After(0, function() fit(ccLine) end)
     end
 end
 

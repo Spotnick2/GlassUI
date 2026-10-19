@@ -105,6 +105,8 @@ function CreateFrame(ftype, name, parent, template)
         w.Text = newWidget("FontString", w)
     end
     if template == "UIRadioButtonTemplate" then w.text = newWidget("FontString", w) end
+    -- UIPanelScrollFrameTemplate's bar, as its ScrollBar key.
+    if template == "UIPanelScrollFrameTemplate" then w.ScrollBar = newWidget("Slider", w) end
     return w
 end
 
@@ -132,6 +134,11 @@ function Methods.GetWidth(w) return w._width end
 function Methods.GetHeight(w) return w._height end
 function Methods.GetSize(w) return w._width, w._height end
 function Methods.GetCenter(w) return w._cx, w._cy end
+-- Rects: what a test sets (nil until laid out, as before the first frame).
+function Methods.GetTop(w) return w._top end
+function Methods.GetBottom(w) return w._bottom end
+-- ScrollFrame: the range a test sets (w._yrange).
+function Methods.GetVerticalScrollRange(w) return w._yrange or 0 end
 function Methods.GetEffectiveScale(w) return w._effScale or 1 end
 function Methods.SetScale(w, s) w._scale = s end
 function Methods.GetScale(w) return w._scale end
