@@ -248,4 +248,48 @@ check(f19.Art:IsDesaturated(), "Tint desaturates")
 eq(GUI.Engine.SetEnabled("s", false), "reload", "turning off a skin that isn't live asks for a /reload")
 check(GUI.Engine.Status("s"):find("after a /reload", 1, true), "and says so")
 
+-- Fade's onAlpha (the damage meter's Background): Blizzard's latest alpha,
+-- never the 0 we hold, never while off, never a secret.
+local f20 = window("TestT")
+local got = {}
+local d20 = skin("t", f20, { style = function(kit, frame)
+    kit:Fade(frame.Art, function(a) got[#got + 1] = a end)
+end })
+GUI = session({ d20 })
+f20.Art:SetAlpha(0.4)
+f20:Show()
+eq(got[#got], 0.4, "at once: the alpha Blizzard had set")
+local n = #got
+f20:Hide(); f20:Show()
+eq(#got, n + 1, "a repeated Fade tells it again")
+eq(got[#got], 0.4, "the saved alpha, not the held 0")
+WoW.asBlizzard(function() f20.Art:SetAlpha(0.8) end)
+eq(got[#got], 0.8, "every Blizzard change")
+eq(f20.Art:GetAlpha(), 0, "held at 0 meanwhile")
+for _, a in ipairs(got) do check(a ~= 0, "never the kit's own 0 (" .. tostring(a) .. ")") end
+n = #got
+local plainCheck = issecretvalue
+issecretvalue = function(v) return v == 0.3 end
+WoW.asBlizzard(function() f20.Art:SetAlpha(0.3) end)
+issecretvalue = plainCheck
+eq(#got, n, "a secret alpha isn't passed on")
+GUI.Engine.SetEnabled("t", false)
+eq(f20.Art:GetAlpha(), 0.8, "off: the latest plain alpha back")
+n = #got
+WoW.asBlizzard(function() f20.Art:SetAlpha(0.6) end)
+eq(#got, n, "nothing while the skin is off")
+-- Secret already at the first Fade: nothing to pass on, and nothing fails.
+local f21 = window("TestU")
+local got21 = 0
+local d21 = skin("u", f21, { style = function(kit, frame)
+    kit:Fade(frame.Art, function() got21 = got21 + 1 end)
+end })
+GUI = session({ d21 })
+f21.Art:SetAlpha(0.35)
+issecretvalue = function(v) return v == 0.35 end
+f21:Show()
+issecretvalue = plainCheck
+eq(got21, 0, "a secret alpha at the first Fade isn't passed on")
+eq(f21.Art:GetAlpha(), 0, "the region is still faded")
+
 done("test_engine")

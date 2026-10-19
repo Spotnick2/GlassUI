@@ -37,10 +37,19 @@ WoW.merchantTab(1)
 WoW.hideMerchant()
 WoW.showMerchant()
 WoW.flushTimers(0)
-for _, cmd in ipairs({ "skin merchant off", "skin merchant on", "off", "on", "theme smoked", "theme class",
-                       "theme clear", "skins", "skin held off" }) do
+-- The damage meter (#49): shown, its Background changed, a window added,
+-- minimized, its breakdown, and one made while the skin is off.
+WoW.showMeter()
+WoW.meterBackground(1, 0.2)
+WoW.meterWindow(2)
+WoW.meterMinimize(1, true)
+WoW.meterBreakdown(2, true)
+for _, cmd in ipairs({ "skin merchant off", "skin merchant on", "skin meter off", "off", "on", "theme smoked",
+                       "theme class", "theme clear", "skins", "skin held off" }) do
     GUI._test.slash(cmd)
+    if cmd == "skin meter off" then WoW.meterWindow(3); WoW.meterBackground(3, 0.7) end
 end
+GUI._test.slash("skin meter on")
 WoW.flushTimers(0)
 WoW.hideMerchant()
 WoW.showMerchant()
