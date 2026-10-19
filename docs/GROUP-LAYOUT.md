@@ -385,13 +385,19 @@ GlassActionBars#37, a compatible addition to GAB's `PUBLIC_API_VERSION` 1 (its d
     - `left`: the right edge of the bars at the screen's left, or 0 with none;
     - `right`: the left edge of the bars at the screen's right, or `width` with none.
   - The `EventRegistry` event `GlassActionBars.EdgesChanged` (left, right, width) fires out of
-    combat, and only when a value changes: after Edit Mode closes or a layout applies, when a counted
-    bar shows or hides, and on a scale or display change. Consumers apply the latest values each time
+    combat, and only when a value changes by more than 0.5 units from the last values announced: after
+    Edit Mode closes or a layout applies, when a counted bar shows or hides, and on a scale or display
+    change. Consumers apply the latest values each time
     (idempotent).
-  - **Which bars count:** the visible Action Bars 1-8 (their button union, as GAB's dock reads it),
-    GAB's Utility bar and its docked provider bars. A bar counts on a side when its outer edge is
-    within 40 units of that screen edge and it is taller than wide, so a horizontal bar near a bottom
-    corner doesn't push the grid.
+  - **Which bars count:**
+    - the visible Action Bars 1-8 (their button union, as GAB's dock reads it), GAB's Utility bar,
+      and its provider bars, docked or free;
+    - a bar counts on a side when it is taller than wide, so a horizontal bar near a bottom corner
+      doesn't push the grid;
+    - and when it starts within 40 units of the screen edge **or of the bars already counted on that
+      side**. A stack counts as a whole: the inner edge only grows, and the first gap over 40 ends it.
+      On the owner's caster, MultiBar6 (x 46-87, beside MultiBar5 at 2-42) would otherwise not count,
+      and the grid would still cover it (GAB#37, PR GAB#40).
 - **GRF follows:** the side default's left edge becomes `left + 30`. The HUD is unaffected, and a
   dragged `layoutPos` stays as saved.
 - **Without GAB:** `left = 0`, as today.
