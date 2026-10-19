@@ -27,7 +27,6 @@
 GlassUI = GlassUI or {}
 local GUI = GlassUI
 local API = GUI.API
-local Glass = GUI.Glass
 local Kit = {}
 GUI.Kit = Kit
 
@@ -160,7 +159,10 @@ function K:Panel(window, size, insets, anchor)
         panel:SetAllPoints(anchor)
     end
     panel:SetFrameLevel(math.max(0, window:GetFrameLevel() - 1))
-    local g = Glass.Apply(panel, size or "large")
+    -- Built at ADDON_LOADED (Glass.lua), before any skin can run. A panel
+    -- earlier would be a bug of ours: recorded, and the glass built for it.
+    if not GUI.Glass then API.Fail("kit:" .. self.key .. ":early", "a panel before the glass was built") end
+    local g = GUI.BuildGlass().Apply(panel, size or "large")
     -- The opaque backing (Glass Quest Tracker's): above the shadow (-8),
     -- under the tint (-6), clipped by the glass's own mask.
     local backing = panel:CreateTexture(nil, "BACKGROUND", nil, -7)

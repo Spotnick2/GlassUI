@@ -99,8 +99,20 @@ Follow switch. The switch is saved first in `SkinProbeDB.panelWas`, since it liv
 | # | Question | Result |
 |---|---|---|
 | P.1 | Its own look and following, after a /reload each: answered once Glass UI is ready, reported, Pearl, its saved glass untouched | **70450, LibGlass r11: passes on the data** (second account, runs #233-#237). In each session the instance was Pearl (gloss 0.15, frost 0.06, wash 0.10, innerShadow 0.15), and every answer was given once Glass UI was ready. There were no failures and MINOR was 11. In its own look, nothing was built for Glass UI and the state was `own`. Following, it built `pearl` and the state was `following`. The saved glass (`glass=smoked` set for the test, `glassTint=neutral`, `windowGlass=reflective`) was the same before following, while following, and after. All three session checks FAILed only on "no EdgeState yet": the read ran at once after the /reload, before Glass Panel's first measure. That was the probe, and now each read waits for the measure. |
-| P.2 | Glass UI's card ("Glass UI preset: Pearl"); its options greyed, with Open Glass UI; `/gpanel glass` refused while following; the bar on Pearl | **70450: yes, with two findings for Glass Panel.** The card reads "Glass UI preset: Pearl" with Use Glass UI appearance ticked. Glass and Windows are greyed, and Open Glass UI brings Glass UI's page back. `/gpanel glass smoked` says "set in Glass UI (following the suite's Pearl; yours stay saved)". Back in its own look, the bar was Smoked again (owner: yes). **Found:** (1) the Tint choice (Neutral / Class colour) stays live while following. The owner answered "yes, but not the tint". (2) The two notes under Windows overlap ("Share, Setup and the other dialogs..." and "Following Glass UI (Pearl): ..."). Both were sent to Glass Panel. Whether Tint should follow is the owner's call. |
+| P.2 | Glass UI's card ("Glass UI preset: Pearl"); its options greyed, with Open Glass UI; `/gpanel glass` refused while following; the bar on Pearl | **70450: yes, with two findings for Glass Panel.** The card reads "Glass UI preset: Pearl" with Use Glass UI appearance ticked. Glass and Windows are greyed, and Open Glass UI brings Glass UI's page back. `/gpanel glass smoked` says "set in Glass UI (following the suite's Pearl; yours stay saved)". Back in its own look, the bar was Smoked again (owner: yes). **Found:** (1) the Tint choice (Neutral / Class colour) stays live while following. The owner answered "yes, but not the tint". (2) The two notes under Windows overlap ("Share, Setup and the other dialogs..." and "Following Glass UI (Pearl): ..."). Both were sent to Glass Panel. The owner decided the tint is Glass UI's while following, and GlassPanel#102 (PR #103) did that. **Re-run on 70450** (runs #246-#250): the Tint choices are greyed, and the two notes sit apart (screenshot). Every session's read passed on the data, its edge included. |
 | P.3 | `EdgeState` and `EdgeChanged`: the bar alone, XP+ zoomed, docked again | **70450: passes.** XP+'s bar was already zoomed under the panel at login. The first measure was 109.0, announced once, the same value. Docking it brought the edge to 24.0 (the bar alone), announced: a second `EdgeChanged`. Zooming in while playing was not exercised, since the zoom step passed at once. |
+
+### Glass UI's own skins on Pearl (#54)
+
+`/fp steps skin pearl`. It reads which glass Glass UI built (`GlassUI.glassPreset`, and
+`glassWhy` for a fallback), with the LibGlass MINOR, the body theme and the instance's STYLE, saved
+as `SkinProbeDB.results["PEARL.built"]`. Then it takes a screenshot each of the merchant and the
+meter, for the owner to judge against the clean glass they had.
+
+| # | Question | Result |
+|---|---|---|
+| PL.1 | Glass UI's own glass is Pearl (MINOR 11, wash 0.10), not the clean fallback | **70450: passes** (second account, run #251). Built `pearl`, with no fallback: MINOR 11, wash 0.10, gloss 0.15, frost 0.06, innerShadow 0.15, body `clear`. |
+| PL.2 | The merchant reads well on Pearl; the meter looks at least as good as on clean | **70450: yes to both** (owner, screenshots of the merchant at Razor Hill's inn and of the meter). |
 
 ## Blizzard's own glass (#17)
 

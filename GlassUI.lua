@@ -93,6 +93,11 @@ local function suite(a, b, c)
         return
     end
     say("suite theme: " .. Suite.THEMES[Suite.ThemeName()].label)
+    if GUI.glassWhy then
+        say("Glass UI's own skins: " .. GUI.glassPreset .. ", not the suite theme ("
+            .. (GUI.glassWhy == "library-too-old" and "LibGlass older than r11" or "it couldn't be built")
+            .. "; /reload after updating)")
+    end
     for _, m in ipairs(Suite.ROSTER) do say(Suite.Line(m)) end
     for _, m in ipairs(Suite.ROSTER) do
         for _, t in ipairs(Suite.Tenants(m.name)) do say(t .. ": follows " .. m.title) end
@@ -184,10 +189,12 @@ boot:SetScript("OnEvent", function(_, event, arg1)
             GUI.db = ensureDefaults()
             -- The suite's answers are ours to give from here on (docs/SUITE.md).
             GUI.Suite.MarkReady()
+            -- Our own glass on the suite theme, now that it can be read (#54).
+            GUI.BuildGlass()
         end
     elseif event == "PLAYER_LOGIN" then
         -- SavedVariables are read here at the latest (porting guide: not at file scope).
-        if not GUI.db then GUI.db = ensureDefaults(); GUI.Suite.MarkReady() end
+        if not GUI.db then GUI.db = ensureDefaults(); GUI.Suite.MarkReady(); GUI.BuildGlass() end
         GUI.Theme.Refresh()
         GUI.Options.Register()
         GUI.Engine.Start()
