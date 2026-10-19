@@ -223,7 +223,7 @@ its look is the real risk, which is what discovery measures.
   - Other RestedXP frames (`RXPItemFrame`, `RXPTargetFrame`, `RXPLevelSplits`, ...) come after the
     window and the arrow, if the owner wants them.
 
-**Discovery first** (`/fp steps skin questing`):
+**Discovery first** (`/fp steps skin questing`, built 2026-10-19; results in docs/FOREVER-PROBE.md, QS):
 - the frame trees;
 - which textures fade and stay faded through their own refreshes (a guide step change, a quest
   update, Questie's fader, a RestedXP theme change);

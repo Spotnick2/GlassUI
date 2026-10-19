@@ -125,6 +125,33 @@ the scene showing through sharp, a gold-metal rim. One fixed size, not sliced.
 | G.1 | Does the atlas exist in game, and at what size? | `/fp steps skin card` step 1 | **70425: yes, 260x530.** |
 | G.2 | Beside Glass UI's clear and smoked glass at the same size, over bright and dark scenery: how does it read? | the same procedure, screenshots | **70425: it isn't glass.** In game the card is opaque: dark brown parchment, gold rim (owner: "it does not look like glass", no theme wanted). The see-through look at login is the cards' **disabled** state while the servers are down: `SetAlpha(0.55)` and desaturated (`SuperDistrict.lua:123-127`). Beside it, our clear and smoked glass read almost alike, a dark grey slab with the scene faint behind: the opaque backing (0.85 / 0.92) dominates the tint. Settled on the merchant (#4): clear's backing is now 0.35. |
 
+## Questie and RestedXP: discovery (#56, docs/QUEST-TRACKER.md part 3)
+
+`/fp steps skin questing`. It turns on Questie, QuestieDB (which Questie requires) and RXPGuides
+for this character only, after saving their enable states in `SkinProbeDB.questingWas[GUID]`.
+Its Restore step puts them back, and so does `/fp skin questing restore`. Installed on 70450:
+Questie 12.1.0 (`Questie_Camelot.toc`) and RestedXP v4.11.26, the versions the plan read.
+
+- **First seen** (`QS.firstSeen`): where each of `Questie_BaseFrame`, `RXPFrame` and `RXPG_ARROW`
+  first existed. SkinProbe loads after both addons, so "SkinProbe load" means at their own load or
+  earlier.
+- **The hold** (`QS.hold.<refresh>`): the probe holds every texture of the three at 0, its own
+  touch. After each of their refreshes it reads which came back and which textures are new. Unfade
+  puts every one back. The refreshes are:
+  - Questie's fader, a quest update, and its background option;
+  - a RestedXP step, its theme, and its window reopened.
+- **Side by side** (`QS.coexist`): Questie's tracker and Blizzard's.
+- **The arrow** (`QS.arrow.<x>`): its texture's `SetRotation` calls, from a hook on that texture,
+  and its `orientation` field. Also its anchor and distance from the screen's top, against Glass
+  Panel's `EdgeState().top`.
+
+| # | Question | Result |
+|---|---|---|
+| QS.1 | When does each frame first exist (the engine attaches at their ADDON_LOADED)? | not run yet |
+| QS.2 | Which textures stay faded through their own refreshes, and what's re-created? | not run yet |
+| QS.3 | Questie's tracker and Blizzard's: both shown, or does Questie hide Blizzard's? | not run yet |
+| QS.4 | The arrow: rotated by `SetRotation`, angle in `orientation`; where it sits against Glass Panel | not run yet |
+
 ## The quest tracker (#55, docs/QUEST-TRACKER.md part 2)
 
 `/fp steps skin tracker`, with Glass Quest Tracker **disabled**: while it's loaded, it owns the

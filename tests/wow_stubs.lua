@@ -423,6 +423,9 @@ WoW.GUID = "Player-4618-0ABCDEF0"
 C_Item = { GetItemIconByID = function(id) return WoW.itemIcons[id] end }
 WoW.itemIcons = { [5500] = 134122 }
 function UnitGUID(unit) return unit == "player" and WoW.GUID or nil end
+-- Seconds since the client started: what a test sets.
+WoW.now = 0
+function GetTime() return WoW.now end
 function issecretvalue(v) return false end
 function InCombatLockdown() return WoW.combat end
 -- hooksecurefunc(table, name, fn) or hooksecurefunc(globalName, fn).

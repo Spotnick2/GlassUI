@@ -616,9 +616,71 @@ eq(T.trackerState("c").section, true, "and the Quests section's")
 rawset(tracker, "isCollapsed", nil); rawset(quests, "isCollapsed", nil)
 rawset(_G, "GlassUI", savedGUI2)
 
+-- #56 discovery: Questie's tracker and RestedXP's window and arrow.
+-- When each frame first exists: the first place it was seen is kept.
+local qbase = CreateFrame("Frame", "Questie_BaseFrame", UIParent)
+T.lookFor("PLAYER_LOGIN")
+eq(T.seen.Questie_BaseFrame, "PLAYER_LOGIN", "a frame is noted where it was first seen")
+T.lookFor("later")
+eq(T.seen.Questie_BaseFrame, "PLAYER_LOGIN", "and not overwritten after")
+eq(SkinProbeDB.results["QS.firstSeen"].Questie_BaseFrame, "PLAYER_LOGIN", "kept in the results")
+local rxp = CreateFrame("Frame", "RXPFrame", UIParent)
+local pinnedTime = GetTime
+rawset(_G, "GetTime", function() return WoW.now end)
+WoW.now = 100
+WoW.fire("PLAYER_ENTERING_WORLD")
+WoW.now = 103.5
+local arrow = CreateFrame("Frame", "RXPG_ARROW", UIParent)
+WoW.tick()
+rawset(_G, "GetTime", pinnedTime)
+eq(T.seen.RXPFrame, "PLAYER_ENTERING_WORLD", "one there at PLAYER_ENTERING_WORLD")
+eq(T.seen.RXPG_ARROW, "PEW+3.5s", "one made later, noted with its delay")
+-- Their enable states for this character: saved, switched on, put back.
+WoW.installed.Questie, WoW.installed.QuestieDB, WoW.installed.RXPGuides = 0, 0, 2
+SkinProbeDB.questingWas = nil
+check((T.questingEnable()), "all three switched on and read back")
+eq(WoW.installed.Questie, 2, "Questie on")
+eq(WoW.installed.QuestieDB, 2, "with QuestieDB, which it requires")
+eq(SkinProbeDB.questingWas[WoW.GUID].Questie, 0, "each state saved first, under this character's GUID")
+T.questingEnable()
+eq(SkinProbeDB.questingWas[WoW.GUID].Questie, 0, "a second Enable keeps the first states")
+check((T.questingRestore()), "restore reads its changes back")
+eq(WoW.installed.Questie, 0, "Questie off again, as saved")
+eq(WoW.installed.RXPGuides, 2, "RestedXP on, as saved")
+eq(SkinProbeDB.questingWas[WoW.GUID], nil, "and the saved states cleared")
+-- The hold test: every texture held, which came back, which are new, all put back.
+local bg = qbase:CreateTexture()
+bg:SetAlpha(0.7)
+local edgeTex = rxp:CreateTexture()
+arrow.texture = arrow:CreateTexture()
+arrow.orientation = 0.4
+check((T.holdOn()), "the hold takes the textures")
+eq(bg:GetAlpha(), 0, "held at 0")
+bg:SetAlpha(0.7)                               -- the addon re-applies its look
+local fresh = rxp:CreateTexture()              -- and makes a texture anew
+local back, new = T.holdCheck("test")
+eq(back, 1, "the one that came back is counted")
+eq(new, 1, "and the new one")
+check(SkinProbeDB.results["QS.hold.test"].newList ~= "", "with its path")
+T.holdOn()
+T.holdOff()
+near(bg:GetAlpha(), 0.7, "Unfade gives back the alpha before the first hold, not the 0")
+eq(edgeTex:GetAlpha(), 1, "every held texture back")
+eq(fresh:GetAlpha(), 1, "the new one too, held by the second Fade")
+-- Side by side, and the arrow.
+local okC = pcall(T.coexist)
+check(okC, "the side-by-side read runs")
+eq(SkinProbeDB.results["QS.coexist"].questie, true, "Questie's tracker read")
+local a = T.arrowState("t")
+eq(a.orientation, 0.4, "the arrow's orientation field read")
+arrow.texture:SetRotation(1.25)
+a = T.arrowState("t")
+eq(a.calls, 1, "its texture's rotation calls counted, from a hook on that texture")
+eq(a.last, 1.25, "with the angle")
+
 -- The procedures are defined and every step's run, wait and check works here.
 for _, name in ipairs({ "wave1", "map", "gradient", "merchant", "card", "suite", "suitecombat", "meter",
-                        "meterskin", "meterbars", "suitepanel", "pearl", "tracker" }) do
+                        "meterskin", "meterbars", "suitepanel", "pearl", "tracker", "questing" }) do
     local p = FP.procedures["SkinProbe/" .. name]
     check(p ~= nil, "procedure " .. name .. " is defined")
     if p then
