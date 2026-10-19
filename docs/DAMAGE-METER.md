@@ -160,7 +160,10 @@ skins follow the suite look's tint is a separate, later question (docs/SUITE-LOO
 
 ## Not in v1
 
-- glass bars, until the owner has seen the preview;
+- glass bars. The preview ran on 70450 (2026-10-19): the owner found it "barely noticeable". At
+  16 px bars, Blizzard's fill covers nearly all of the glass behind it. Bars in glass would mean
+  drawing our own bar in place of Blizzard's, which the skin contract forbids. Dropped; the preview
+  stays in the probe;
 - recoloured header buttons;
 - the suite look's tint for Glass UI's skins;
 - Edit Mode's settings dialog, which every system shares.
