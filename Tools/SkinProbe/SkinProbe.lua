@@ -21,6 +21,10 @@
 --   #24 S.7 again, combat only                                 /fp steps skin suitecombat
 -- And Blizzard's own glass, the login ruleset card beside ours (#17): /fp steps skin card
 --
+-- Discovery for the next skin:
+--   #49 the damage meter: its windows, bars, styles, breakdown     /fp steps skin meter
+--                         its state and settings now               /fp skin meter
+--
 -- The only writes to Blizzard objects are SetAlpha, always put back at once
 -- (`fade`) or by `border restore`, and our own frames parented to the map.
 -- Every client call that may be missing or throw goes through Probe:Try or a
@@ -31,6 +35,8 @@ local ADDON, NS = ...
 -- first run's oldest tenth, the state lines, was trimmed away (70374).
 local MAX_LOG = 20000
 local MAX_TREE_LINES = 700        -- per target, so one window can't flood the log
+-- The meter holds up to three windows of pooled bars, each bar a few frames deep.
+local TREE_MAX = { meter = 2000 }
 
 local Probe = ForeverProbe:Module("SkinProbe", { api = 1, cmd = "skin" })
 
@@ -70,6 +76,8 @@ local TARGETS = {
     character = { "CharacterFrame", "PaperDollFrame", "ReputationFrame", "SkillsFrame", "PVPRankFrame",
                   "TokenFrame", "StatisticsFrame" },
     map       = { "WorldMapFrame", "QuestMapFrame" },
+    -- #49: Blizzard_DamageMeter (AllowLoadGameType standard, camelot), not a wave-1 window.
+    meter     = { "DamageMeter" },
 }
 local ORDER = { "merchant", "popup", "character", "map" }
 NS.TARGETS = TARGETS
@@ -77,7 +85,8 @@ NS.TARGETS = TARGETS
 -- The neighbours the skins must coexist with or step aside for (docs/PLAN.md).
 local NEIGHBOURS = { "Leatrix_Maps", "Auctionator", "Skilled", "ElvUI", "EllesmereUI", "Tukui",
                      "GlassMail", "GlassActionBars", "GlassChat", "GlassQuestTracker", "GlassMiniMap",
-                     "GlassMiniMapBar", "GlassUnitFrames", "GlassRaidFrames", "GlassPanel", "GlassMaps" }
+                     "GlassMiniMapBar", "GlassUnitFrames", "GlassRaidFrames", "GlassPanel", "GlassMaps",
+                     "Details", "Skada", "Recount" }
 
 local function frameByName(name)
     local f = rawget(_G, name)
@@ -259,7 +268,7 @@ end
 
 local function eachTarget(key, fn)
     local names = TARGETS[key]
-    if not names then say("unknown target " .. show(key) .. " (merchant, popup, character, map)"); return false end
+    if not names then say("unknown target " .. show(key) .. " (merchant, popup, character, map, meter)"); return false end
     for _, name in ipairs(names) do
         local f = frameByName(name)
         if f then fn(f, name) else say(key .. " " .. name .. " MISSING") end
@@ -267,17 +276,22 @@ local function eachTarget(key, fn)
     return true
 end
 
+-- One frame's tree, every frame and region under `name`.
+local function treeOf(f, name, depth, max)
+    local lines = 0
+    local budget = { n = 0, max = max or MAX_TREE_LINES }
+    walk(f, name, depth, function(kind, obj, path)
+        lines = lines + 1
+        if kind == "frame" then frameLine(obj, "W1.2 F " .. path) else say("W1.2 R " .. regionLine(obj, path)) end
+    end, budget)
+    if budget.n > budget.max then say("W1.2 " .. name .. " TRUNCATED at " .. budget.max .. " lines") end
+    return lines
+end
+
 local function tree(key, depth)
     depth = tonumber(depth) or 4
     local lines = 0
-    eachTarget(key, function(f, name)
-        local budget = { n = 0, max = MAX_TREE_LINES }
-        walk(f, name, depth, function(kind, obj, path)
-            lines = lines + 1
-            if kind == "frame" then frameLine(obj, "W1.2 F " .. path) else say("W1.2 R " .. regionLine(obj, path)) end
-        end, budget)
-        if budget.n > budget.max then say("W1.2 " .. name .. " TRUNCATED at " .. budget.max .. " lines") end
-    end)
+    eachTarget(key, function(f, name) lines = lines + treeOf(f, name, depth, TREE_MAX[key]) end)
     say("W1.2 tree " .. key .. " depth " .. depth .. ": " .. lines .. " lines")
     return lines
 end
@@ -311,7 +325,7 @@ local function fade(key, depth)
                 which[#which + 1] = path
                 say("W1.2 IGNORES SetAlpha: " .. path .. " read " .. num(after) .. " after SetAlpha(0)")
             end
-        end, { n = 0, max = MAX_TREE_LINES })
+        end, { n = 0, max = TREE_MAX[key] or MAX_TREE_LINES })
     end)
     say("W1.2 fade " .. key .. ": " .. tried .. " textures tried, " .. ignored .. " ignore SetAlpha")
     if TARGETS[key] then
@@ -446,6 +460,218 @@ local function gradientOff()
 end
 
 --------------------------------------------------------------------------------
+-- The damage meter (#49): what the skin's plan needs, before it is written.
+-- Blizzard_DamageMeter (origin/forever @70450): DamageMeter, an Edit Mode
+-- system, holds up to three session windows, DamageMeterSessionWindow1-3,
+-- created on first use. Each has a Header atlas, MinimizeContainer.Background
+-- (its alpha is Blizzard's, from the Edit Mode Background setting), pooled
+-- bars in a ScrollBox, and a SourceWindow (a bar's breakdown). The Style
+-- setting swaps each bar's background atlas and hides or shows its edge.
+-- Reads only, plus the fade readback, which puts each alpha back at once.
+--------------------------------------------------------------------------------
+
+local MAX_METER_WINDOWS = 3       -- MAX_DAMAGE_METER_SESSION_WINDOWS, a local in DamageMeter.lua
+
+local function meterWindows()
+    local out = {}
+    for i = 1, MAX_METER_WINDOWS do
+        local w = frameByName("DamageMeterSessionWindow" .. i)
+        if w then out[#out + 1] = w end
+    end
+    return out
+end
+
+local function meterShownWindows()
+    local n = 0
+    for _, w in ipairs(meterWindows()) do
+        local ok, v = call(w, "IsShown")
+        if ok and plain(v) == true then n = n + 1 end
+    end
+    return n
+end
+
+-- A window's bars: its pooled entry frames, through its own enumerator.
+local function meterBars(w)
+    local bars = {}
+    call(w, "ForEachEntryFrame", function(e) bars[#bars + 1] = e end)
+    return bars
+end
+
+local function meterBarCount()
+    local n = 0
+    for _, w in ipairs(meterWindows()) do n = n + #meterBars(w) end
+    return n
+end
+
+-- The Style setting by its enum name (Default, Bordered, Thin), or nil.
+local function meterStyle()
+    local ok, v = call(frameByName("DamageMeter"), "GetStyle")
+    v = ok and plain(v) or nil
+    if v == nil then return nil end
+    local okE, styles = pcall(function() return Enum.DamageMeterStyle end)
+    if okE and type(styles) == "table" then
+        for name, n in pairs(styles) do if n == v then return name end end
+    end
+    return tostring(v)
+end
+
+local function editMode()
+    local ok, v = call(frameByName("EditModeManagerFrame"), "IsEditModeActive")
+    return ok and plain(v) == true
+end
+
+local function sourceWindow()
+    local w = frameByName("DamageMeterSessionWindow1")
+    local ok, src = call(w, "GetSourceWindow")
+    return ok and src or nil
+end
+
+local function meterShown()
+    local ok, v = call(frameByName("DamageMeter"), "IsShown")
+    return ok and plain(v) == true
+end
+
+local function atlasOf(t)
+    local _, a = call(t, "GetAtlas")
+    return show(a)
+end
+
+local function alphaOf(r)
+    local ok, a = call(r, "GetAlpha")
+    return ok and num(a) or "?"
+end
+
+-- The meter's switches and Edit Mode settings, then one line per window and
+-- its first bar: what the style changes, and whether a bar's value and colour
+-- are secret (the skin may only restyle what it can read).
+local function meterState(label)
+    local m = frameByName("DamageMeter")
+    local cvar = rawget(_G, "C_CVar")
+    local okC, enabled = pcall(function() return cvar.GetCVar("damageMeterEnabled") end)
+    local dm = rawget(_G, "C_DamageMeter")
+    local okA, available, why = pcall(function() return dm.IsDamageMeterAvailable() end)
+    local parts = { "loaded=" .. tostring(loaded("Blizzard_DamageMeter")),
+                    "cvar=" .. (okC and show(enabled) or "?"),
+                    "available=" .. (okA and show(available) or "?") .. (okA and why and ("/" .. show(why)) or ""),
+                    "shown=" .. tostring(meterShown()), "editMode=" .. tostring(editMode()),
+                    "style=" .. show(meterStyle()) }
+    for _, getter in ipairs({ "GetWindowAlpha", "GetBackgroundAlpha", "GetBarHeight", "GetTextScale" }) do
+        local ok, v = call(m, getter)
+        parts[#parts + 1] = getter:sub(4) .. "=" .. (ok and num(v) or "?")
+    end
+    parts[#parts + 1] = "visibility=" .. show(m and rawget(m, "visibility"))
+    parts[#parts + 1] = "combat=" .. tostring(InCombatLockdown())
+    local lines = { table.concat(parts, " ") }
+    say("DM " .. label .. ": " .. lines[1])
+    for i, w in ipairs(meterWindows()) do
+        local _, wShown = call(w, "IsShown")
+        local _, minimized = call(w, "IsMinimized")
+        local _, ww = call(w, "GetWidth")
+        local _, wh = call(w, "GetHeight")
+        local mc = rawget(w, "MinimizeContainer")
+        local bars = meterBars(w)
+        local s = "window" .. i .. " shown=" .. show(wShown) .. " minimized=" .. show(minimized)
+            .. " size=" .. num(ww) .. "x" .. num(wh) .. " alpha=" .. alphaOf(w)
+            .. " header=" .. atlasOf(rawget(w, "Header")) .. " background=" .. atlasOf(mc and rawget(mc, "Background"))
+            .. "@" .. alphaOf(mc and rawget(mc, "Background")) .. " bars=" .. #bars
+        local sb = bars[1] and rawget(bars[1], "StatusBar")
+        if sb then
+            local _, v = call(sb, "GetValue")
+            local _, r, g, b = call(sb, "GetStatusBarColor")
+            local _, fill = call(sb, "GetStatusBarTexture")
+            local edge = rawget(sb, "BackgroundEdge")
+            local _, edgeShown = call(edge, "IsShown")
+            local _, bh = call(bars[1], "GetHeight")
+            local secret = issecretvalue ~= nil and (issecretvalue(v) or issecretvalue(r)) or false
+            s = s .. " bar1 h=" .. num(bh) .. " fill=" .. atlasOf(fill) .. " colour=" .. num(r) .. "," .. num(g)
+                .. "," .. num(b) .. " bg=" .. atlasOf(rawget(sb, "Background")) .. "@" .. alphaOf(rawget(sb, "Background"))
+                .. " edge=" .. show(edgeShown) .. " secret=" .. tostring(secret)
+        end
+        lines[#lines + 1] = s
+        say("DM " .. label .. " " .. s)
+    end
+    record("DM." .. label, table.concat(lines, " | "))
+    return meterStyle(), #meterWindows()
+end
+
+-- The first bar alone, at full depth: the regions a style changes.
+local function barTree(label)
+    local w = frameByName("DamageMeterSessionWindow1")
+    local bar = w and meterBars(w)[1]
+    if not bar then say("DM " .. label .. ": no bar to walk"); return 0 end
+    return treeOf(bar, "DM." .. label .. ".bar1", 4)
+end
+
+-- The style the owner started with, so the last style step puts it back.
+local meterWas
+
+Probe:Steps("meter", {
+    title = "Glass UI: the damage meter (#49)",
+    { text = "Reads the damage meter's state: loaded, switched on, its Edit Mode settings, its windows.",
+      auto = true, run = function() meterWas = meterStyle(); return meterState("start") end,
+      check = function() return loaded("Blizzard_DamageMeter"), "Blizzard_DamageMeter loaded" end },
+    { text = "If the damage meter isn't on screen, turn it on (Options, Advanced) and set its Visibility to "
+          .. "Always Visible in Edit Mode. This step goes on by itself once it shows.",
+      wait = function() return meterShown() and not editMode(), "the meter isn't shown, or Edit Mode is open" end,
+      timeout = 300 },
+    { text = "Hit something for a few seconds (a training dummy or any mob) until bars show in the meter. "
+          .. "This step goes on by itself.",
+      wait = function() local n = meterBarCount(); return n > 0, n .. " bars" end, timeout = 600 },
+    { text = "Out of combat, press Measure: every frame and texture of the meter, in your current style.",
+      button = "Measure", screenshot = "meter, current style",
+      run = function() return meterState("first"), tree("meter", 8), fade("meter", 8) end,
+      check = function() return not InCombatLockdown(), "measured out of combat" end },
+    { text = "Open Edit Mode, click the damage meter, set Style to Bordered, and close Edit Mode. "
+          .. "This step goes on by itself.",
+      wait = function() return meterStyle() == "Bordered" and not editMode(), "style " .. show(meterStyle()) end,
+      timeout = 600 },
+    { text = "Bordered. Press Measure.", button = "Measure", screenshot = "meter, Bordered",
+      run = function() return meterState("Bordered"), barTree("Bordered") end },
+    { text = "Now the same with Style set to Thin.",
+      wait = function() return meterStyle() == "Thin" and not editMode(), "style " .. show(meterStyle()) end,
+      timeout = 600 },
+    { text = "Thin. Press Measure.", button = "Measure", screenshot = "meter, Thin",
+      run = function() return meterState("Thin"), barTree("Thin") end },
+    { text = "Put Style back to the one you use, and close Edit Mode.",
+      wait = function()
+          return meterStyle() == (meterWas or "Default") and not editMode(), "style " .. show(meterStyle())
+      end, timeout = 600 },
+    { text = "Click a bar in the meter to open its breakdown. This step goes on by itself.",
+      wait = function()
+          local ok, v = call(sourceWindow(), "IsShown")
+          return ok and plain(v) == true, "no breakdown open"
+      end, timeout = 300 },
+    { text = "The breakdown. Press Measure.", button = "Measure", screenshot = "meter, breakdown",
+      run = function()
+          local src = sourceWindow()
+          return meterState("breakdown"), src and treeOf(src, "DM.breakdown", 6, TREE_MAX.meter) or 0
+      end },
+    { text = "Close the breakdown. Then open the gear menu on the meter and add a new window. "
+          .. "This step goes on by itself.",
+      wait = function() local n = meterShownWindows(); return n >= 2, n .. " windows shown" end, timeout = 300 },
+    { text = "A second window. Press Measure.", button = "Measure", screenshot = "meter, two windows",
+      run = function()
+          local w2 = frameByName("DamageMeterSessionWindow2")
+          return meterState("two windows"), w2 and treeOf(w2, "DM.window2", 7, TREE_MAX.meter) or 0
+      end },
+    { text = "Minimize one window with its button at the top right, then press Next for a screenshot.",
+      screenshot = "meter, minimized",
+      check = function()
+          for _, w in ipairs(meterWindows()) do
+              local ok, v = call(w, "IsMinimized")
+              if ok and plain(v) == true then return true, meterState("minimized") end
+          end
+          return false, "no window minimized"
+      end },
+    { text = "Optional, Skip if it isn't easy: fight something and press Measure while in combat. It records "
+          .. "whether the bars' values and colours are hidden (secret) during combat.", button = "Measure",
+      run = function() return meterState("combat") end,
+      check = function() return InCombatLockdown(), "measured in combat" end },
+    { text = "Put the meter back the way you like it (the gear menu hides the extra window, the minimize "
+          .. "button brings a window back). Then reload to save the results.", reload = true },
+})
+
+--------------------------------------------------------------------------------
 -- Commands
 --------------------------------------------------------------------------------
 
@@ -453,7 +679,7 @@ Probe:Command("state", function() state() end, "W1.1/W1.4/W1.5: frames, gamepad 
 Probe:Command("tree", function(args)
     local key, depth = (args or ""):match("^%s*(%S*)%s*(%S*)")
     tree(key, depth)
-end, "W1.2: tree <merchant|popup|character|map> [depth]: every frame and region")
+end, "W1.2: tree <merchant|popup|character|map|meter> [depth]: every frame and region")
 Probe:Command("fade", function(args)
     local key, depth = (args or ""):match("^%s*(%S*)%s*(%S*)")
     fade(key, depth)
@@ -467,6 +693,7 @@ end, "W1.3: border fade|restore: the world map border's art")
 Probe:Command("gradient", function(args)
     if (args or ""):match("off") then gradientOff() else gradientOn() end
 end, "W1.6: gradient on|off: the four test squares A-D")
+Probe:Command("meter", function() meterState("now") end, "#49: the damage meter's settings, windows and first bars")
 Probe:Command("clear", function() Probe:ClearLog(); say("log cleared") end, "empty the saved log")
 
 --------------------------------------------------------------------------------
@@ -1236,4 +1463,5 @@ NS._test = { Probe = Probe, state = state, tree = tree, fade = fade, slashOwners
              borderRestore = borderRestore, gradientOn = gradientOn, gradientOff = gradientOff,
              panels = panels, faded = faded, cardAtlas = cardAtlas, cardOn = cardOn, cardOff = cardOff,
              themeTry = themeTry, themeRestore = themeRestore, suiteSet = suiteSet, suiteRestore = suiteRestore,
-             suiteState = suiteState, suiteCheck = suiteCheck, suiteSnapshot = suiteSnapshot }
+             suiteState = suiteState, suiteCheck = suiteCheck, suiteSnapshot = suiteSnapshot,
+             meterState = meterState, meterStyle = meterStyle, meterBars = meterBars, treeOf = treeOf }
