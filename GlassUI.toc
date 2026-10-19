@@ -16,5 +16,6 @@ Suite.lua
 Skin\Engine.lua
 Skin\Kit.lua
 Skin\Merchant.lua
+Skin\DamageMeter.lua
 Options.lua
 GlassUI.lua

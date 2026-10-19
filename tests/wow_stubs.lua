@@ -641,6 +641,79 @@ function WoW.bset(t, k, v)
     if WoW.snap[t] then WoW.snap[t][k] = v end
 end
 
+-- Blizzard_DamageMeter (origin/forever @70450), with the regions SkinProbe
+-- listed on 70450 (docs/FOREVER-PROBE.md, DM.1). DamageMeter, then its session
+-- windows, each made by its SetupSessionWindow (a mixin method, so an addon
+-- call shows in WoW.luaCalls) as "DamageMeterSessionWindow" .. index, reused
+-- when it exists. MinimizeContainer uses the window's level (useParentLevel).
+-- One bar per window, in WoW.meterBars[index].
+WoW.meterBars = {}
+local function meterWindow(meter, i)
+    local w = blizz("Frame", meter, "DamageMeterSessionWindow" .. i)
+    w._level = i
+    w.Header = blizz("Texture", w, nil, "BACKGROUND")
+    w.SessionTimer = blizz("FontString", w, nil, "OVERLAY")
+    w.MinimizeButton = blizz("Button", w)
+    w.SettingsDropdown = blizz("DropdownButton", w)
+    w.SessionDropdown = blizz("DropdownButton", w)
+    w.DamageMeterTypeDropdown = blizz("DropdownButton", w)
+    w.DamageMeterTypeDropdown.TypeName = blizz("FontString", w.DamageMeterTypeDropdown, nil, "OVERLAY")
+    local mc = blizz("Frame", w)
+    mc._level = i
+    w.MinimizeContainer = mc
+    mc.Background = blizz("Texture", mc, nil, "BACKGROUND")
+    mc.Background:SetAlpha(0.5)
+    mc.ScrollBox = blizz("Frame", mc)
+    mc.ResizeButton = blizz("Button", mc)
+    local bar = blizz("Button", mc.ScrollBox)
+    bar.StatusBar = blizz("StatusBar", bar)
+    bar.StatusBar.Background = blizz("Texture", bar.StatusBar, nil, "BACKGROUND")
+    bar.StatusBar.BackgroundEdge = blizz("Texture", bar.StatusBar, nil, "OVERLAY")
+    bar.StatusBar.Name = blizz("FontString", bar.StatusBar, nil, "OVERLAY")
+    WoW.meterBars[i] = bar
+    local src = blizz("Frame", mc)
+    src._level = 3
+    src._shown = false
+    mc.SourceWindow = src
+    src.Background = blizz("Texture", src, nil, "BACKGROUND")
+    src.CloseButton = blizz("Button", src)
+    return w
+end
+
+function WoW.makeMeter()
+    WoW.asBlizzard(function()
+        local m = blizz("Frame", UIParent, "DamageMeter")
+        m._shown = false
+        luaMethod(m, "SetupSessionWindow", function(self, i)
+            local w = rawget(_G, "DamageMeterSessionWindow" .. i) or meterWindow(self, i)
+            WoW.snapshot()
+            w:Show()
+            return w
+        end)
+        luaMethod(m, "ForEachSessionWindow", function() end)
+        m:SetupSessionWindow(1)
+        WoW.snapshot()
+    end)
+    return DamageMeter
+end
+
+-- Blizzard's side of the meter: shown by its Visibility setting, a window
+-- added (or shown again) from the gear menu, hidden, minimized, and the
+-- Background setting (UpdateBackground: the background's alpha).
+function WoW.showMeter() WoW.asBlizzard(function() DamageMeter:Show() end) end
+function WoW.hideMeter() WoW.asBlizzard(function() DamageMeter:Hide() end) end
+function WoW.meterWindow(i) WoW.asBlizzard(function() DamageMeter:SetupSessionWindow(i) end) end
+function WoW.meterHideWindow(i) WoW.asBlizzard(function() _G["DamageMeterSessionWindow" .. i]:Hide() end) end
+function WoW.meterMinimize(i, on)
+    WoW.asBlizzard(function() _G["DamageMeterSessionWindow" .. i].MinimizeContainer:SetShown(not on) end)
+end
+function WoW.meterBackground(i, alpha)
+    WoW.asBlizzard(function() _G["DamageMeterSessionWindow" .. i].MinimizeContainer.Background:SetAlpha(alpha) end)
+end
+function WoW.meterBreakdown(i, on)
+    WoW.asBlizzard(function() _G["DamageMeterSessionWindow" .. i].MinimizeContainer.SourceWindow:SetShown(on) end)
+end
+
 function WoW.showMerchant() WoW.asBlizzard(function() MerchantFrame:Show() end) end
 function WoW.hideMerchant() WoW.asBlizzard(function() MerchantFrame:Hide() end) end
 

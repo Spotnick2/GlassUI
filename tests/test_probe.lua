@@ -69,6 +69,9 @@ local meterBar = CreateFrame("Button", nil, meterWin.MinimizeContainer)
 meterBar.StatusBar = CreateFrame("StatusBar", nil, meterBar)
 meterBar.StatusBar.Background = meterBar.StatusBar:CreateTexture(nil, "BACKGROUND")
 meterBar.StatusBar.Background:SetAtlas("UI-HUD-CoolDownManager-Bar-BG")
+meterBar.StatusBar.BackgroundEdge = meterBar.StatusBar:CreateTexture(nil, "OVERLAY")
+local meterFill = meterBar.StatusBar:CreateTexture(nil, "ARTWORK")
+function meterBar.StatusBar:GetStatusBarTexture() return meterFill end
 local meterBars = { meterBar }
 function meterWin:ForEachEntryFrame(fn) for _, b in ipairs(meterBars) do fn(b) end end
 function meterWin:GetSourceWindow() return self.MinimizeContainer.SourceWindow end
@@ -418,8 +421,44 @@ eq(T.sourceWindow(), nil, "no breakdown open")
 meterBars = { meterBar }
 win2:Hide()
 
+-- #49, the glass bars preview: every touched region comes back, even once its
+-- row has left the list (recycled), and twice over.
+local sb = meterBar.StatusBar
+sb.Background:SetAlpha(0.9)
+check(T.barsOn() >= 1, "the preview covers the shown bar")
+eq(sb.Background:GetAlpha(), 0, "its background faded")
+eq(sb.BackgroundEdge:GetAlpha(), 0, "and its edge")
+eq(meterFill:GetAlpha(), 0.8, "its fill at 0.8")
+local barPanel = T.barPanels[meterBar]
+check(barPanel and barPanel:IsShown(), "our glass behind it")
+eq(barPanel:GetParent(), sb, "a child of the bar")
+T.barsOn()
+eq(sb.Background:GetAlpha(), 0, "on twice: still faded")
+meterBar:Hide()
+meterBars = {}
+T.barsOff()
+T.barsOff()
+eq(sb.Background:GetAlpha(), 0.9, "a recycled row's background comes back to its own alpha")
+eq(sb.BackgroundEdge:GetAlpha(), 1, "and its edge")
+eq(meterFill:GetAlpha(), 1, "and its fill")
+check(not barPanel:IsShown(), "our glass hides")
+meterBar:Show()
+meterBars = { meterBar }
+-- A second preview records afresh: Blizzard's alpha set in between is the one put back.
+sb.Background:SetAlpha(0.7)
+T.barsOn()
+T.barsOff()
+eq(sb.Background:GetAlpha(), 0.7, "a second preview puts back the newer alpha")
+-- The skin's acceptance reads the headers: faded or back.
+meterWin.Header:SetAlpha(0)
+check(T.headersFaded(true), "headers faded")
+check(not T.headersFaded(false), "not back")
+meterWin.Header:SetAlpha(1)
+check(T.headersFaded(false), "back")
+
 -- The procedures are defined and every step's run, wait and check works here.
-for _, name in ipairs({ "wave1", "map", "gradient", "merchant", "card", "suite", "suitecombat", "meter" }) do
+for _, name in ipairs({ "wave1", "map", "gradient", "merchant", "card", "suite", "suitecombat", "meter",
+                        "meterskin", "meterbars" }) do
     local p = FP.procedures["SkinProbe/" .. name]
     check(p ~= nil, "procedure " .. name .. " is defined")
     if p then
@@ -439,7 +478,7 @@ for _, name in ipairs({ "wave1", "map", "gradient", "merchant", "card", "suite",
         end
     end
 end
-T.panelsOff(); T.borderRestore(); T.gradientOff()
+T.panelsOff(); T.borderRestore(); T.gradientOff(); T.barsOff()
 T.suiteRestore()
 rawset(_G, "GlassUI", nil)
 eq(#WoW.chat, 0, "still nothing in chat after every procedure step")

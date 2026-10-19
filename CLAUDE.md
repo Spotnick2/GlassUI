@@ -60,14 +60,15 @@ audited exceptions and the reasons are in docs/PLAN.md, "The skin contract". In 
 | `Skin\Engine.lua` | `Register`, `Active`, owners/yields/handover, the switches, deferral and the combat wait, gamepad and suite stand-downs, `Status` |
 | `Skin\Kit.lua` | per-skin touches (`Fade` with read-back, `Blank`/`Tint`/`Shade` for `live = false`), `Panel`, widget kinds (`Shell`, `Inset`, `Tab`) |
 | `Skin\Merchant.lua` | the merchant window (live) |
+| `Skin\DamageMeter.lua` | Blizzard's damage meter (live, #49, docs/DAMAGE-METER.md): the windows in glass, the bars stock |
 | `Suite.lua` | the suite contract (docs/SUITE.md): `GlassUI.Suite` (`API`, `Ready`, `Theme`, `Report`, `Open`), the roster, the follow switches, each member's state; the suite look (docs/SUITE-LOOK.md: `Look`, `SetLook`, `LookChanged`) |
 | `Options.lua` | the settings page: the suite theme, the family and its Follow switches, the raid frames (layout, click-casting); the "Suite look" subpage |
 | `GlassUI.lua` | bootstrap, `GlassUIDB`, `/glassui` |
 
 Planned, per docs/PLAN.md: `Skin\<Window>.lua` for the rest, `Hub.lua`.
 `Tools\SkinProbe\` is the ForeverProbe module (never shipped): `/fp skin`, the measurements
-`/fp steps skin wave1|map|gradient`, each skin's acceptance (`/fp steps skin merchant`) and the
-suite's (`/fp steps skin suite`, #24);
+`/fp steps skin wave1|map|gradient|meter`, each skin's acceptance (`/fp steps skin merchant|meterskin`),
+the meter's glass bars preview (`/fp steps skin meterbars`) and the suite's (`/fp steps skin suite`, #24);
 docs/FOREVER-PROBE.md says how to run it.
 
 ## References

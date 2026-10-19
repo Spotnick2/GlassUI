@@ -79,7 +79,8 @@ end
 -- with (name, ns), the library's XML expanded in place, then ADDON_LOADED,
 -- PLAYER_LOGIN and PLAYER_ENTERING_WORLD.
 -- Blizzard's always-loaded windows exist before any addon, as FrameXML loads
--- first: the merchant (opts.noMerchant: a client without it).
+-- first: the merchant (opts.noMerchant: a client without it) and the damage
+-- meter (opts.noMeter).
 -- opts.db: saved variables. opts.before(): runs after the files load and
 -- before ADDON_LOADED.
 function loadAddon(opts)
@@ -87,6 +88,7 @@ function loadAddon(opts)
     GlassUI, GlassUIDB, LibStub = nil, nil, nil
     WoW.reset()
     if not opts.noMerchant then WoW.makeMerchant() end
+    if not opts.noMeter then WoW.makeMeter() end
     local ns = {}
     for _, line in ipairs(tocLines()) do
         local files

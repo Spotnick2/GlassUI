@@ -24,6 +24,8 @@
 -- Discovery for the next skin:
 --   #49 the damage meter: its windows, bars, styles, breakdown     /fp steps skin meter
 --                         its state and settings now               /fp skin meter
+--   #49 the damage meter skin's acceptance                         /fp steps skin meterskin
+--   #49 a glass bars preview (never shipped)                        /fp steps skin meterbars
 --
 -- The only writes to Blizzard objects are SetAlpha, always put back at once
 -- (`fade`) or by `border restore`, and our own frames parented to the map.
@@ -1465,6 +1467,214 @@ Probe:Steps("card", {
 })
 
 --------------------------------------------------------------------------------
+-- Acceptance: the damage meter skin (#49, docs/DAMAGE-METER.md "In game"), on
+-- the real addon. The look is judged from the screenshots; the checks read
+-- the faded regions and our panels.
+--------------------------------------------------------------------------------
+
+local function meterSwitch(on)
+    local G = glassUI()
+    if not (G and G.Engine) then return false, "Glass UI not loaded" end
+    return G.Engine.SetEnabled("meter", on)
+end
+
+-- The setting a step waits for, through the meter's own getters (the probe
+-- may call them; the skin never does).
+local function meterGet(getter)
+    local ok, v = call(frameByName("DamageMeter"), getter)
+    return ok and plain(v) or nil
+end
+
+-- Every shown window's header bar faded (on) or back (off).
+local function headersFaded(on)
+    local n = 0
+    for _, w in ipairs(meterWindows()) do
+        if shownFrame(w) then
+            local ok, a = call(rawget(w, "Header"), "GetAlpha")
+            a = ok and plain(a) or nil
+            if (on and a ~= 0) or (not on and a == 0) then return false, "window header alpha " .. show(a) end
+            n = n + 1
+        end
+    end
+    return n > 0, n .. " windows"
+end
+
+local function skinState(label)
+    local G = glassUI()
+    local status = G and G.Engine and G.Engine.Status("meter") or "Glass UI not loaded"
+    local ok, faded = headersFaded(true)
+    say("DMS " .. label .. ": " .. status .. "; headers faded=" .. tostring(ok) .. " (" .. show(faded) .. ")")
+    record("DMS." .. label, status .. "; headers faded=" .. tostring(ok))
+    return status, meterState("skin " .. label)
+end
+
+local skinWindowsWere
+
+Probe:Steps("meterskin", {
+    title = "Glass UI: the damage meter skin (#49)",
+    { text = "Turns on script errors and the taint log (Logs\\taint.log), and reads the skin's switch. "
+          .. "With the taint log on, Blizzard's own code throws 'attempt to call a nil value' errors "
+          .. "(tooltips, the bag bar): ignore those. A /reload turns the log off again.",
+      auto = true, run = function()
+          skinWindowsWere = meterShownWindows()
+          return setCVar("scriptErrors", "1"), setCVar("taintLog", "1"), skinState("start")
+      end,
+      check = function() local s = skinState("check"); return s == "on", s end },
+    { text = "Hit something until bars show in the meter. This step goes on by itself.",
+      wait = function() local n = meterBarCount(); return n > 0 and not InCombatLockdown(), n .. " bars" end,
+      timeout = 600 },
+    { text = "The meter in glass. Press Next for a screenshot.", screenshot = "meter skin",
+      check = function() return headersFaded(true) end },
+    { text = "Can you read every name and number, and the window titles?", ask = true },
+    { text = "In Edit Mode, set the meter's Style to Bordered and close Edit Mode.",
+      wait = function() return meterStyle() == "Bordered" and not editMode(), "style " .. show(meterStyle()) end,
+      timeout = 600 },
+    { text = "Bordered. Press Next for a screenshot.", screenshot = "meter skin, Bordered",
+      check = function() return headersFaded(true) end },
+    { text = "Now Style Thin.",
+      wait = function() return meterStyle() == "Thin" and not editMode(), "style " .. show(meterStyle()) end,
+      timeout = 600 },
+    { text = "Thin. Press Next for a screenshot.", screenshot = "meter skin, Thin",
+      check = function() return headersFaded(true) end },
+    { text = "Style back to Default, and Background to 0%.",
+      wait = function()
+          local bg = meterGet("GetBackgroundAlpha")
+          return meterStyle() == "Default" and bg == 0 and not editMode(), "background " .. show(bg)
+      end, timeout = 600 },
+    { text = "Background 0%: no glass behind the bars. Press Next for a screenshot.",
+      screenshot = "meter skin, Background 0" },
+    { text = "Background 100%.",
+      wait = function() local bg = meterGet("GetBackgroundAlpha"); return bg == 1 and not editMode(), show(bg) end,
+      timeout = 600 },
+    { text = "Background 100%. Press Next for a screenshot.", screenshot = "meter skin, Background 100" },
+    { text = "Background back to 50%, and Transparency to 50%.",
+      wait = function()
+          local bg, wa = meterGet("GetBackgroundAlpha"), meterGet("GetWindowAlpha")
+          return bg == 0.5 and wa == 0.5 and not editMode(), "background " .. show(bg) .. ", window " .. show(wa)
+      end, timeout = 600 },
+    { text = "Transparency 50%: the whole window, glass included. Press Next for a screenshot.",
+      screenshot = "meter skin, Transparency 50" },
+    { text = "Transparency back to 100%, then minimize one window with its button.",
+      wait = function()
+          if meterGet("GetWindowAlpha") ~= 1 or editMode() then return false, "transparency or Edit Mode" end
+          for _, w in ipairs(meterWindows()) do
+              local ok, v = call(w, "IsMinimized")
+              if ok and plain(v) == true then return true end
+          end
+          return false, "no window minimized"
+      end, timeout = 600 },
+    { text = "Minimized: only the header strip. Press Next for a screenshot.", screenshot = "meter skin, minimized" },
+    { text = "Bring the window back, then Shift-click a bar to pin its breakdown.",
+      wait = function() return sourceWindow(true) ~= nil, "no pinned breakdown" end, timeout = 600 },
+    { text = "The breakdown. Press Next for a screenshot.", screenshot = "meter skin, breakdown" },
+    { text = "Close the breakdown. Switches the skin off, live.", button = "Skin off",
+      screenshot = "meter skin off", run = function() return meterSwitch(false), skinState("off") end,
+      check = function() return headersFaded(false) end },
+    { text = "Does the meter look exactly like Blizzard's own again?", ask = true },
+    { text = "While the skin is off, add a window from the meter's gear menu (Skip if you already have three).",
+      wait = function()
+          local n = meterShownWindows()
+          return n > (skinWindowsWere or 1) or n >= MAX_METER_WINDOWS, n .. " windows"
+      end, timeout = 600 },
+    { text = "Switches the skin on again, live: every window, the new one too.", button = "Skin on",
+      screenshot = "meter skin on again", run = function() return meterSwitch(true), skinState("on again") end,
+      check = function() return headersFaded(true) end },
+    { text = "Reload.", reload = true },
+    { text = "After the reload. Press Next for a screenshot.", screenshot = "meter skin, after reload",
+      check = function() return headersFaded(true) end },
+    { text = "Optional, Skip if it isn't easy: fight something and press Measure while in combat.",
+      button = "Measure", run = function() return skinState("combat") end,
+      check = function() return InCombatLockdown() and headersFaded(true) end },
+    { text = "Put the meter back the way you like it (the gear menu hides the extra window). "
+          .. "Then reload to save the results.", reload = true },
+})
+
+--------------------------------------------------------------------------------
+-- The glass bars preview (#49, docs/DAMAGE-METER.md): never shipped. Within
+-- the skin contract, so it shows what a later version could really do: each
+-- shown bar's Background and BackgroundEdge faded, a small glass panel of ours
+-- behind it, Blizzard's fill texture at 0.8. Rows change without scrolling
+-- (a session event refreshes the list) and pooled bars are recycled, so every
+-- region touched is recorded once with its alpha, and the restore puts back
+-- every recorded one, never re-reading the visible rows. Idempotent; also
+-- /fp skin meterbars off.
+--------------------------------------------------------------------------------
+
+local barsWas = {}        -- region -> its alpha before the preview
+local barPanels = {}      -- our panels, by bar
+local FILL_ALPHA = 0.8
+
+local function touch(region, alpha)
+    local ok, before = call(region, "GetAlpha")
+    before = ok and plain(before) or nil
+    if type(before) ~= "number" then return false end
+    if barsWas[region] == nil then barsWas[region] = before end
+    call(region, "SetAlpha", alpha)
+    return true
+end
+
+local function barsOn()
+    local G = glassUI()
+    local n = 0
+    for _, w in ipairs(meterWindows()) do
+        for _, bar in ipairs(meterBars(w)) do
+            local sb = rawget(bar, "StatusBar")
+            if sb and shownFrame(bar) then
+                touch(rawget(sb, "Background"), 0)
+                touch(rawget(sb, "BackgroundEdge"), 0)
+                local _, fill = call(sb, "GetStatusBarTexture")
+                touch(fill, FILL_ALPHA)
+                local p = barPanels[bar]
+                if not p then
+                    p = CreateFrame("Frame", nil, sb)
+                    p:SetAllPoints(sb)
+                    p:SetFrameLevel(math.max(0, sb:GetFrameLevel() - 1))
+                    p:EnableMouse(false)
+                    if G and G.Glass and G.Glass.Apply then
+                        local ok, err = pcall(G.Glass.Apply, p, "small")
+                        if not ok then say("DMB Glass.Apply ERROR " .. show(err)) end
+                    end
+                    barPanels[bar] = p
+                end
+                p:Show()
+                n = n + 1
+            end
+        end
+    end
+    say("DMB on: " .. n .. " bars")
+    record("DMB.on", n)
+    return n
+end
+
+local function barsOff()
+    local n = 0
+    for region, alpha in pairs(barsWas) do
+        call(region, "SetAlpha", alpha)
+        n = n + 1
+    end
+    barsWas = {}
+    for _, p in pairs(barPanels) do p:Hide() end
+    say("DMB off: " .. n .. " regions put back")
+    return n
+end
+
+Probe:Steps("meterbars", {
+    title = "Glass UI: a glass bars preview for the damage meter",
+    { text = "Hit something until bars show in the meter, then stop fighting. This step goes on by itself.",
+      wait = function() local n = meterBarCount(); return n > 0 and not InCombatLockdown(), n .. " bars" end,
+      timeout = 600 },
+    { text = "Puts glass behind each bar shown now (a still picture: new rows stay Blizzard's).",
+      button = "Glass bars", run = barsOn, screenshot = "meter, glass bars" },
+    { text = "Would you like the meter's bars like this? Say what you'd change in the Note box.", ask = true },
+    { text = "Puts every bar back as Blizzard had it.", button = "Put back", run = barsOff,
+      screenshot = "meter, bars put back" },
+    { text = "Type /reload to save the results.", reload = true },
+})
+Probe:Command("meterbars", function(args)
+    if (args or ""):match("off") then barsOff() else barsOn() end
+end, "#49: meterbars on|off: the glass bars preview (off puts every touched bar back)")
+
+--------------------------------------------------------------------------------
 -- Boot
 --------------------------------------------------------------------------------
 
@@ -1487,4 +1697,5 @@ NS._test = { Probe = Probe, state = state, tree = tree, fade = fade, slashOwners
              themeTry = themeTry, themeRestore = themeRestore, suiteSet = suiteSet, suiteRestore = suiteRestore,
              suiteState = suiteState, suiteCheck = suiteCheck, suiteSnapshot = suiteSnapshot,
              meterState = meterState, meterStyle = meterStyle, meterBars = meterBars, treeOf = treeOf,
-             barTree = barTree, sourceWindow = sourceWindow }
+             barTree = barTree, sourceWindow = sourceWindow, barsOn = barsOn, barsOff = barsOff,
+             barPanels = barPanels, headersFaded = headersFaded }

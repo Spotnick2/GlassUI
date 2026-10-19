@@ -15,6 +15,9 @@
 --   Blank, Tint, Shade   for art a fade can't hold (an animation's
 --           setToFinalAlpha, a gradient). Not restorable live: a skin that
 --           uses any of them is live = false, and the kit refuses otherwise.
+--           Fade(region, onAlpha) also hands that latest alpha to onAlpha, at
+--           once and whenever Blizzard sets it (the damage meter's glass
+--           follows its Background setting).
 --   Panel   our glass: an unnamed, mouse-off frame of our own under the window.
 --
 -- Widget kinds, each written when the first skin needed it: Shell
@@ -47,7 +50,7 @@ end
 -- Fade
 --------------------------------------------------------------------------------
 
-local faded = setmetatable({}, { __mode = "k" })    -- region -> { kit =, alpha = latest Blizzard alpha, busy = }
+local faded = setmetatable({}, { __mode = "k" })    -- region -> { kit =, alpha = latest Blizzard alpha, busy =, onAlpha = }
 local hooked = setmetatable({}, { __mode = "k" })
 
 local function hold(region)
@@ -58,16 +61,29 @@ local function hold(region)
     s.busy = false
 end
 
-function K:Fade(region)
+-- Blizzard's latest alpha to the region's onAlpha: a plain number only, never
+-- the 0 we hold.
+local function tell(region, s)
+    if not s.onAlpha or type(API.Plain(s.alpha)) ~= "number" then return end
+    local ok, err = pcall(s.onAlpha, s.alpha)
+    if not ok then API.Fail("fade:" .. s.kit.key .. ":" .. describe(region) .. ":onAlpha", err) end
+end
+
+function K:Fade(region, onAlpha)
     if type(region) ~= "table" or type(region.SetAlpha) ~= "function" then return false end
     if not faded[region] then faded[region] = { kit = self, alpha = API.Plain(region:GetAlpha()) } end
+    faded[region].onAlpha = onAlpha
     if not hooked[region] then
         hooked[region] = true
         hooksecurefunc(region, "SetAlpha", function(r, alpha)
             local s = faded[r]
             if not s or s.busy then return end
-            if type(API.Plain(alpha)) == "number" then s.alpha = alpha end
-            if GUI.Engine.Active(s.kit.key) then hold(r) end
+            local taken = type(API.Plain(alpha)) == "number"
+            if taken then s.alpha = alpha end
+            if GUI.Engine.Active(s.kit.key) then
+                hold(r)
+                if taken then tell(r, s) end
+            end
         end)
     end
     hold(region)
@@ -79,6 +95,7 @@ function K:Fade(region)
         API.Fail("fade:" .. self.key .. ":" .. describe(region), "ignores SetAlpha (a gradient?): Blank it instead")
         return false
     end
+    tell(region, faded[region])
     return true
 end
 
@@ -131,14 +148,16 @@ end
 
 -- Glass under a window: a child one level below it, so the window's own
 -- regions and children draw over it (GlassMail's panel). insets: { left, top,
--- right, bottom } in px, inward. size: LibGlass's, default "large".
-function K:Panel(window, size, insets)
+-- right, bottom } in px, inward. size: LibGlass's, default "large". anchor:
+-- the region it covers, when not the whole window (still the window's child).
+function K:Panel(window, size, insets, anchor)
     local panel = CreateFrame("Frame", nil, window)
+    anchor = anchor or window
     if insets then
-        panel:SetPoint("TOPLEFT", window, "TOPLEFT", insets[1], -insets[2])
-        panel:SetPoint("BOTTOMRIGHT", window, "BOTTOMRIGHT", -insets[3], insets[4])
+        panel:SetPoint("TOPLEFT", anchor, "TOPLEFT", insets[1], -insets[2])
+        panel:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", -insets[3], insets[4])
     else
-        panel:SetAllPoints(window)
+        panel:SetAllPoints(anchor)
     end
     panel:SetFrameLevel(math.max(0, window:GetFrameLevel() - 1))
     local g = Glass.Apply(panel, size or "large")
