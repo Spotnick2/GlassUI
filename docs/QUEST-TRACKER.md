@@ -43,6 +43,18 @@ Codex `gpt-6-astra` review: consensus in round 2, 2026-10-19.
 - **What changes and what doesn't.** Pearl changes the light and the outline only: wash, gloss,
   frost and rim (LibGlass GLASS-MATERIAL.md, "Pearl"). The body stays Glass UI's `Theme` (clear,
   smoked or class, and the backing), so the clear 0.35 the owner liked stays.
+- **The wash follows the material** (Codex on PR #57). Today `Theme.lua:70` paints each body theme's
+  own absolute wash (`Theme.PRESETS`: clear and class 0.18, smoked 0.14) on every panel, at
+  `Theme.Register` and on every live body change. That would overwrite Pearl's 0.10.
+  - So a body theme's wash becomes a **factor of the material's own**: clear and class 1, smoked
+    0.14 / 0.18.
+  - Theme paints `Glass.STYLE.wash × factor`, read from the built instance (Pearl 0.10, or the clean
+    fallback 0.18).
+  - On clean that gives exactly today's 0.18 and 0.14, so the clean fallback looks the same as now.
+  - The tint and the backing stay the body theme's, unchanged.
+  - **Tests:** the wash painted on a registered surface is 0.10 under Pearl and 0.18 under the clean
+    fallback, both at first paint and after a live body change (clear to smoked to clear). Checking
+    the instance's preset alone would miss this.
 - **Applying a change.** The suite theme's preset is read once, when the instance is built, so a
   different preset applies at a /reload, as for the followers. Today there is only one preset
   (Pearl), so there's nothing to select yet. The body theme (clear, smoked, class) still repaints
