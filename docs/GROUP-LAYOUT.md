@@ -335,8 +335,8 @@ the addon that owns its frame follows. There is no dependency either way.
     a move of 0, or GUF absent, each bar goes back to it.
 - **A bar snapped in Edit Mode stays put** (as built in GAB#30, PR #35, after its Codex review).
   That includes Blizzard's default place, stacked on Action Bar 1, so only a bar the player placed
-  freely follows. `/gab follow` says why a bar doesn't. Measured clean for the pet bar on 70450
-  (the owner's hunter); the stance bar is not measured yet.
+  freely follows. `/gab follow` says why a bar doesn't. Measured clean on 70450: the pet bar on the
+  owner's hunter, the stance bar on a paladin. Merged in GAB#30 (PR #35).
 - **How GAB moves them is GAB's design.** Both bars are Blizzard Edit Mode systems (`PetActionBar`,
   `StanceBar`), and the porting
   guide calls moving one "a taint minefield" (`PORTING-TBC-TO-FOREVER.md:446-485`). Its measured way
