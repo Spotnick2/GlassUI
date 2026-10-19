@@ -486,7 +486,11 @@ local function buildLook()
     lookRefreshers[#lookRefreshers + 1] = function()
         local lines = {}
         for _, m in ipairs(Suite.ROSTER) do
-            local l = Suite.LookLine(m.name)
+            local l, switching = Suite.LookLine(m.name)
+            if l and switching then
+                l = l .. "; set to " .. (Suite.Following(m.name) and "follow" or "its own look")
+                    .. " - /reload to apply"
+            end
             if l then lines[#lines + 1] = m.title .. ": " .. l end
             for _, t in ipairs(Suite.Tenants(m.name)) do lines[#lines + 1] = t .. ": follows " .. m.title end
         end

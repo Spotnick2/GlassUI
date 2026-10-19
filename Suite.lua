@@ -269,7 +269,9 @@ function Suite.SetLookPreset(name)
 end
 
 -- What a follower's report says about the look, for the page and
--- /glassui suite: nil when it reported none.
+-- /glassui suite: nil when it reported none. The source is the answer it
+-- started with, not the saved switch: a follower joins or leaves only at a
+-- /reload. The second value is true when the switch says otherwise.
 function Suite.LookLine(addon)
     local r = reports[addon]
     if not (r and r.look) then return nil end
@@ -279,9 +281,11 @@ function Suite.LookLine(addon)
             own[#own + 1] = Suite.LOOK_LABELS[k]:lower() .. " " .. (Suite.LOOK_LABELS[r.look[k]] or r.look[k])
         end
     end
-    local text = Suite.Following(addon) and "suite look" or "its own look"
+    local a = answers[addon]
+    local follows = a ~= nil and a.preset ~= nil
+    local text = follows and "suite look" or "its own look"
     if #own > 0 then text = text .. ", its own " .. table.concat(own, ", ") end
-    return text
+    return text, Suite.Following(addon) ~= follows
 end
 
 -- The addons wearing a follower's skin ("Apotheca: follows Glass Action Bars").

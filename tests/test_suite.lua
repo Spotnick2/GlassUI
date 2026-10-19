@@ -446,6 +446,31 @@ check(O.lookFollowers:GetText():find("Apotheca: follows Glass Action Bars", 1, t
 Suite.Report("GlassActionBars", { api = 1, built = "pearl",
     look = { tint = "class", hover = "halo", press = "ripple", emptySlots = "full" }, own = {} })
 eq(O.lookFollowers:GetText(), "Glass Action Bars: suite look", "a new report redraws the open subpage")
+-- Follow turned off before a /reload: GAB still applies the suite look this
+-- session, so the line keeps saying so and names the pending switch.
+Suite.SetFollow("GlassActionBars", false)
+eq(Suite.LookLine("GlassActionBars"), "suite look", "leaving: the look source is the session's, not the switch")
+eq(select(2, Suite.LookLine("GlassActionBars")), true, "and the switch is flagged as pending")
+eq(O.lookFollowers:GetText(), "Glass Action Bars: suite look; set to its own look - /reload to apply",
+   "the subpage shows the pending switch separately")
+GUI._test.slash("suite")
+check(chat():find("Glass Action Bars: following Glass UI (Pearl); suite look - /reload to apply", 1, true),
+      "/glassui suite agrees with itself while leaving")
+O.lookPanel:Hide()
+-- Follow turned on before a /reload: GAB keeps its own look until then.
+setup()
+WoW.installed.GlassActionBars, WoW.loaded.GlassActionBars = 2, true
+ask("GlassActionBars")
+Suite.Report("GlassActionBars", { api = 1,
+    look = { tint = "clear", hover = "glow", press = "flash", emptySlots = "frosted" }, own = {} })
+eq(Suite.LookLine("GlassActionBars"), "its own look", "not following: its own look")
+eq(select(2, Suite.LookLine("GlassActionBars")), false, "and nothing pending")
+Suite.SetFollow("GlassActionBars", true)
+eq(Suite.LookLine("GlassActionBars"), "its own look", "joining: still its own look until the /reload")
+O = GUI.Options._test
+O.lookPanel:Show()
+eq(O.lookFollowers:GetText(), "Glass Action Bars: its own look; set to follow - /reload to apply",
+   "the subpage shows the pending join")
 O.lookPanel:Hide()
 
 -- Never another addon's SavedVariables: the strict globals would throw on a
