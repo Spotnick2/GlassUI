@@ -235,7 +235,7 @@ eq(optsOpened, 1, "Settings calls the member's own function")
 rows.GlassRaidFrames.open:Click()
 check(GUI.failures["suite:options:GlassRaidFrames"], "a member's failing Settings is caught and recorded, not ours to crash on")
 GUI.failures["suite:options:GlassRaidFrames"] = nil
-eq(O.clickCast:GetText(), "Bindings on other addons' frames: Enabled", "the click-casting line")
+eq(O.clickCast:GetText(), "Click-casting: bindings on other addons' frames enabled", "the click-casting line")
 O.clickCastOpen:Click()
 eq(ccOpened, 1, "Configure bindings opens GRF's editor")
 eq(O.note:GetText(), "Appearance changes apply after reloading.", "the footer while nothing is pending")
@@ -252,7 +252,7 @@ eq(O.note:GetText(), "Appearance changes apply after reloading.", "switching it 
 
 -- Live: a new report or a switch set from the command line redraws the open page.
 Suite.Report("GlassRaidFrames", { api = 1, clickCast = { open = function() end, others = false } })
-eq(O.clickCast:GetText(), "Bindings on other addons' frames: Disabled", "GRF's report again: the open page redraws at once")
+eq(O.clickCast:GetText(), "Click-casting: bindings on other addons' frames disabled", "GRF's report again: the open page redraws at once")
 GUI._test.slash("suite follow glassraidframes on")
 eq(rows.GlassRaidFrames.follow:GetChecked(), true, "a switch set by /glassui suite shows on the open page")
 GUI._test.slash("suite follow glassraidframes off")
@@ -307,6 +307,31 @@ eq(GUI.Options._test.pearl, nil, "no pearl icon: the bare disc")
 eq(next(GUI.failures), nil, "and nothing failed")
 GUI.Options._test.panel:Hide()
 WoW.itemIcons = { [5500] = 134122 }
+
+-- The group layout (docs/GROUP-LAYOUT.md §6): what GRF and GUF report, shown, never acted on.
+setup()
+eq(Suite.LayoutLine(), nil, "no layout line before GRF reports one")
+Suite.Report("GlassRaidFrames", { api = 1, layout = { on = true, mode = "hud", extra = 1 } })
+eq(Suite.ReportOf("GlassRaidFrames").layout.extra, nil, "only the known layout fields are copied")
+eq(Suite.LayoutLine(), "Group layout: centred above the action bars", "GRF's HUD")
+Suite.Report("GlassUnitFrames", { api = 1, layout = { linked = true, placing = true } })
+eq(Suite.LayoutLine(), "Group layout: centred above the action bars; player and target beside it", "GUF placing beside it")
+Suite.Report("GlassRaidFrames", { api = 1, layout = { on = true, mode = "side" } })
+Suite.Report("GlassUnitFrames", { api = 1, layout = { linked = true, placing = false } })
+eq(Suite.LayoutLine(), "Group layout: at the side; player and target in their own places", "side: GUF linked, not placing")
+Suite.Report("GlassUnitFrames", { api = 1, layout = { linked = false, placing = false } })
+eq(Suite.LayoutLine(), "Group layout: at the side; player and target not linked", "GUF not linked")
+Suite.Report("GlassRaidFrames", { api = 1, layout = { on = false, mode = "hud" } })
+eq(Suite.LayoutLine(), "Group layout: off (the classic grid); player and target not linked", "the layout switched off reads as off, whatever the mode")
+Suite.Report("GlassRaidFrames", { api = 1, layout = { on = true, mode = "hud" } })
+Suite.Report("GlassUnitFrames", { api = 1, layout = { linked = true, placing = true } })
+GUI._test.slash("suite")
+check(chat():find("Group layout: centred above the action bars; player and target beside it", 1, true), "/glassui suite prints the layout line")
+GUI.Options._test.panel:Show()
+eq(GUI.Options._test.layoutLine:GetText(), "Group layout: centred above the action bars; player and target beside it", "the page shows it")
+Suite.Report("GlassUnitFrames", { api = 1, layout = { linked = true, placing = false } })
+eq(GUI.Options._test.layoutLine:GetText(), "Group layout: centred above the action bars; player and target in their own places", "and redraws when a report changes it")
+GUI.Options._test.panel:Hide()
 
 -- Never another addon's SavedVariables: the strict globals would throw on a
 -- read, and nothing was written.

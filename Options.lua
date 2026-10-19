@@ -284,14 +284,16 @@ local function build()
     end)
     Options._test.fold, Options._test.foldText, Options._test.list = fold, foldText, list
 
-    -- Click-casting.
+    -- Raid frames: the group layout and click-casting, both Glass Raid
+    -- Frames' (shown here, set there).
     local sep2 = rule()
-    local cc = label(panel, "Click-casting", "GameFontHighlightLarge")
+    local cc = label(panel, "Raid frames", "GameFontHighlightLarge")
     cc:SetPoint("TOPLEFT", sep2, "BOTTOMLEFT", 4, -12)
-    local ccOwner = label(panel, "", "GameFontHighlight")
-    ccOwner:SetPoint("TOPLEFT", cc, "BOTTOMLEFT", 0, -6)
+    local layoutLine = label(panel, "", "GameFontHighlight")
+    layoutLine:SetPoint("TOPLEFT", cc, "BOTTOMLEFT", 0, -6)
     local ccLine = label(panel, "", "GameFontHighlight")
-    ccLine:SetPoint("TOPLEFT", ccOwner, "BOTTOMLEFT", 0, -4)
+    ccLine:SetPoint("TOPLEFT", layoutLine, "BOTTOMLEFT", 0, -4)
+    Options._test.layoutLine = layoutLine
     local ccOpen = button(panel, "Configure bindings", 170, function()
         local c = Suite.ClickCast()
         if c and c.open then API.Try("suite:clickcast", c.open) end
@@ -344,13 +346,12 @@ local function build()
         keepOwn:SetShown(#others > 0)
         span(sep2, #others > 0 and keepOwn or restore, 14)
 
+        layoutLine:SetText(Suite.LayoutLine() or "Group layout: Glass Raid Frames hasn't reported one")
         local c = Suite.ClickCast()
         if c then
-            ccOwner:SetText("Managed by Glass Raid Frames")
-            ccLine:SetText("Bindings on other addons' frames: " .. (c.others and "Enabled" or "Disabled"))
+            ccLine:SetText("Click-casting: bindings on other addons' frames " .. (c.others and "enabled" or "disabled"))
         else
-            ccOwner:SetText("Managed by Glass Raid Frames, when it is loaded")
-            ccLine:SetText("Glass Raid Frames hasn't reported this session.")
+            ccLine:SetText("Click-casting: Glass Raid Frames hasn't reported this session")
         end
         ccOpen:SetShown(c ~= nil and c.open ~= nil)
 

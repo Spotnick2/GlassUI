@@ -175,6 +175,9 @@ blocked, and after combat everything glides once to the new footprint. The owner
       - out of combat afterwards, shown. Nothing was blocked.
     - Should it ever stop holding on a later build, the fallback stays: the fixed party-pet set is
       disabled out of combat **in both modes** rather than risk a pet shown twice.
+    - **With show-solo off** (as built in GRF#72): `[@raid1,exists] hide; [@party1,exists] show;
+      hide`, so a lone pet never shows under no cell. `[@party1,exists]` is the same mechanism as the
+      measured `[@raid1,exists]`, but not measured itself.
   - **Only with the row.** The holder is used only while the row set is applied, and that is decided
     out of combat. The driver stays the only owner of its visibility: whenever the set changes, GRF
     re-registers it with `"hide"` while the columns are applied, and with the measured party
@@ -330,6 +333,10 @@ the addon that owns its frame follows. There is no dependency either way.
   - It acts out of combat, with Edit Mode closed.
   - It never writes the Edit Mode layout: the layout position is the set-aside position. With
     a move of 0, or GUF absent, each bar goes back to it.
+- **A bar snapped in Edit Mode stays put** (as built in GAB#30, PR #35, after its Codex review).
+  That includes Blizzard's default place, stacked on Action Bar 1, so only a bar the player placed
+  freely follows. `/gab follow` says why a bar doesn't. Measured clean on 70450: the pet bar on the
+  owner's hunter, the stance bar on a paladin. Merged in GAB#30 (PR #35).
 - **How GAB moves them is GAB's design.** Both bars are Blizzard Edit Mode systems (`PetActionBar`,
   `StanceBar`), and the porting
   guide calls moving one "a taint minefield" (`PORTING-TBC-TO-FOREVER.md:446-485`). Its measured way
@@ -352,7 +359,10 @@ so `Suite.API` stays 1:
 - GRF reports `layout = { on, mode }`, what it applied;
 - GUF reports `layout = { linked, placing }`.
 
-`Suite.lua`'s report copier gains these two plain fields. The line also has buttons to each addon's
+`Suite.lua`'s report copier gains these two plain fields. **Built:** the page's "Raid frames" section
+shows the group layout ("centred above the action bars", "at the side" or "off"; "player and target
+beside it", "in their own places" or "not linked") above the click-casting line, and `/glassui suite`
+prints the same. The line also has buttons to each addon's
 settings.
 
 ## To measure first (70450)
