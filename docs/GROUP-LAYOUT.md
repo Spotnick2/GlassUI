@@ -559,9 +559,10 @@ All built and merged:
 **In game on 70450:** M1-M5, GRF's grid run (solo, a party, a raid of 2, combat, layout off and
 on), the glide and the 10/20/40 preview with GUF following, and GAB's pet and stance bars.
 
-**Not checked in game,** closed by the owner as the sole user, who reports any finding:
-- GUF against GRF's real grid with the addons loading in either order;
-- GUF with GRF absent;
-- a /reload in combat with GUF linked.
-
-These rest on the same `LayoutState()` sync the preview exercised, and on GUF's offline tests.
+**The real-grid cases** (GUF's runs #274-278, on GUF PR #139, 70450) pass:
+- **Placed exactly:** GUF placed player and target beside GRF's real grid at load, after a /reload,
+  and after a /reload in the middle of a fight.
+- **GRF off:** GUF keeps its own positions.
+- **Nothing blocked** in any run.
+- **Measured along the way:** a /reload in the middle of a fight loads with the lockdown off. It's
+  in the porting guide.
