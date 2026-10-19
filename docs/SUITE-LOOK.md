@@ -10,8 +10,9 @@ first follower. The plan comes from GlassActionBars#39 (sharing GAB's look with 
 - **Material:** GAB follows the suite theme like GUF and GRF.
   - GAB speaks `GlassUI.Suite` (Theme/Report) and moves its LibGlass pin from r8 to r11. r9 and r10
     are additive for GAB.
-  - **Pearl becomes GAB's own default**, on trial: "Let's try Pearl as GAB's default, we'll circle
-    back once I see how it looks".
+  - **Pearl is GAB's own default.** It was tried first ("Let's try Pearl as GAB's default, we'll
+    circle back once I see how it looks"), and kept after the trial: "i'd say I don't see much of a
+    difference so yes Pearl can be the default" (owner, 2026-10-19).
   - Its local choice is a new setting, `material` = `pearl` (default) | `clean` | `classic`, applied at
     reload and used only when not following.
   - **When it asks:** at its own `PLAYER_LOGIN`, building its LibGlass instance then rather than at
@@ -142,6 +143,15 @@ unchanged.
   - Apotheca#68 passes "Apotheca".
 
 ## Glass UI's page
+
+**Built (GlassUI#44):**
+- `Suite.Look`, `SetLook`, `SetLookPreset` and `LookPreset`;
+- the `GlassUI.Suite.LookChanged` event through EventRegistry;
+- the "Suite look" subpage (radios for the tint, preset, hover, press and empty slots, plus who
+  follows), and `/glassui look`;
+- the reports' `look`, `own` and `tenants` copied for the page, the GAB card and
+  `/glassui suite`.
+
 
 - **Where:** the suite look gets its own Settings subpage under Glass UI, "Suite look". The main
   page is full.

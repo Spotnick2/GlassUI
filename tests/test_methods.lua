@@ -33,9 +33,12 @@ WoW.asBlizzard(function() MerchantFrame.Bg:SetAlpha(0.5) end)
 GUI.Suite.Theme("GlassUnitFrames")
 GUI.Suite.Report("GlassRaidFrames", { api = 1, options = function() end, clickCast = { open = function() end, others = true } })
 GUI.Options._test.panel:Show()
+GUI.Options._test.lookPanel:Show()
+GUI.Options._test.lookRows["Tint"][2]:Click()
 for _, cmd in ipairs({ "failures", "version", "help", "", "skins", "skin merchant off", "skin merchant on",
                        "off", "on", "theme smoked", "theme class", "theme clear",
-                       "suite", "suite follow glassunitframes on", "options" }) do
+                       "suite", "suite follow glassunitframes on", "options",
+                       "look", "look tint class", "look preset soft" }) do
     GUI._test.slash(cmd)
 end
 WoW.flushTimers()

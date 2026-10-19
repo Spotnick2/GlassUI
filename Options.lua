@@ -204,6 +204,16 @@ local function memberCard(m)
         elseif state == "early" then s = "Started before Glass UI: using addon settings"
         elseif state == "silent" then s = "No report from it: see its errors"
         else s = "Using addon settings" end
+        -- The suite look it overrides, and the addons wearing its skin.
+        if r and r.own and (state == "following" or state == "own") then
+            local own = {}
+            for _, k in ipairs(Suite.LOOK_KEYS) do
+                if r.own[k] then own[#own + 1] = Suite.LOOK_LABELS[k]:lower() end
+            end
+            if #own > 0 then s = s .. "; its own " .. table.concat(own, ", ") end
+        end
+        local tenants = Suite.Tenants(m.name)
+        if #tenants > 0 then s = s .. "; " .. table.concat(tenants, ", ") .. " follow it" end
         if pending then s = s .. " - reload to apply" end
         status:SetText(s)
         follow:SetChecked(Suite.Following(m.name))
@@ -376,17 +386,143 @@ panel:SetScript("OnShow", function()
 end)
 panel:SetScript("OnHide", hideReload)
 
+--------------------------------------------------------------------------------
+-- The "Suite look" subpage (docs/SUITE-LOOK.md): the tint and the button
+-- feedback every follower uses unless it overrides a key. Each choice is
+-- saved and announced at once (Suite.SetLook), live.
+--------------------------------------------------------------------------------
+
+local lookPanel = CreateFrame("Frame")
+lookPanel.name = "Suite look"
+lookPanel:Hide()
+local lookRefreshers = {}
+local RADIO_ART = "Interface\\Buttons\\UI-RadioButton"   -- 4 cells: normal, checked, highlight, pushed
+
+-- A labelled radio: UIRadioButtonTemplate when the client has it (its own
+-- label, rb.text), else the client's radio art and a label of ours (Glass
+-- Mail's recipe).
+local function radio(parent, text)
+    local ok, rb = pcall(CreateFrame, "CheckButton", nil, parent, "UIRadioButtonTemplate")
+    if ok and rb and rb.text then
+        rb.text:SetFontObject("GameFontHighlight")
+        rb.text:SetText(text)
+        return rb
+    end
+    rb = CreateFrame("CheckButton", nil, parent)
+    rb:SetSize(16, 16)
+    rb:SetNormalTexture(RADIO_ART)
+    rb:GetNormalTexture():SetTexCoord(0, 0.25, 0, 1)
+    rb:SetCheckedTexture(RADIO_ART)
+    rb:GetCheckedTexture():SetTexCoord(0.25, 0.5, 0, 1)
+    rb:SetHighlightTexture(RADIO_ART)
+    rb:GetHighlightTexture():SetTexCoord(0.5, 0.75, 0, 1)
+    rb:GetHighlightTexture():SetBlendMode("ADD")
+    local fs = label(parent, text)
+    fs:SetPoint("LEFT", rb, "RIGHT", 4, 0)
+    rb.text = fs
+    return rb
+end
+
+local function refreshLook()
+    for _, refresh in ipairs(lookRefreshers) do refresh() end
+end
+
+-- One row of choices under `anchor`: a heading, then the radios left to
+-- right. get() returns the value to check; set(value) applies one.
+local function choiceRow(anchor, heading, values, get, set)
+    local Suite = GUI.Suite
+    local h = label(lookPanel, heading, "GameFontNormal")
+    h:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -16)
+    local group, prev = {}, nil
+    for _, v in ipairs(values) do
+        local rb = radio(lookPanel, Suite.LOOK_LABELS[v] or v)
+        rb.value = v
+        if prev then
+            rb:SetPoint("LEFT", prev, "RIGHT", 110, 0)
+        else
+            rb:SetPoint("TOPLEFT", h, "BOTTOMLEFT", 0, -6)
+        end
+        -- set() saves and announces; Suite's change notice redraws this page.
+        rb:SetScript("OnClick", function() set(v) end)
+        group[#group + 1] = rb
+        prev = rb
+    end
+    lookRefreshers[#lookRefreshers + 1] = function()
+        local current = get()
+        for _, rb in ipairs(group) do rb:SetChecked(rb.value == current) end
+    end
+    Options._test.lookRows[heading] = group
+    return group[1]
+end
+
+local function buildLook()
+    local Suite = GUI.Suite
+    local title = label(lookPanel, "Suite look", "GameFontHighlightHuge")
+    title:SetPoint("TOPLEFT", lookPanel, "TOPLEFT", PAD + 4, -PAD)
+    local note = label(lookPanel, "The tint and the button feedback of every Glass addon that uses the Glass UI "
+        .. "appearance. An addon can keep its own value for any of them in its settings. Changes apply at once.",
+        "GameFontDisable")
+    note:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -6)
+    note:SetWidth(560)
+    local function lookOf(k) return function() return (Suite.Look() or Suite.LOOK_DEFAULTS)[k] end end
+    local function setter(k) return function(v) Suite.SetLook(k, v) end end
+    local prev = choiceRow(note, "Tint", Suite.LOOK_VALUES.tint, lookOf("tint"), setter("tint"))
+    local presets = {}
+    for i, n in ipairs(Suite.LOOK_PRESET_NAMES) do presets[i] = n end
+    prev = choiceRow(prev, "Button feedback", presets, function() return Suite.LookPreset() end,
+        function(v) Suite.SetLookPreset(v) end)
+    local custom = label(lookPanel, "", "GameFontDisableSmall")
+    custom:SetPoint("LEFT", prev, "RIGHT", 380, 0)
+    lookRefreshers[#lookRefreshers + 1] = function()
+        custom:SetText(Suite.LookPreset() == "custom" and "(custom)" or "")
+    end
+    prev = choiceRow(prev, "Hover", Suite.LOOK_VALUES.hover, lookOf("hover"), setter("hover"))
+    prev = choiceRow(prev, "Press", Suite.LOOK_VALUES.press, lookOf("press"), setter("press"))
+    prev = choiceRow(prev, "Empty slots", Suite.LOOK_VALUES.emptySlots, lookOf("emptySlots"), setter("emptySlots"))
+    local followers = label(lookPanel, "", "GameFontHighlight")
+    followers:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, -24)
+    followers:SetWidth(560)
+    followers:SetJustifyV("TOP")
+    lookRefreshers[#lookRefreshers + 1] = function()
+        local lines = {}
+        for _, m in ipairs(Suite.ROSTER) do
+            local l, switching = Suite.LookLine(m.name)
+            if l and switching then
+                l = l .. "; set to " .. (Suite.Following(m.name) and "follow" or "its own look")
+                    .. " - /reload to apply"
+            end
+            if l then lines[#lines + 1] = m.title .. ": " .. l end
+            for _, t in ipairs(Suite.Tenants(m.name)) do lines[#lines + 1] = t .. ": follows " .. m.title end
+        end
+        followers:SetText(#lines > 0 and table.concat(lines, "\n")
+            or "No Glass addon follows the suite look yet.")
+    end
+    Options._test.lookFollowers, Options._test.lookCustom = followers, custom
+end
+
+lookPanel:SetScript("OnShow", function()
+    if not Options.lookBuilt then
+        Options.lookBuilt = true
+        buildLook()
+    end
+    refreshLook()
+end)
+
 -- Called once at PLAYER_LOGIN by GlassUI.lua.
 function Options.Register()
     if category then return end
     category = API.RegisterSettingsPanel(panel, panel.name)
+    Options.lookCategory = API.RegisterSettingsSubpanel(category, lookPanel, lookPanel.name)
 end
+
+function Options.OpenLook() return API.OpenSettings(Options.lookCategory) end
 
 function Options.Open() return API.OpenSettings(category) end
 
 -- Suite's change notice: redraw only while the page is open.
 function Options.Refresh()
     if Options.built and panel:IsShown() then refreshAll() end
+    if Options.lookBuilt and lookPanel:IsShown() then refreshLook() end
 end
 
-Options._test = { panel = panel, refreshers = refreshers, rows = {} }
+Options._test = { panel = panel, refreshers = refreshers, rows = {}, lookPanel = lookPanel, lookRows = {} }

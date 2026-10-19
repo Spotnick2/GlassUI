@@ -121,6 +121,20 @@ function API.RegisterSettingsPanel(panel, name)
     return category
 end
 
+-- A page under another (Glass UI's "Suite look" under Glass UI).
+function API.RegisterSettingsSubpanel(parent, panel, name)
+    local S = settingsAPI()
+    if not (parent and S and S.RegisterCanvasLayoutSubcategory) then return nil end
+    return S.RegisterCanvasLayoutSubcategory(parent, panel, name)
+end
+
+-- EventRegistry's TriggerEvent under pcall: a listener's error stays its own.
+function API.TriggerEvent(event, ...)
+    local R = rawget(_G, "EventRegistry")
+    if not (R and R.TriggerEvent) then return false end
+    return (pcall(R.TriggerEvent, R, event, ...))
+end
+
 function API.OpenSettings(category)
     local S = settingsAPI()
     if not (category and S and S.OpenToCategory) then return false end
