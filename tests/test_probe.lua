@@ -380,6 +380,96 @@ eq(follow.GlassUnitFrames, true, "the Follow switch is back")
 eq(SkinProbeDB.suiteWas[WoW.GUID], nil, "and this character's snapshot is cleared")
 T.suiteSnapshot()
 
+-- #58, Glass Panel in the suite: read as a member, Pearl either way, its edge
+-- read and announced; only its Follow switch changes, and it comes back.
+WoW.loaded.GlassPanel = true
+local panelTop, panelBar = nil, true
+rawset(_G, "GlassPanel", { failures = {},
+    Glass = setmetatable({}, { __index = { preset = "pearl", STYLE = { gloss = 0.15, frost = 0.06, wash = 0.1,
+        innerShadow = 0.15 } } }),
+    Bar = { frame = { IsShown = function() return panelBar end } },
+    EdgeState = function() return panelTop and { top = panelTop } or nil end })
+rawset(_G, "GlassPanelDB", { glass = "clear", glassTint = "neutral", windowGlass = "reflective" })
+follow.GlassPanel = true
+answers.GlassPanel = { ready = true, preset = "pearl" }
+reports.GlassPanel = { built = "pearl", minor = 11 }
+states.GlassPanel = "following"
+pass, why = T.panelCheck("following", true)
+check(not pass and why:find("no EdgeState yet", 1, true), "no edge measured yet fails")
+panelTop = 24
+pass, why = T.panelCheck("following", true)
+check(not pass and why:find("never announced", 1, true), "an edge never announced fails")
+EventRegistry:TriggerEvent("GlassPanel.EdgeChanged", 24)
+pass, why = T.panelCheck("following", true)
+check(pass, "a matching session passes: " .. tostring(why))
+eq(SkinProbeDB.results["P.following"].saved.glass, "clear", "with its saved glass kept in the results")
+eq(SkinProbeDB.results["P.following"].edge, 24, "and its edge")
+reports.GlassPanel.built = nil
+pass, why = T.panelCheck("following", true)
+check(not pass and why:find("built nil", 1, true), "following without building Pearl fails")
+reports.GlassPanel.built = "pearl"
+reports.GlassPanel.minor = 10
+pass, why = T.panelCheck("following", true)
+check(not pass and why:find("Pearl needs 11", 1, true), "a library older than r11 fails")
+reports.GlassPanel.minor = 11
+pass, why = T.panelCheck("following", false)
+check(not pass and why:find("Follow switch true", 1, true), "a Follow switch that doesn't match fails")
+GlassPanel.failures.x = "boom"
+pass, why = T.panelCheck("following", true)
+check(not pass and why:find("failure", 1, true), "a failure of Glass Panel's own fails the session")
+GlassPanel.failures.x = nil
+-- The edge: the bar's height at least while it shows; the last announcement matches out of combat.
+panelTop = 0
+pass, why = T.panelCheck("following", true)
+check(not pass and why:find("under the bar", 1, true), "an edge under the bar while it shows fails")
+panelBar = false
+pass, why = T.panelCheck("following", true)
+check(not pass and why:find("last announced 24", 1, true), "an edge moved and not announced fails")
+WoW.combat = true
+pass = T.panelCheck("following", true)
+check(pass, "in combat the announcement waits: not a failure")
+WoW.combat = false
+EventRegistry:TriggerEvent("GlassPanel.EdgeChanged", 0)
+pass, why = T.panelCheck("following", true)
+check(pass, "the bar hidden, 0 announced, passes: " .. tostring(why))
+panelBar, panelTop = true, 60.3
+EventRegistry:TriggerEvent("GlassPanel.EdgeChanged", 60)
+pass, why = T.panelCheck("following", true)
+check(pass, "a value within the slack of the last announcement passes: " .. tostring(why))
+-- Its own look: nothing built for Glass UI, Pearl still, the saved glass compared.
+follow.GlassPanel = nil
+reports.GlassPanel.built = nil
+answers.GlassPanel = { ready = true, reason = "not-following" }
+states.GlassPanel = "own"
+pass, why = T.panelCheck("own", false)
+check(pass, "its own look passes: " .. tostring(why))
+rawset(_G, "GlassPanel", setmetatable({ Glass = { preset = "clean" } }, { __index = GlassPanel }))
+pass, why = T.panelCheck("own", false)
+check(not pass and why:find("wanted pearl", 1, true), "its own look on anything but Pearl fails")
+rawset(_G, "GlassPanel", getmetatable(GlassPanel).__index)
+pass, why = T.panelCheck("own again", false, "own")
+check(pass, "the same saved glass again passes: " .. tostring(why))
+GlassPanelDB.windowGlass = "smoked"
+pass, why = T.panelCheck("own again", false, "own")
+check(not pass and why:find("db.windowGlass", 1, true), "a saved glass key that changed fails")
+GlassPanelDB.windowGlass = "reflective"
+pass, why = T.panelCheck("own again", false, "never")
+check(not pass and why:find("no 'never' session", 1, true), "comparing with a session never read fails")
+-- The switch: saved once, set and read back, put back.
+follow.GlassPanel = true
+SkinProbeDB.panelWas = nil
+check((T.panelFollow(false)), "Follow off is set and read back")
+eq(follow.GlassPanel, nil, "off")
+eq(SkinProbeDB.panelWas.follow, true, "the switch as it was is saved")
+T.panelFollow(true)
+eq(SkinProbeDB.panelWas.follow, true, "a later change keeps the first: it is what to restore")
+T.panelFollow(false)
+check((T.panelRestore()), "restore reads its change back")
+eq(follow.GlassPanel, true, "the switch is back")
+eq(SkinProbeDB.panelWas, nil, "and the saved one cleared")
+local okNothing, whyNothing = T.panelRestore()
+check(okNothing and whyNothing == "nothing to restore", "a second restore finds nothing")
+
 -- #49: the meter's state names the style and reads each window's bars.
 local style, windows = T.meterState("test")
 eq(style, "Bordered", "the style by its enum name")
@@ -458,7 +548,7 @@ check(T.headersFaded(false), "back")
 
 -- The procedures are defined and every step's run, wait and check works here.
 for _, name in ipairs({ "wave1", "map", "gradient", "merchant", "card", "suite", "suitecombat", "meter",
-                        "meterskin", "meterbars" }) do
+                        "meterskin", "meterbars", "suitepanel" }) do
     local p = FP.procedures["SkinProbe/" .. name]
     check(p ~= nil, "procedure " .. name .. " is defined")
     if p then
@@ -479,7 +569,7 @@ for _, name in ipairs({ "wave1", "map", "gradient", "merchant", "card", "suite",
     end
 end
 T.panelsOff(); T.borderRestore(); T.gradientOff(); T.barsOff()
-T.suiteRestore()
+T.suiteRestore(); T.panelRestore()
 rawset(_G, "GlassUI", nil)
 eq(#WoW.chat, 0, "still nothing in chat after every procedure step")
 
