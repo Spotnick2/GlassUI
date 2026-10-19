@@ -167,6 +167,13 @@ blocked, and after combat everything glides once to the new footprint. The owner
     `[group:raid] hide; show`, which **M4 measures on 70450**. If the driver fails, the fixed
     party-pet set is disabled out of combat **in both modes** (HUD and side) rather than risk a wrong
     owner after a raid conversion.
+  - **Only with the row.** The holder is used only while the row set is applied, and that is decided
+    out of combat. The driver stays the only owner of its visibility: whenever the set changes, GRF
+    re-registers it with `"hide"` while the columns are applied, and with `"[group:raid] hide; show"`
+    while the row is applied.
+    - A plain `Hide()` would fight the driver, which would show the holder again.
+    - So a raid of 6+ that falls back to a party in combat keeps its columns until combat ends,
+      without party pets stacking on the column's cells (GRF session, 2026-10-18).
 - **The baseline (HUD mode):** one stable point, the reference's 928 frame limit, at 152/1080 of
   UIParent's height above its bottom edge (M3 measures it against the action bars).
   - **Raid:** the grid's bottom is on the baseline, so its top is at baseline + 5 rows.
@@ -363,3 +370,5 @@ re-lays the header, and re-setting an attribute to the same value does.
 - the set is chosen by member count, so a raid of 2-5 is a row;
 - the row set clears `groupBy`;
 - the party lift is in raw units.
+- the party-pet holder is used only with the row: its driver is re-registered as `"hide"` while the
+  columns are applied (GRF session, the column-to-party fallback in combat).
