@@ -559,9 +559,25 @@ check(not T.headersFaded(false), "not back")
 meterWin.Header:SetAlpha(1)
 check(T.headersFaded(false), "back")
 
+-- #54: which glass Glass UI built for its own skins.
+local savedGUI = rawget(_G, "GlassUI")
+rawset(_G, "GlassUI", { glassPreset = "pearl", Glass = { STYLE = { wash = 0.1, gloss = 0.15 } },
+                        Theme = { Name = function() return "clear" end } })
+local builtStep = FP.procedures["SkinProbe/pearl"].steps[1]
+local okBuilt, builtWhy = builtStep.check()
+check(okBuilt, "Pearl built passes: " .. tostring(builtWhy))
+eq(SkinProbeDB.results["PEARL.built"].wash, 0.1, "its wash is kept in the results")
+eq(SkinProbeDB.results["PEARL.built"].theme, "clear", "with the body theme")
+GlassUI.glassPreset, GlassUI.glassWhy = "clean", "library-too-old"
+okBuilt, builtWhy = builtStep.check()
+check(not okBuilt and builtWhy:find("library-too-old", 1, true), "the clean fallback fails, saying why")
+GlassUI.glassWhy = nil
+check(not builtStep.check(), "anything but Pearl fails, fallback or not")
+rawset(_G, "GlassUI", savedGUI)
+
 -- The procedures are defined and every step's run, wait and check works here.
 for _, name in ipairs({ "wave1", "map", "gradient", "merchant", "card", "suite", "suitecombat", "meter",
-                        "meterskin", "meterbars", "suitepanel" }) do
+                        "meterskin", "meterbars", "suitepanel", "pearl" }) do
     local p = FP.procedures["SkinProbe/" .. name]
     check(p ~= nil, "procedure " .. name .. " is defined")
     if p then

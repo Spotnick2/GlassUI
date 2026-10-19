@@ -55,8 +55,8 @@ audited exceptions and the reasons are in docs/PLAN.md, "The skin contract". In 
 | File | What |
 |---|---|
 | `Compat.lua` | `API.*`: failures, events, version, `IsSecret`/`Plain`, `CVarBool`, `ClassColor`, Settings registration |
-| `Glass.lua` | our LibGlass instance (`preset = "clean"`) |
-| `Theme.lua` | clear / smoked / class: tint, wash (`SetWash`) and the opaque backing, repainted live |
+| `Glass.lua` | our LibGlass instance, built at `ADDON_LOADED` on the suite theme (Pearl; clean below LibGlass r11, #54) |
+| `Theme.lua` | clear / smoked / class: tint, wash (`SetWash`, a factor of the material's) and the opaque backing, repainted live |
 | `Skin\Engine.lua` | `Register`, `Active`, owners/yields/handover, the switches, deferral and the combat wait, gamepad and suite stand-downs, `Status` |
 | `Skin\Kit.lua` | per-skin touches (`Fade` with read-back, `Blank`/`Tint`/`Shade` for `live = false`), `Panel`, widget kinds (`Shell`, `Inset`, `Tab`) |
 | `Skin\Merchant.lua` | the merchant window (live) |
@@ -69,7 +69,8 @@ Planned, per docs/PLAN.md: `Skin\<Window>.lua` for the rest, `Hub.lua`.
 `Tools\SkinProbe\` is the ForeverProbe module (never shipped): `/fp skin`, the measurements
 `/fp steps skin wave1|map|gradient|meter`, each skin's acceptance (`/fp steps skin merchant|meterskin`),
 the meter's glass bars preview (`/fp steps skin meterbars`), the suite's (`/fp steps skin suite`,
-#24) and Glass Panel's place in it (`/fp steps skin suitepanel`, #58);
+#24) and Glass Panel's place in it (`/fp steps skin suitepanel`, #58), Glass UI's own skins on Pearl
+(`/fp steps skin pearl`, #54);
 docs/FOREVER-PROBE.md says how to run it.
 
 ## References

@@ -47,7 +47,7 @@ end
 eq(GUI.Glass.MEDIA, "Interface\\AddOns\\GlassUI\\Libs\\LibGlass-1.0\\Media\\",
    "Glass.MEDIA is the embedded copy's")
 check(GUI.Glass ~= LibStub("LibGlass-1.0"), "Glass is our own instance, not the library")
-eq(GUI.Glass.STYLE.thinRim, true, "the clean preset (thin rims)")
+eq(GUI.Glass.STYLE.thinRim, true, "thin rims (Pearl, and the clean fallback)")
 
 -- The dev-build notice: a deployed dev copy on another build says so once at login.
 WoW.build, WoW.version = "70400", "dev"

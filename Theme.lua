@@ -20,20 +20,24 @@
 -- Only body regions are repainted (tint, wash, backing); rims are the
 -- material's. The wash is a gradient, which ignores SetAlpha on this client
 -- (SkinProbe W1.6, 70374): it is painted with LibGlass r7's SetWash.
+--
+-- A body's wash is a factor of the material's own (STYLE.wash), never an
+-- absolute: the suite's Pearl lowers it to 0.10 (#54), and an absolute would
+-- paint over that on every panel. On the clean material (0.18) the factors
+-- give the 0.18 and 0.14 the merchant was judged with.
 
 GlassUI = GlassUI or {}
 local GUI = GlassUI
 local API = GUI.API
-local Glass = GUI.Glass
 local Theme = {}
 GUI.Theme = Theme
 
 Theme.NAMES = { "clear", "smoked", "class" }
 Theme.LABELS = { clear = "Clear glass", smoked = "Smoked glass", class = "Class colour glass" }
 Theme.PRESETS = {
-    clear  = { tint = { 0.13, 0.16, 0.22, 0.24 }, wash = 0.18, backing = 0.35 },
-    smoked = { tint = { 0.05, 0.06, 0.08, 0.62 }, wash = 0.14, backing = 0.92 },
-    class  = { classShade = 0.6, wash = 0.18, backing = 0.35 },
+    clear  = { tint = { 0.13, 0.16, 0.22, 0.24 }, wash = 1, backing = 0.35 },
+    smoked = { tint = { 0.05, 0.06, 0.08, 0.62 }, wash = 0.14 / 0.18, backing = 0.92 },
+    class  = { classShade = 0.6, wash = 1, backing = 0.35 },
 }
 Theme.BACKING = { 0.04, 0.05, 0.07 }
 
@@ -62,12 +66,13 @@ end
 
 local function paint(s, name, tint)
     local p = Theme.PRESETS[name]
+    local Glass = GUI.Glass
     if tint then
         Glass.SetSurfaceTint(s.g, tint[1], tint[2], tint[3], tint[4])
     else
         Glass.SetSurfaceTint(s.g)
     end
-    Glass.SetWash(s.g, p.wash)
+    Glass.SetWash(s.g, Glass.STYLE.wash * p.wash)
     if s.backing then
         local c = Theme.BACKING
         s.backing:SetColorTexture(c[1], c[2], c[3], p.backing)

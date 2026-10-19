@@ -21,6 +21,8 @@ Codex `gpt-6-astra` review: consensus in round 2, 2026-10-19.
 
 ## Part 1: the suite theme for Glass UI's skins (#54)
 
+**Status (2026-10-19):** built (branch `suite-skins`). In game: `/fp steps skin pearl`.
+
 **Today:**
 - `Glass.lua` builds `New({ preset = "clean" })` while the file loads, before the saved variables
   are in.

@@ -20,6 +20,7 @@
 --   #24 the suite theme across GUF and GRF (S.1-S.8)          /fp steps skin suite
 --   #24 S.7 again, combat only                                 /fp steps skin suitecombat
 --   #58 Glass Panel in the suite: Pearl, its options, its edge /fp steps skin suitepanel
+--   #54 Glass UI's own skins on Pearl                         /fp steps skin pearl
 -- And Blizzard's own glass, the login ruleset card beside ours (#17): /fp steps skin card
 --
 -- Discovery for the next skin:
@@ -1602,6 +1603,46 @@ Probe:Command("suitepanel", function(args)
 end, "Glass Panel in the suite: its state and edge (restore: put back the Follow switch the procedure saved)")
 
 --------------------------------------------------------------------------------
+-- Glass UI's own skins on the suite theme (#54, docs/QUEST-TRACKER.md part 1):
+-- which glass was built, then the merchant and the meter on it for the owner
+-- to judge against the clean glass they had.
+--------------------------------------------------------------------------------
+
+local function ownGlass(label)
+    local G = glassUI()
+    local inst = G and G.Glass
+    local st = type(inst) == "table" and field(inst, "STYLE") or nil
+    local rec = { preset = G and plain(G.glassPreset), why = G and plain(G.glassWhy), minor = libMinor(),
+                  theme = G and G.Theme and G.Theme.Name() }
+    if type(st) == "table" then
+        for _, k in ipairs(STYLE_KEYS) do rec[k] = field(st, k) end
+    end
+    say("PEARL " .. label .. ": built " .. show(rec.preset) .. " why=" .. show(rec.why) .. " MINOR=" .. show(rec.minor)
+        .. " body=" .. show(rec.theme) .. " wash=" .. num(rec.wash) .. " gloss=" .. num(rec.gloss))
+    record("PEARL." .. label, rec)
+    return rec
+end
+
+Probe:Steps("pearl", {
+    title = "Glass UI: its own skins on Pearl (#54)",
+    { text = "Reads which glass Glass UI built for its skins: Pearl, the suite theme.",
+      auto = true, run = function() return ownGlass("built").preset end,
+      check = function()
+          local rec = ownGlass("built")
+          return rec.preset == "pearl" and rec.why == nil,
+              "built " .. show(rec.preset) .. (rec.why and (" (" .. rec.why .. ")") or "")
+      end },
+    { text = "Talk to a vendor and leave the merchant window open.", wait = function() return shown("MerchantFrame") end,
+      timeout = 600, screenshot = "pearl, merchant" },
+    { text = "Do the merchant's names and prices read well on Pearl, over the scenery behind it?", ask = true },
+    { text = "Close it, and have the damage meter on screen (fight something if its windows are empty). Press "
+          .. "Next for a screenshot.", screenshot = "pearl, meter" },
+    { text = "Does the meter look at least as good as it did on the clean glass? Put what differs in the Note.",
+      ask = true },
+    { text = "Type /reload to save the results.", reload = true },
+})
+
+--------------------------------------------------------------------------------
 -- Blizzard's own glass (#17): the ruleset screen's card at login
 -- (Blizzard_GlueXML\Mainline\SuperDistrict.xml:8) beside our panels
 --------------------------------------------------------------------------------
@@ -1926,4 +1967,4 @@ NS._test = { Probe = Probe, state = state, tree = tree, fade = fade, slashOwners
              meterState = meterState, meterStyle = meterStyle, meterBars = meterBars, treeOf = treeOf,
              barTree = barTree, sourceWindow = sourceWindow, barsOn = barsOn, barsOff = barsOff,
              barPanels = barPanels, headersFaded = headersFaded, panelState = panelState,
-             panelCheck = panelCheck, panelFollow = panelFollow, panelRestore = panelRestore }
+             panelCheck = panelCheck, panelFollow = panelFollow, panelRestore = panelRestore, ownGlass = ownGlass }
