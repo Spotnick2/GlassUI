@@ -73,6 +73,35 @@ The look is judged from the procedure's screenshots; `Logs\taint.log` is read af
 | S.7 | Combat: Follow switched in combat waits for the reload; a /reload in combat; no blocked action | **70450: passes** (`/fp steps skin suitecombat`, second account, runs #148-#150). GRF was switched off on Glass UI's page while fighting: it was saved, and GRF stayed on Pearl for that session. The page said a change was waiting and to type /reload, with no Reload UI button while fighting (owner: yes). After the reload, GRF built its own look (here Pearl, its default: nothing saved on that account) as "own" and not-following, and GUF stayed on Pearl. Nothing was blocked, and Glass UI recorded no failure. The only error was Blizzard's `PetActionBar.lua:123` taint-log noise (189 times). In both runs the session after a /reload typed in combat started out of combat, so the combat-deferred build after a reload was not exercised here. That path is each addon's own combat queue, unchanged by this work. The first run (#220-#221) is superseded: its switch never reached Glass UI. |
 | S.8 | The page's click-casting line and buttons; GRF's editor on Pearl | **70450: yes.** The page (after the owner's mockup) fits the window at this UI scale. Both cards read "Glass UI preset: Pearl". GUF's Settings opens its page, showing the look set in Glass UI. Configure bindings opens GRF's editor, which reads well on Pearl. The click-casting line matches GRF's setting. **The page's own Reload UI button reloaded with nothing blocked** (run #219 to #220): the secure macro path works inside Settings. Found: the click-casting line didn't redraw while the page was open when GRF reported again; fixed, the page now redraws on every report and switch. Owner: the orb was "not the pearl artwork" of the mockup, so it now shows the Iridescent Pearl's own icon (item 5500, #26), seen in the S.7 run. That run's screenshot also showed a card's long state line running under its checkbox: the line now stops short of the checkbox and reads "... - reload to apply". |
 
+### Glass Panel in the suite (#58)
+
+`/fp steps skin suitepanel`, with Glass UI and Glass Panel loaded (GlassPanel#96 and #97, on its
+main since 2026-10-19), and XP+ on the panel for the edge steps. It changes only Glass Panel's
+Follow switch. The switch is saved first in `SkinProbeDB.panelWas`, since it lives in `GlassUIDB`
+(account-wide). The Restore step puts it back, and so does `/fp skin suitepanel restore`.
+
+- **Each session** (its own look, following, its own look again), saved as
+  `SkinProbeDB.results["P.<label>"]`:
+  - the member reading above;
+  - the Follow switch;
+  - `GlassPanel.EdgeState().top`, and whether the bar shows;
+  - how many `GlassPanel.EdgeChanged` announcements this session heard, and the last one;
+  - Glass UI's and Glass Panel's failures.
+- **Pearl either way:** Pearl is Glass Panel's own default, so the instance is `pearl` in every
+  session. What following changes is the report (`built = "pearl"`) and the state. The saved
+  `glass`, `glassTint` and `windowGlass` must match the session read just before following.
+- **The edge:**
+  - at least the bar's 24 while it shows, and announced;
+  - out of combat, the last announcement within 0.5 of `EdgeState` (its tolerance);
+  - then XP+'s zoomed bar under the panel, where the edge must grow;
+  - then docked again, where it must come back.
+
+| # | Question | Result |
+|---|---|---|
+| P.1 | Its own look and following, after a /reload each: answered once Glass UI is ready, reported, Pearl, its saved glass untouched | **70450, LibGlass r11: passes on the data** (second account, runs #233-#237). In each session the instance was Pearl (gloss 0.15, frost 0.06, wash 0.10, innerShadow 0.15), and every answer was given once Glass UI was ready. There were no failures and MINOR was 11. In its own look, nothing was built for Glass UI and the state was `own`. Following, it built `pearl` and the state was `following`. The saved glass (`glass=smoked` set for the test, `glassTint=neutral`, `windowGlass=reflective`) was the same before following, while following, and after. All three session checks FAILed only on "no EdgeState yet": the read ran at once after the /reload, before Glass Panel's first measure. That was the probe, and now each read waits for the measure. |
+| P.2 | Glass UI's card ("Glass UI preset: Pearl"); its options greyed, with Open Glass UI; `/gpanel glass` refused while following; the bar on Pearl | **70450: yes, with two findings for Glass Panel.** The card reads "Glass UI preset: Pearl" with Use Glass UI appearance ticked. Glass and Windows are greyed, and Open Glass UI brings Glass UI's page back. `/gpanel glass smoked` says "set in Glass UI (following the suite's Pearl; yours stay saved)". Back in its own look, the bar was Smoked again (owner: yes). **Found:** (1) the Tint choice (Neutral / Class colour) stays live while following. The owner answered "yes, but not the tint". (2) The two notes under Windows overlap ("Share, Setup and the other dialogs..." and "Following Glass UI (Pearl): ..."). Both were sent to Glass Panel. Whether Tint should follow is the owner's call. |
+| P.3 | `EdgeState` and `EdgeChanged`: the bar alone, XP+ zoomed, docked again | **70450: passes.** XP+'s bar was already zoomed under the panel at login. The first measure was 109.0, announced once, the same value. Docking it brought the edge to 24.0 (the bar alone), announced: a second `EdgeChanged`. Zooming in while playing was not exercised, since the zoom step passed at once. |
+
 ## Blizzard's own glass (#17)
 
 The ruleset screen at login (`Blizzard_GlueXML\Mainline\SuperDistrict.xml:8`) draws its cards with

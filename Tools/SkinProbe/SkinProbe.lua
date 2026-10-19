@@ -19,6 +19,7 @@
 --   #4 merchant                                              /fp steps skin merchant
 --   #24 the suite theme across GUF and GRF (S.1-S.8)          /fp steps skin suite
 --   #24 S.7 again, combat only                                 /fp steps skin suitecombat
+--   #58 Glass Panel in the suite: Pearl, its options, its edge /fp steps skin suitepanel
 -- And Blizzard's own glass, the login ruleset card beside ours (#17): /fp steps skin card
 --
 -- Discovery for the next skin:
@@ -938,12 +939,14 @@ Probe:Steps("merchant", {
 
 local SUITE_ADDONS = { "GlassUI", "GlassUnitFrames", "GlassRaidFrames" }
 local MEMBERS = { "GlassUnitFrames", "GlassRaidFrames" }
-local NAMESPACE = { GlassUnitFrames = "GlassUF", GlassRaidFrames = "GlassRaidFrames" }
+-- Glass Panel is read the same way, by its own procedure (suitepanel, #58).
+local NAMESPACE = { GlassUnitFrames = "GlassUF", GlassRaidFrames = "GlassRaidFrames", GlassPanel = "GlassPanel" }
 -- The saved keys following must leave untouched (the plan's suspension list).
 local SAVED = {
     GlassUnitFrames = { db = "GlassUnitFramesDB",
                         keys = { "look", "glassBody", "fill", "rim", "track", "fade", "edge", "trackRamp" } },
     GlassRaidFrames = { db = "GlassRaidFramesDB", keys = { "look", "glassBody" } },
+    GlassPanel = { db = "GlassPanelDB", keys = { "glass", "glassTint", "windowGlass" } },
 }
 local STYLE_KEYS = { "gloss", "frost", "wash", "innerShadow" }
 
@@ -1375,6 +1378,230 @@ Probe:Command("suite", function(args)
 end, "the suite theme: each member's state (restore: put back the enable states the procedure saved)")
 
 --------------------------------------------------------------------------------
+-- Glass Panel in the suite (#58; GlassPanel#96 and #97, on its main): its own
+-- look and following, each after a /reload, read as the members above are;
+-- Glass UI's card and its options; its top edge, GlassPanel.EdgeState() and
+-- the GlassPanel.EdgeChanged announcements, with XP+'s bar docked and zoomed.
+-- Only its Follow switch changes. That lives in GlassUIDB (account-wide), so
+-- it is saved once in SkinProbeDB.panelWas and put back by the last step, or
+-- /fp skin suitepanel restore.
+--------------------------------------------------------------------------------
+
+local PANEL = "GlassPanel"
+local PANEL_BAR = 24           -- GlassPanel's Bar.HEIGHT, UIParent units (#97)
+local EDGE_SLACK = 0.5         -- its Edge.TOLERANCE: a smaller move isn't announced
+
+-- Every announcement this session: counted, the last value kept.
+local edgeHeard = { count = 0 }
+EventRegistry:RegisterCallback("GlassPanel.EdgeChanged", function(_, top)
+    edgeHeard.count = edgeHeard.count + 1
+    edgeHeard.last = plain(top)
+end, edgeHeard)
+
+local function panelEdge()
+    local f = field(rawget(_G, PANEL) or {}, "EdgeState")
+    if type(f) ~= "function" then return nil end
+    local ok, s = pcall(f)
+    local top = ok and type(s) == "table" and field(s, "top") or nil
+    return type(top) == "number" and top or nil
+end
+
+local function panelBarShown()
+    local bar = field(rawget(_G, PANEL) or {}, "Bar")
+    local f = type(bar) == "table" and field(bar, "frame") or nil
+    if type(f) ~= "table" then return false end
+    local ok, v = pcall(f.IsShown, f)
+    return ok and plain(v) == true
+end
+
+local function count(t)
+    local n = 0
+    if type(t) == "table" then for _ in pairs(t) do n = n + 1 end end
+    return n
+end
+
+-- Glass Panel as a member, its edge and both addons' failures: logged, and
+-- saved as P.<label>.
+local function panelState(label)
+    local m = memberState(PANEL)
+    local S, G = suite(), glassUI()
+    m.glassUI = loaded("GlassUI")
+    m.following = S ~= nil and S.Following ~= nil and S.Following(PANEL) == true
+    m.edge, m.barShown = panelEdge(), panelBarShown()
+    m.heard, m.lastHeard = edgeHeard.count, edgeHeard.last
+    m.combat = InCombatLockdown() == true
+    m.failures = count(G and G.failures) + count(field(rawget(_G, PANEL) or {}, "failures"))
+    say("P " .. label .. ": " .. memberLine(PANEL, m) .. " following=" .. tostring(m.following) .. " edge="
+        .. num(m.edge) .. " bar=" .. tostring(m.barShown) .. " heard=" .. m.heard .. " last=" .. num(m.lastHeard)
+        .. " failures=" .. m.failures)
+    record("P." .. label, m)
+    return m
+end
+
+-- The edge read and announced: a number, the bar's height at least while the
+-- bar shows, and (out of combat) the last announcement within the slack.
+local function edgeProblem(m)
+    if m.edge == nil then return "no EdgeState yet" end
+    if m.barShown and m.edge < PANEL_BAR - EDGE_SLACK then
+        return "EdgeState top " .. num(m.edge) .. ", under the bar's " .. PANEL_BAR
+    end
+    if m.heard == 0 then return "EdgeChanged never announced" end
+    if not m.combat and (m.lastHeard == nil or math.abs(m.lastHeard - m.edge) > EDGE_SLACK) then
+        return "last announced " .. num(m.lastHeard) .. ", EdgeState " .. num(m.edge)
+    end
+end
+
+-- One session: `follow` is whether it should be on Pearl through Glass UI;
+-- `same` the label of an earlier session whose saved glass keys this one must
+-- match. Pearl is its own default (#96), so the instance is Pearl either way.
+local function panelCheck(label, follow, same)
+    local m = panelState(label)
+    local bad = {}
+    local function fail(msg) bad[#bad + 1] = msg end
+    if not m.glassUI then fail("Glass UI isn't loaded") end
+    if not m.loaded then fail("Glass Panel isn't loaded") end
+    if m.failures > 0 then fail(m.failures .. " failure(s): /glassui failures, /gpanel failures") end
+    if m.following ~= follow then fail("Follow switch " .. tostring(m.following)) end
+    if m.answerReady ~= true then fail("asked before Glass UI was ready, or never asked") end
+    if not m.reported then fail("didn't report") end
+    local want = follow and "pearl" or nil
+    if m.built ~= want then fail("built " .. show(m.built) .. ", wanted " .. show(want)) end
+    if m.reason ~= nil then fail("reason " .. show(m.reason)) end
+    if m.state ~= (follow and "following" or "own") then fail("state " .. show(m.state)) end
+    if type(m.minor) ~= "number" or m.minor < 11 then fail("LibGlass MINOR " .. show(m.minor) .. ", Pearl needs 11") end
+    if m.preset ~= "pearl" then fail("instance preset " .. show(m.preset) .. ", wanted pearl") end
+    local edge = edgeProblem(m)
+    if edge then fail(edge) end
+    local earlier = same and type(SkinProbeDB) == "table" and SkinProbeDB.results and SkinProbeDB.results["P." .. same]
+    if type(earlier) == "table" then
+        for _, k in ipairs(SAVED[PANEL].keys) do
+            local now, was = m.saved and m.saved[k], earlier.saved and earlier.saved[k]
+            if now ~= was then fail("db." .. k .. " " .. show(now) .. " vs " .. show(was) .. " in " .. same) end
+        end
+    elseif same then
+        fail("no '" .. same .. "' session to compare with")
+    end
+    return #bad == 0, #bad == 0 and "as expected" or table.concat(bad, "; ")
+end
+
+local function panelSnapshot()
+    if type(SkinProbeDB) ~= "table" then return false, "no saved table" end
+    if type(SkinProbeDB.panelWas) == "table" then return true, "already saved" end
+    local S = suite()
+    if not (S and S.Following) then return false, "Glass UI isn't loaded" end
+    SkinProbeDB.panelWas = { follow = S.Following(PANEL) == true }
+    say("P saved: follow=" .. tostring(SkinProbeDB.panelWas.follow))
+    return true, "saved"
+end
+
+local function panelFollow(on)
+    local saved, why = panelSnapshot()
+    if not saved then return false, why end
+    local S = suite()
+    if not (S and S.SetFollow) then return false, "Glass UI isn't loaded: can't set Follow" end
+    S.SetFollow(PANEL, on)
+    local now = S.Following(PANEL) == true
+    say("P follow set " .. tostring(on) .. ", reads " .. tostring(now))
+    return now == on, "follow=" .. tostring(now)
+end
+
+local function panelRestore()
+    local was = type(SkinProbeDB) == "table" and SkinProbeDB.panelWas
+    if type(was) ~= "table" then return true, "nothing to restore" end
+    local S = suite()
+    if not (S and S.SetFollow) then return false, "Glass UI isn't loaded: kept for when it is" end
+    S.SetFollow(PANEL, was.follow == true)
+    SkinProbeDB.panelWas = nil
+    say("P restored follow=" .. tostring(was.follow == true))
+    return S.Following(PANEL) == (was.follow == true), "follow=" .. tostring(was.follow == true)
+end
+
+-- A wait on the edge, then the session read: was the move announced?
+local function edgeWait(test, why)
+    return function()
+        local e = panelEdge()
+        return e ~= nil and test(e), why .. " (EdgeState top " .. num(e) .. ")"
+    end
+end
+local function edgeCheck(label)
+    return function()
+        local m = panelState(label)
+        local problem = edgeProblem(m)
+        return problem == nil, problem or ("top " .. num(m.edge) .. ", announced " .. num(m.lastHeard))
+    end
+end
+
+-- A session is read once Glass Panel has measured: right after a /reload the
+-- step comes first (70450: all three reads found no EdgeState yet).
+local function firstMeasure() return panelEdge() ~= nil, "waiting for Glass Panel's first measure" end
+
+Probe:Steps("suitepanel", {
+    title = "Glass UI: Glass Panel in the suite (Pearl, its options, its top edge)",
+    { text = "Needs Glass UI and Glass Panel loaded (XP+ on the panel for the edge steps). Turns on script errors, "
+          .. "saves Glass Panel's Follow switch, and reads it as it is now. Only that switch changes; the last "
+          .. "step puts it back.",
+      auto = true, run = function()
+          return setCVar("scriptErrors", "1"), panelSnapshot(), panelState("start").edge
+      end,
+      check = function()
+          local S = suite()
+          if not (S and S.API == 1) then return false, "Glass UI (with its suite API) must be loaded: /reload and start again" end
+          return loaded(PANEL), loaded(PANEL) and "both loaded" or "Glass Panel must be loaded: enable it, /reload, start again"
+      end },
+    { text = "Its own look first.", button = "Own look", run = function() return panelFollow(false) end },
+    { text = "Reload.", reload = true },
+    { text = "Reads its own look: Pearl (its default), nothing built for Glass UI, its edge announced.",
+      wait = firstMeasure, timeout = 30,
+      check = function() return panelCheck("own", false) end },
+    { text = "Optional, so following shows: type /gpanel glass smoked (the bar's own glass), and type what you "
+          .. "changed in the Note box to put it back at the end. Skip if you'd rather not." },
+    { text = "Now following Glass UI. Reads its saved glass first, to compare with.", button = "Follow",
+      run = function()
+          panelState("before following")
+          return panelFollow(true)
+      end },
+    { text = "Reload.", reload = true },
+    { text = "Reads it following: built Pearl for Glass UI, its saved glass untouched.",
+      wait = firstMeasure, timeout = 30,
+      check = function() return panelCheck("following", true, "before following") end },
+    { text = "Open Glass UI's page (/glassui options). Does Glass Panel's card read 'Glass UI preset: Pearl' with "
+          .. "'Use Glass UI appearance' ticked?", ask = true, screenshot = "suite panel, Glass UI page" },
+    { text = "Press Glass Panel's Settings button on that card. Are its bar glass and window glass controls greyed "
+          .. "out, with an Open Glass UI button? Press that: does Glass UI's page come back?", ask = true,
+      screenshot = "suite panel, its options" },
+    { text = "Type /gpanel glass smoked. Does it say the glass is set in Glass UI, and the bar stays as it is?",
+      ask = true },
+    { text = "Close the windows. Does the bar read as Pearl, like the unit frames when they follow? Press Next for "
+          .. "a screenshot.", screenshot = "suite panel, the bar on Pearl" },
+    -- #97: the bar alone, XP+'s zoomed bar under it, then docked again.
+    { text = "Reads the edge with the bar alone (at least the bar's height, announced).",
+      auto = true, run = function() return panelEdge() end, check = edgeCheck("edge, docked") },
+    { text = "Double-click XP+'s icon on the panel to zoom its bar. If the bar isn't at the top of the screen, "
+          .. "Shift-drag it up under the panel. Skip if XP+ isn't on your panel.",
+      wait = edgeWait(function(e) return e > PANEL_BAR + EDGE_SLACK end, "waiting for the edge to grow"),
+      timeout = 300, screenshot = "suite panel, the XP bar zoomed",
+      check = edgeCheck("edge, zoomed") },
+    { text = "Double-click XP+'s icon on the zoomed bar to dock it again.",
+      wait = edgeWait(function(e) return e <= PANEL_BAR + EDGE_SLACK end, "waiting for the edge to come back"),
+      timeout = 300, check = edgeCheck("edge, docked again") },
+    -- Its own look again: the saved glass back as it was.
+    { text = "Back to its own look.", button = "Own look again", run = function() return panelFollow(false) end },
+    { text = "Reload.", reload = true },
+    { text = "Reads its own look again, and compares its saved glass with the session before following.",
+      wait = firstMeasure, timeout = 30,
+      check = function() return panelCheck("own again", false, "before following") end },
+    { text = "Does the bar look as it did before following (Smoked, if you set it)?", ask = true,
+      screenshot = "suite panel, own look again" },
+    { text = "Puts back Glass Panel's Follow switch.", button = "Restore", run = panelRestore },
+    { text = "Put back what you changed at the start (your Note says what; /gpanel glass clear is the default), "
+          .. "then type /reload to save the results.", reload = true },
+})
+
+Probe:Command("suitepanel", function(args)
+    if args == "restore" then panelRestore() else panelState("now") end
+end, "Glass Panel in the suite: its state and edge (restore: put back the Follow switch the procedure saved)")
+
+--------------------------------------------------------------------------------
 -- Blizzard's own glass (#17): the ruleset screen's card at login
 -- (Blizzard_GlueXML\Mainline\SuperDistrict.xml:8) beside our panels
 --------------------------------------------------------------------------------
@@ -1698,4 +1925,5 @@ NS._test = { Probe = Probe, state = state, tree = tree, fade = fade, slashOwners
              suiteState = suiteState, suiteCheck = suiteCheck, suiteSnapshot = suiteSnapshot,
              meterState = meterState, meterStyle = meterStyle, meterBars = meterBars, treeOf = treeOf,
              barTree = barTree, sourceWindow = sourceWindow, barsOn = barsOn, barsOff = barsOff,
-             barPanels = barPanels, headersFaded = headersFaded }
+             barPanels = barPanels, headersFaded = headersFaded, panelState = panelState,
+             panelCheck = panelCheck, panelFollow = panelFollow, panelRestore = panelRestore }
