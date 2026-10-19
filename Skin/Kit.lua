@@ -12,12 +12,19 @@
 --           latest one (Glass Quest Tracker's fix: Edit Mode's Opacity sets
 --           an alpha whenever the slider moves). The only touch a live skin
 --           restores.
---   Blank, Tint, Shade   for art a fade can't hold (an animation's
---           setToFinalAlpha, a gradient). Not restorable live: a skin that
---           uses any of them is live = false, and the kit refuses otherwise.
 --           Fade(region, onAlpha) also hands that latest alpha to onAlpha, at
 --           once and whenever Blizzard sets it (the damage meter's glass
 --           follows its Background setting).
+--   Blank   for art a fade can't hold (an animation's setToFinalAlpha, a
+--           gradient): SetTexture(nil), the atlas or file read back first and
+--           given back by Restore (Glass Quest Tracker's Unblank, #55). Safe
+--           only where Blizzard sets that image once (the tracker's module
+--           headers: in XML); a new target needs the same check.
+--   Tint    desaturated and recoloured; Restore gives back the desaturation
+--           and the vertex colour, never the image, so an atlas Blizzard
+--           swapped meanwhile stays (the tracker's minimize buttons).
+--   Shade   a shadow under a font string. Not restorable live: a skin using
+--           it is live = false, and the kit refuses otherwise.
 --   Panel   our glass: an unnamed, mouse-off frame of our own under the window.
 --
 -- Widget kinds, each written when the first skin needed it: Shell
@@ -106,29 +113,52 @@ local function unfade(region, s)
 end
 
 --------------------------------------------------------------------------------
--- Blank, Tint, Shade (live = false skins only)
+-- Blank and Tint (restorable), Shade (live = false skins only)
 --------------------------------------------------------------------------------
+
+local blanked = setmetatable({}, { __mode = "k" })  -- texture -> { kit =, atlas = | file = }
+local tinted = setmetatable({}, { __mode = "k" })   -- texture -> { kit =, desat =, r, g, b, a }
 
 local function notLive(kit, what)
     if kit.live then error(what .. " can't be undone live: set live = false on skin " .. kit.key, 3) end
 end
 
--- Drop a texture's image (SetTexture(nil)); its file or atlas comes back at
--- the next /reload with the skin off.
+-- Drop a texture's image. What it showed is read first, once, and kept until
+-- Restore: a blank again only drops the image again.
 function K:Blank(tex)
-    notLive(self, "Blank")
     if type(tex) ~= "table" or type(tex.SetTexture) ~= "function" then return false end
+    if not blanked[tex] then
+        local atlas = API.Plain(tex:GetAtlas())
+        blanked[tex] = { kit = self, atlas = atlas, file = not atlas and API.Plain(tex:GetTexture()) or nil }
+    end
     tex:SetTexture(nil)
     return true
 end
 
--- Desaturate and recolour a texture.
+local function unblank(tex, s)
+    blanked[tex] = nil
+    if s.atlas then pcall(tex.SetAtlas, tex, s.atlas)
+    elseif s.file ~= nil then pcall(tex.SetTexture, tex, s.file) end
+end
+
+-- Desaturate and recolour a texture. Its desaturation and colour are read
+-- first, once, and kept until Restore.
 function K:Tint(tex, r, g, b, a)
-    notLive(self, "Tint")
     if type(tex) ~= "table" or type(tex.SetVertexColor) ~= "function" then return false end
+    if not tinted[tex] then
+        local s = { kit = self, desat = API.Plain(tex:IsDesaturated()) == true }
+        s.r, s.g, s.b, s.a = tex:GetVertexColor()
+        tinted[tex] = s
+    end
     tex:SetDesaturated(true)
     tex:SetVertexColor(r, g, b, a or 1)
     return true
+end
+
+local function untint(tex, s)
+    tinted[tex] = nil
+    pcall(tex.SetDesaturated, tex, s.desat)
+    pcall(tex.SetVertexColor, tex, API.Plain(s.r) or 1, API.Plain(s.g) or 1, API.Plain(s.b) or 1, API.Plain(s.a) or 1)
 end
 
 -- A shadow under a font string's text, where glass makes it hard to read.
@@ -182,11 +212,17 @@ function K:HidePanels()
     for _, p in ipairs(self.panels) do p:Hide() end
 end
 
--- A live skin turned off: every fade back to Blizzard's latest alpha, our
--- panels hidden.
+-- A live skin turned off: every fade back to Blizzard's latest alpha, every
+-- blank and tint given back, our panels hidden.
 function K:Restore()
     for region, s in pairs(faded) do
         if s.kit == self then unfade(region, s) end
+    end
+    for tex, s in pairs(blanked) do
+        if s.kit == self then unblank(tex, s) end
+    end
+    for tex, s in pairs(tinted) do
+        if s.kit == self then untint(tex, s) end
     end
     self:HidePanels()
 end

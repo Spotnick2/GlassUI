@@ -12,7 +12,8 @@
 -- - The widget METATABLE is a real method table, like the client's.
 -- - BLIZZARD objects (WoW.makeMerchant): every method addon code calls on
 --   one is recorded (WoW.blizzCalls), with SetTexture/SetAtlas's argument
---   (WoW.textureArgs); a Lua method is recorded apart (WoW.luaCalls); a field
+--   (WoW.textureArgs) and what addon code read from that texture with
+--   GetTexture/GetAtlas (WoW.readBack); a Lua method is recorded apart (WoW.luaCalls); a field
 --   written is trapped (WoW.fieldChanges). Glass Quest Tracker's contract
 --   machinery. WoW.asBlizzard runs code as Blizzard's own.
 
@@ -202,6 +203,8 @@ end
 function Methods.GetHighlightTexture(w) return w._highlight end
 function Methods.SetNormalTexture(w, file) w._normal = newWidget("Texture", w); w._normal._file = file end
 function Methods.GetNormalTexture(w) return w._normal end
+function Methods.GetPushedTexture(w) return w._pushed end
+function Methods.GetDisabledTexture(w) return w._disabled end
 function Methods.SetCheckedTexture(w, file) w._checkedTex = newWidget("Texture", w) end
 function Methods.GetCheckedTexture(w) return w._checkedTex end
 
@@ -280,10 +283,25 @@ function Methods.CreateFontString(w, _, layer) return region(w, "FontString", la
 local function textureArg(t, method, v)
     if rawget(t, "_blizz") and not WoW.inBlizzard then table.insert(WoW.textureArgs, { t, method, v }) end
 end
+-- What addon code read from a Blizzard texture, per getter: the provenance
+-- test_contract asks of a non-nil texture argument.
+local function readBy(t, getter, v)
+    if v == nil or not rawget(t, "_blizz") or WoW.inBlizzard then return v end
+    WoW.reads[t] = WoW.reads[t] or {}
+    WoW.reads[t][getter] = WoW.reads[t][getter] or {}
+    WoW.reads[t][getter][v] = true
+    return v
+end
+-- Did addon code read v from t with this setter's getter?
+function WoW.readBack(t, setter, v)
+    local getter = setter == "SetAtlas" and "GetAtlas" or "GetTexture"
+    local r = WoW.reads[t]
+    return r ~= nil and r[getter] ~= nil and r[getter][v] == true
+end
 function Methods.SetTexture(t, file) textureArg(t, "SetTexture", file); t._file = file; t._atlas = nil; return true end
-function Methods.GetTexture(t) return t._file end
+function Methods.GetTexture(t) return readBy(t, "GetTexture", t._file) end
 function Methods.SetAtlas(t, atlas) textureArg(t, "SetAtlas", atlas); t._atlas = atlas; t._file = nil; return true end
-function Methods.GetAtlas(t) return t._atlas end
+function Methods.GetAtlas(t) return readBy(t, "GetAtlas", t._atlas) end
 function Methods.SetTexCoord(t, ...) t._coords = { ... } end
 function Methods.GetTexCoord(t)
     local c = t._coords or { 0, 0, 0, 1, 1, 0, 1, 1 }
@@ -352,6 +370,7 @@ function WoW.reset()
     WoW.onLoaded = {}
     WoW.style = 0
     WoW.blizz, WoW.blizzCalls, WoW.luaCalls, WoW.fieldWrites, WoW.textureArgs = {}, {}, {}, {}, {}
+    WoW.reads = setmetatable({}, { __mode = "k" })
     WoW.hookedKeys = setmetatable({}, { __mode = "k" })
     WoW.snap = setmetatable({}, { __mode = "k" })
     WoW.inBlizzard = false
@@ -720,6 +739,162 @@ end
 function WoW.meterBreakdown(i, on)
     WoW.asBlizzard(function() _G["DamageMeterSessionWindow" .. i].MinimizeContainer.SourceWindow:SetShown(on) end)
 end
+
+-- Blizzard's objective tracker (Mainline, as Forever runs it), Glass Quest
+-- Tracker's stub (measured on 70374): the container with its NineSlice and
+-- Header, the eleven module instances with their headers, each module's pooled
+-- extras, and EditModeManagerFrame.
+local function blizzTexture(parent, atlas)
+    local t = blizz("Texture", parent)
+    t._atlas = atlas
+    return t
+end
+
+local function blizzButton(parent, normal, pushed, highlight, disabled)
+    local b = blizz("Button", parent)
+    b._normal = blizzTexture(b, normal)
+    b._pushed = blizzTexture(b, pushed)
+    b._highlight = blizzTexture(b, highlight)
+    if disabled then b._disabled = blizzTexture(b, disabled) end
+    return b
+end
+
+local function makeHeader(parent, bgAtlas, collapse, expand, withAnim)
+    local h = blizz("Frame", parent)
+    h.Background = blizzTexture(h, bgAtlas)
+    h.Text = blizz("FontString", h)
+    h.MinimizeButton = blizzButton(h, collapse, collapse .. "-pressed", "ui-questtrackerbutton-red-highlight")
+    if withAnim then
+        h.Shine = blizzTexture(h, "UI-QuestTracker-OBJFX-Shine")
+        h.Glow = blizzTexture(h, "UI-QuestTracker-OBJFX-BarGlow")
+        h.Shine._alpha, h.Glow._alpha = 0, 0
+    end
+    luaMethod(h, "SetCollapsed", function(self, collapsed)
+        local n, p = self.MinimizeButton:GetNormalTexture(), self.MinimizeButton:GetPushedTexture()
+        n:SetAtlas(collapsed and expand or collapse)
+        p:SetAtlas((collapsed and expand or collapse) .. "-pressed")
+    end)
+    return h
+end
+
+WoW.MODULE_NAMES = { "ScenarioObjectiveTracker", "UIWidgetObjectiveTracker", "CampaignQuestObjectiveTracker",
+    "QuestObjectiveTracker", "AdventureObjectiveTracker", "AchievementObjectiveTracker",
+    "MonthlyActivitiesObjectiveTracker", "InitiativeTasksObjectiveTracker", "ProfessionsRecipeTracker",
+    "BonusObjectiveTracker", "WorldQuestObjectiveTracker" }
+
+-- A module in the container's list. Named, as the client's are; one made
+-- with addModule alone has no global: a module a later build added.
+function WoW.addModule(name, global)
+    local t = ObjectiveTrackerFrame
+    local m
+    WoW.asBlizzard(function()
+        m = blizz("Frame", t, global and name or nil)
+        rawset(m, "_name", name)
+        m._shown = false
+        m.Header = makeHeader(m, "UI-QuestTracker-Secondary-Objective-Header",
+            "ui-questtrackerbutton-secondary-collapse", "ui-questtrackerbutton-secondary-expand", true)
+        luaMethod(m, "EndLayout", function() end)
+        table.insert(t.modules, m)
+        WoW.snapshot()
+    end)
+    return m
+end
+
+function WoW.makeTracker()
+    WoW.asBlizzard(function()
+        local t = blizz("Frame", UIParent, "ObjectiveTrackerFrame")
+        t._width, t._height = 260, 800
+        t.NineSlice = blizz("Frame", t)
+        t.NineSlice._level = t._level
+        t.NineSlice._alpha = 0
+        t.Header = makeHeader(t, "ui-questtracker-primary-objective-header", "ui-questtrackerbutton-collapse-all",
+            "ui-questtrackerbutton-expand-all")
+        t.Header.FilterButton = blizzButton(t.Header, "ui-questtrackerbutton-filter",
+            "ui-questtrackerbutton-filter-pressed", "ui-questtrackerbutton-red-highlight")
+        t.isCollapsed = false
+        t.modules = {}
+        for _, name in ipairs(WoW.MODULE_NAMES) do WoW.addModule(name, true) end
+        local em = blizz("Frame", UIParent, "EditModeManagerFrame")
+        em._shown = false
+        WoW.snapshot()
+    end)
+    return ObjectiveTrackerFrame
+end
+
+-- One layout of module `name` (a global name, or the module), the way the
+-- container drives it: the pools this layout uses (spec.items item buttons,
+-- spec.groups find-group buttons, spec.bars progress bars), shown when it has
+-- anything, then EndLayout. The NineSlice's BOTTOM follows the last shown
+-- module (Container.lua:117).
+function WoW.layout(name, spec)
+    spec = spec or {}
+    local t, m = ObjectiveTrackerFrame, type(name) == "table" and name or rawget(_G, name)
+    WoW.asBlizzard(function()
+        local edge = {}
+        for i = 1, spec.items or 0 do
+            local key = "item" .. i
+            edge[key] = (m.usedRightEdgeFrames or {})[key] or blizzButton(m, "UI-QuestTrackerButton-QuestItem-Frame",
+                "UI-QuestTrackerButton-QuestItem-Frame", nil)
+        end
+        for i = 1, spec.groups or 0 do
+            local key = "group" .. i
+            edge[key] = (m.usedRightEdgeFrames or {})[key] or blizzButton(m, nil, nil, nil, "disabled")
+        end
+        WoW.bset(m, "usedRightEdgeFrames", edge)
+        local bars = {}
+        for i = 1, spec.bars or 0 do
+            local key = "bar" .. i
+            local p = (m.usedProgressBars or {})[key]
+            if not p then
+                p = blizz("Frame", m)
+                p.Bar = blizz("StatusBar", p)
+                p.Bar.BorderLeft = blizz("Texture", p.Bar)
+                p.Bar.BorderRight = blizz("Texture", p.Bar)
+                p.Bar.BorderMid = blizz("Texture", p.Bar)
+            end
+            bars[key] = p
+        end
+        WoW.bset(m, "usedProgressBars", bars)
+        local shown = spec.shown
+        if shown == nil then shown = (spec.blocks or 0) > 0 or (spec.items or 0) > 0 or (spec.bars or 0) > 0 end
+        m._shown = shown and not t.isCollapsed
+        if m._shown then
+            t.NineSlice:ClearAllPoints()
+            t.NineSlice:SetPoint("TOPLEFT", t, "TOPLEFT", -30, 0)
+            t.NineSlice:SetPoint("TOPRIGHT", t, "TOPRIGHT", 5, 0)
+            t.NineSlice:SetPoint("BOTTOM", m, "BOTTOM", 0, -10)
+        end
+        WoW.snapshot()
+        m:EndLayout()
+    end)
+end
+
+-- The player clicks the container's collapse button: ContainerMixin:SetCollapsed
+-- sets isCollapsed and the Header's button, with the modules still shown;
+-- the layouts that follow hide them (drive those with WoW.layout).
+function WoW.collapse(collapsed)
+    local t = ObjectiveTrackerFrame
+    WoW.asBlizzard(function()
+        WoW.bset(t, "isCollapsed", collapsed)
+        t.Header:SetCollapsed(collapsed)
+    end)
+end
+
+-- The player collapses one module's section (Blizzard_ObjectiveTrackerModule.lua:479).
+function WoW.collapseModule(name, collapsed)
+    WoW.asBlizzard(function()
+        local m = rawget(_G, name)
+        WoW.bset(m, "isCollapsed", collapsed)
+        m.Header:SetCollapsed(collapsed)
+    end)
+end
+
+-- Edit Mode opens or closes (EditModeManagerFrame's OnShow / OnHide).
+function WoW.editMode(on)
+    WoW.asBlizzard(function() EditModeManagerFrame:SetShown(on) end)
+end
+function WoW.showTracker() WoW.asBlizzard(function() ObjectiveTrackerFrame:Show() end) end
+function WoW.hideTracker() WoW.asBlizzard(function() ObjectiveTrackerFrame:Hide() end) end
 
 function WoW.showMerchant() WoW.asBlizzard(function() MerchantFrame:Show() end) end
 function WoW.hideMerchant() WoW.asBlizzard(function() MerchantFrame:Hide() end) end

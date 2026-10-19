@@ -125,6 +125,23 @@ the scene showing through sharp, a gold-metal rim. One fixed size, not sliced.
 | G.1 | Does the atlas exist in game, and at what size? | `/fp steps skin card` step 1 | **70425: yes, 260x530.** |
 | G.2 | Beside Glass UI's clear and smoked glass at the same size, over bright and dark scenery: how does it read? | the same procedure, screenshots | **70425: it isn't glass.** In game the card is opaque: dark brown parchment, gold rim (owner: "it does not look like glass", no theme wanted). The see-through look at login is the cards' **disabled** state while the servers are down: `SetAlpha(0.55)` and desaturated (`SuperDistrict.lua:123-127`). Beside it, our clear and smoked glass read almost alike, a dark grey slab with the scene faint behind: the opaque backing (0.85 / 0.92) dominates the tint. Settled on the merchant (#4): clear's backing is now 0.35. |
 
+## The quest tracker (#55, docs/QUEST-TRACKER.md part 2)
+
+`/fp steps skin tracker`, with Glass Quest Tracker **disabled**: while it's loaded, it owns the
+tracker and Glass UI steps aside. Each check reads the skin's switch, where our panel sits
+(`populated` or `header`), the NineSlice's alpha, whether the Quests section's header bar is
+blanked, the collapses and Glass UI's failures. These are saved as `SkinProbeDB.results["QT.<label>"]`,
+and `/fp skin tracker` prints the same. The collapse and Edit Mode steps wait for the owner's hands,
+so Next alone can't pass them.
+
+| # | Question | Result |
+|---|---|---|
+| QT.1 | Each theme on the tracker (clear, smoked, class): readable, the right edge on the glass | not run yet |
+| QT.2 | The tracker and a section collapsed and expanded; Edit Mode move, Height, Text Size: the panel follows; no gold bar or shine flashes | not run yet |
+| QT.3 | Over bright ground: every line readable at clear's 0.35 backing (else a denser per-skin backing) | not run yet |
+| QT.4 | Off live: exactly Blizzard's; collapsed while off, on again: placed on the header | not run yet |
+| QT.5 | After a /reload; in combat; a quest routine under `taintLog 1`: nothing blocked, no error | not run yet |
+
 ## The damage meter (#49)
 
 Discovery before the skin's plan. `Blizzard_DamageMeter` (`origin/forever` @70450) loads on Forever.

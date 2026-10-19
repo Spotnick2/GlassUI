@@ -70,6 +70,9 @@ Codex `gpt-6-astra` review: consensus in round 2, 2026-10-19.
 
 ## Part 2: the quest tracker (#55), `Skin\QuestTracker.lua`, key `tracker`
 
+**Status (2026-10-19):** built (branch `quest-tracker`). In game: `/fp steps skin tracker`, with Glass
+Quest Tracker disabled (while it's loaded, it owns the tracker).
+
 What comes over from GQT is measured: taint passes A and B clean on 70374, the look's checks on 70450
 (GQT docs/FOREVER-PROBE.md). The facts it relies on (GQT CLAUDE.md, "Tracker facts"):
 - Forever runs the Mainline `Blizzard_ObjectiveTracker`.
