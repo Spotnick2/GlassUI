@@ -163,14 +163,18 @@ blocked, and after combat everything glides once to the new footprint. The owner
   `partypet1..4`).
   - Each has `RegisterUnitWatch` and sits under its owner's cell, by the party order the client
     guarantees.
-  - They live in one container shown only out of a raid by a secure visibility driver
-    `[group:raid] hide; show`, which **M4 measures on 70450**. If the driver fails, the fixed
-    party-pet set is disabled out of combat **in both modes** (HUD and side) rather than risk a wrong
-    owner after a raid conversion.
+  - They live in one container shown only out of a raid by a secure visibility driver.
+    - **M4 (70450, run #238): `[group:raid] hide; show` does not update in combat.** A party
+      converted to a raid mid-fight kept the holder shown until combat ended, so the pet showed
+      twice: under `raid1`, and in the raid-pet column. Out of combat the condition is right.
+    - The candidate is `[@raid1,exists] hide; show`. `[exists]` updates in combat (GRF probe item
+      11), but this condition is **measured before it is used**, in the same probe.
+    - If no condition holds in combat, the fixed party-pet set is disabled out of combat **in both
+      modes** (HUD and side) rather than risk a pet shown twice or under the wrong owner.
   - **Only with the row.** The holder is used only while the row set is applied, and that is decided
     out of combat. The driver stays the only owner of its visibility: whenever the set changes, GRF
-    re-registers it with `"hide"` while the columns are applied, and with `"[group:raid] hide; show"`
-    while the row is applied.
+    re-registers it with `"hide"` while the columns are applied, and with the measured party
+    condition while the row is applied.
     - A plain `Hide()` would fight the driver, which would show the holder again.
     - So a raid of 6+ that falls back to a party in combat keeps its columns until combat ends,
       without party pets stacking on the column's cells (GRF session, 2026-10-18).
@@ -183,6 +187,13 @@ blocked, and after combat everything glides once to the new footprint. The owner
   - **Centring:** grid and pets are centred together on the whole union (grid, the 6 gap and every
     pet column), recomputed out of combat. The header's anchor is its bottom centre, shifted left by
     half the pet block's width.
+  - **One pet column is reserved in a raid** whenever pets are shown, even with no pets yet. The
+    union and the announced rectangle always include it.
+    - A raid's first pet, or a conversion, can appear in combat, when nothing of ours may move. It
+      then lands in space GUF already keeps clear, instead of over GUF's target frame and its debuffs.
+      The owner saw that overlap in the M1 run, where nothing was announced.
+    - Further columns (more than 10 pets) can still appear in combat. They are reconciled after
+      combat.
   - **Side mode:** the same shapes, with the baseline at the role's side position.
 - **The mover** moves the baseline, saved per role as `profiles[role].layoutPos`. While the layout
   is on, Reset clears `layoutPos`. `pos`, `petPos` and the legacy geometry stay set aside,
@@ -348,8 +359,19 @@ settings.
 - **M2:** the raid-pet header anchored to the grid: does it follow the grid's own resize in combat?
 - **M3:** UIParent's size at the owner's scale, and GlassActionBars' top. Does the baseline clear the
   bars? This is only measured; nothing anchors to GlassActionBars.
-- **M4:** the five party-pet buttons, and the `[group:raid] hide; show` visibility driver on 70450.
-  Do they show under their owners, and hide in a raid, in combat too?
+  - **Run #238:** UIParent is 2133x1200 (scale 0.64). The main bars' top is at 132.6 and the
+    baseline at 168.9: 36 clear.
+  - **But the pet action bar** (x 641-896, top 253.1) sits 84 above the baseline. A centred grid
+    wider than about 340 (5+ columns, a raid of 21 or more) reaches over a hunter's or warlock's pet
+    bar.
+  - In the HUD that is solved by GlassActionBars#30 (§5b): the pet bar follows the pet frame, which
+    sits left of the grid. If #30 has to take its fallback (the bar stays where Edit Mode puts it),
+    the overlap stays at 21+, and is documented.
+  - The owner judged the party and small-raid cases clear.
+- **M4:** the five party-pet buttons, and their visibility driver on 70450. Do they show under their
+  owners, and hide in a raid, in combat too?
+  - **Run #238:** `[group:raid]` does not update in combat (above).
+  - `[@raid1,exists] hide; show` is measured next.
 - **M5:** the visual glide on a cell and on GUF's frames, out of combat. Does it read like the zoom
   (owner), with nothing blocked?
 
@@ -428,3 +450,17 @@ the glide.
 pet frame, horizontally (section 5b). GUF announces its placement for that.
 The stance bar follows the player frame too, so the announcement carries both `dx` (player) and
 `petDx` (pet).
+
+**After the M1-M4 run (GRF, 70450, run #238):**
+- **M1 holds:**
+  - the row is 198x60 at baseline + 68, and the columns 96x126 on the baseline, centred;
+  - re-setting the same value re-lays the header every time;
+  - without the anchor clear, the swap breaks (2x2 instead of 2x1);
+  - the in-combat reflow keeps the grid's bottom fixed, with nothing blocked;
+  - a stale column anchor on child 1 (the row's LEFT+BOTTOM pair) didn't stretch the cell. The
+    columns' TOP+LEFT pair is still unmeasured.
+- **M2 holds.**
+- **M3** clears the main bars, with the pet-bar catch above.
+- **M4:**
+  - `[group:raid]` does not update in combat, so `[@raid1,exists]` is measured next;
+  - one pet column is reserved in a raid.
