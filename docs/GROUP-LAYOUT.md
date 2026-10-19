@@ -178,9 +178,8 @@ blocked, and after combat everything glides once to the new footprint. The owner
   UIParent's height above its bottom edge (M3 measures it against the action bars).
   - **Raid:** the grid's bottom is on the baseline, so its top is at baseline + 5 rows.
   - **The row:** the grid's bottom is at baseline + 68 (top at 800), with a party's pet row under
-    it. 68 is raw UIParent units, like the cells, so the row's top lines up with GUF's player and
-    target, whose centre is at baseline + 98 (section 4). Only the baseline itself is a fraction of
-    UIParent's height.
+    it. 68 is raw UIParent units, like the cells, for the reference's row top at 800. Only the
+    baseline itself is a fraction of UIParent's height.
   - **Centring:** grid and pets are centred together on the whole union (grid, the 6 gap and every
     pet column), recomputed out of combat. The header's anchor is its bottom centre, shifted left by
     half the pet block's width.
@@ -235,8 +234,13 @@ blocked, and after combat everything glides once to the new footprint. The owner
   - **the player:** its right edge 24 left of the union's left edge, using its real width (the
     365-unit button with the portrait tile);
   - **the target:** its left edge 24 right of the union's right edge;
-  - **their height:** the centre is `base + 98` (tops at 800), from the baseline, not the union, so
-    party pets never move them.
+  - **their height: unchanged.** The link sets **only the horizontal position**. Each frame keeps
+    the height of its own position (its saved one, or GUF's default), as the reference says: "their
+    vertical anchors stay fixed".
+    - The owner's M5 glide run (70450) showed why: placed at `base + 98`, the player frame dropped
+      onto the chat box's tabs. At its own height it stays clear of the chat, even at 40, where it
+      moves far left.
+    - Party pets and the grid's size therefore never move it vertically either.
   - **the player and target cast bars**, detached, 360x22, centred on the union: centres at
     `top + 73` and `top + 41`.
     - The override goes into `Castbar.EffectiveGeometry`, covering detached state, size, scale and
@@ -270,8 +274,9 @@ blocked, and after combat everything glides once to the new footprint. The owner
   scales):
   - GRF: each cell's `b.body` (power strip, rims and indicators included) and each pet body;
   - GUF: each moving unit's body, portrait tile and cast hosts, and the decorations anchored
-    straight to the button (the right-side raid mark, `Frames.lua:450`; the portraitless timer,
-    `Timer.lua:122`). Those are re-anchored to the moving visual, keeping their final geometry.
+    straight to the button: the right-side raid mark (`Frames.lua:450`), the portraitless timer
+    (`Timer.lua:122`) and pet happiness (`placeHappiness`, found by the GUF session). Each is
+    re-anchored to the visual on its edge (tile or body), keeping its final geometry.
     The followers that ride along are included.
 - **Then** it applies the secure layout and reads the new positions on the next frame.
 - **Then** it offsets each visual by old minus new, relative to its secure parent, and eases the
@@ -339,6 +344,8 @@ settings.
 - Anchoring to GlassActionBars.
 - A shared Glide in LibGlass.
 - Per-frame vertical offsets beyond moving the whole HUD with GRF's mover.
+- Moving GUF's frames vertically. If a later layout ever brings frames lower, it first needs an
+  agreement with GlassChat, whose chat box sits below them (owner, 2026-10-18).
 - Tier layouts for DPS roles beyond the continuous shape at the side.
 
 **Review:** Codex (`gpt-6-astra`, high effort), **consensus in round 3** (2026-10-18). Round 1: It found two BLOCKERs, both
@@ -372,3 +379,7 @@ re-lays the header, and re-setting an attribute to the same value does.
 - the party lift is in raw units.
 - the party-pet holder is used only with the row: its driver is re-registered as `"hide"` while the
   columns are applied (GRF session, the column-to-party fallback in combat).
+
+**Amended after the owner's M5 glide run (2026-10-18):** GUF's link sets only the horizontal
+position, and the height stays the frames' own. Pet happiness joins the decorations re-anchored for
+the glide.
