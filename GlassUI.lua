@@ -93,6 +93,8 @@ local function suite(a, b, c)
     end
     say("suite theme: " .. Suite.THEMES[Suite.ThemeName()].label)
     for _, m in ipairs(Suite.ROSTER) do say(Suite.Line(m)) end
+    local layout = Suite.LayoutLine()
+    if layout then say(layout) end
     local cc = Suite.ClickCast()
     if cc then
         say("click-casting: Glass Raid Frames; its bindings on other addons' frames: "

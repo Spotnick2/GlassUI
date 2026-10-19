@@ -119,6 +119,13 @@ local function copyReport(addon, state)
     if type(cc) == "table" then
         r.clickCast = { open = plain(cc.open, "function"), others = plain(cc.others, "boolean") }
     end
+    -- The group layout's state (docs/GROUP-LAYOUT.md §6): GRF's { on, mode },
+    -- GUF's { linked, placing }. What they applied, shown, never acted on.
+    local l = state.layout
+    if type(l) == "table" then
+        r.layout = { on = plain(l.on, "boolean"), mode = plain(l.mode, "string"),
+                     linked = plain(l.linked, "boolean"), placing = plain(l.placing, "boolean") }
+    end
     reports[addon] = r
 end
 
@@ -203,6 +210,29 @@ function Suite.Line(m)
     end
     if pending then text = text .. " - /reload to apply" end
     return m.title .. ": " .. text, state, pending
+end
+
+-- The group layout, as GRF and GUF reported it (docs/GROUP-LAYOUT.md), or
+-- nil when GRF reported none.
+Suite.LAYOUT_MODE_TEXT = {
+    hud = "centred above the action bars",
+    side = "at the side",
+    legacy = "off (the classic grid)",
+}
+function Suite.LayoutLine()
+    local g = reports.GlassRaidFrames
+    local l = g and g.layout
+    if not l then return nil end
+    local text = "Group layout: "
+        .. (Suite.LAYOUT_MODE_TEXT[(l.on == false) and "legacy" or l.mode] or "unknown")
+    local u = reports.GlassUnitFrames
+    local ul = u and u.layout
+    if ul then
+        if ul.placing then text = text .. "; player and target beside it"
+        elseif ul.linked then text = text .. "; player and target in their own places"
+        else text = text .. "; player and target not linked" end
+    end
+    return text
 end
 
 -- Glass Raid Frames' click-casting, as it reported it: nil when it didn't.
