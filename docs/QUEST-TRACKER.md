@@ -236,7 +236,11 @@ its look is the real risk, which is what discovery measures.
   same question as Blizzard's panels clearing GAB's bars (#47).
 - The clean shape is the suite's announce-and-follow pattern: GlassPanel announces the top edge it
   occupies (its bar, plus the XP bar when maximized), and the arrow keeps clear of it. That needs:
-  - a GlassPanel change, in its own repo and session;
+  - a GlassPanel change, in its own repo and session: GlassPanel#97. It provides
+    `GlassPanel.EdgeState()` returning `{ top }` (UIParent units down from the screen's top: its
+    bar, plus the zoomed XP bar while that sits in the top band, MARGIN 40), and
+    `"GlassPanel.EdgeChanged"` with `(top)`, fired out of combat. Its own RestedXP plugin goes
+    (GlassPanel#98, the owner: "not satisfying"), so `RXPG_ARROW` is the only arrow;
   - the owner's audited exception for moving this one third-party frame, decided with #47;
   - RestedXP's own saved position respected: only its default position is offset, never a place the
     player dragged it to.
