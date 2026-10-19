@@ -25,13 +25,15 @@ file doesn't cover something, check how those handle it before you invent a new 
 - `/glassui` and `/gui` (`/glass` is GlassUnitFrames'). v0.1.0 = wave 1 + hub v1; 1.0.0 at Forever's
   launch. Private repo for now; CurseForge project 1745875.
 
-**Status (scope correction, owner, 2026-10-18):** Glass UI is first the **suite orchestrator**,
-[docs/SUITE.md](docs/SUITE.md). Suite theme v1 is done (#24, closed, 70450): the Pearl theme with
-GlassUnitFrames and GlassRaidFrames following it, LibGlass r11's `pearl` preset, and the settings
-page. Next: the group layout (#28, [docs/GROUP-LAYOUT.md](docs/GROUP-LAYOUT.md), Codex consensus
-round 3), mostly GRF and GUF work, with a status line here. The skins are parked: the engine, kit,
-theme and merchant (#3, #4) are on `main`, the popups (#5) on branch `popups`, all to be revisited.
-Measured on 1.60.1.70450.
+**Status (2026-10-19):** Glass UI is first the **suite orchestrator**. Done on 70450:
+- **suite theme v1** (#24): Pearl, with GlassUnitFrames and GlassRaidFrames following it,
+  [docs/SUITE.md](docs/SUITE.md);
+- **the group layout** (#28): GRF's continuous grid sized by the group, GUF's player and target
+  beside it, GAB's pet and stance bars following, all with the zoom's glide.
+  [docs/GROUP-LAYOUT.md](docs/GROUP-LAYOUT.md) records what was measured and what wasn't.
+
+The settings page shows both. The skins are parked: the engine, kit, theme and merchant (#3, #4) are
+on `main`, the popups (#5) on branch `popups`, all to be revisited. Measured on 1.60.1.70450.
 
 ## The skin contract (non-negotiable)
 

@@ -547,3 +547,21 @@ GRF FOREVER-PROBE item 17):**
 - **Combat** ends the preview at once. Nothing was blocked, and nothing was announced in combat.
 - **Still to check in game, with GRF's real grid:** both load orders, GRF absent, and a /reload in
   combat (GUF's side).
+
+## Done (2026-10-19)
+
+All built and merged:
+- **GRF:** #72, #73 and #74, for GRF#69;
+- **GUF:** #133, #135 and #137, for GUF#132, #134 and #136;
+- **GAB:** #35 and #40, for GAB#30 and #37;
+- **Glass UI:** #37, the status line.
+
+**In game on 70450:** M1-M5, GRF's grid run (solo, a party, a raid of 2, combat, layout off and
+on), the glide and the 10/20/40 preview with GUF following, and GAB's pet and stance bars.
+
+**Not checked in game,** closed by the owner as the sole user, who reports any finding:
+- GUF against GRF's real grid with the addons loading in either order;
+- GUF with GRF absent;
+- a /reload in combat with GUF linked.
+
+These rest on the same `LayoutState()` sync the preview exercised, and on GUF's offline tests.
