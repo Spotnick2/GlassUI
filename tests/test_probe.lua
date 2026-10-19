@@ -50,6 +50,29 @@ local maximize = CreateFrame("Button", nil, map.BorderFrame.MaximizeMinimizeFram
 local maximizeArt = maximize:CreateTexture(nil, "ARTWORK")
 window("QuestMapFrame", map)
 
+-- #49, the damage meter as on Forever (Blizzard_DamageMeter, origin/forever
+-- @70450): DamageMeter with its Edit Mode getters, one session window with a
+-- header, a background (its alpha Blizzard's), a breakdown and one bar.
+Enum.DamageMeterStyle = { Default = 0, Bordered = 1, Thin = 2 }
+local meterStyle = 1
+local meter = CreateFrame("Frame", "DamageMeter", UIParent)
+function meter:GetStyle() return meterStyle end
+function meter:GetBackgroundAlpha() return 0.5 end
+local meterWin = CreateFrame("Frame", "DamageMeterSessionWindow1", meter)
+meterWin.Header = meterWin:CreateTexture(nil, "BACKGROUND")
+meterWin.Header:SetAtlas("ui-damagemeters-header-bar")
+meterWin.MinimizeContainer = CreateFrame("Frame", nil, meterWin)
+meterWin.MinimizeContainer.Background = meterWin.MinimizeContainer:CreateTexture(nil, "BACKGROUND")
+meterWin.MinimizeContainer.Background:SetAlpha(0.5)
+meterWin.MinimizeContainer.SourceWindow = CreateFrame("Frame", nil, meterWin.MinimizeContainer)
+local meterBar = CreateFrame("Button", nil, meterWin.MinimizeContainer)
+meterBar.StatusBar = CreateFrame("StatusBar", nil, meterBar)
+meterBar.StatusBar.Background = meterBar.StatusBar:CreateTexture(nil, "BACKGROUND")
+meterBar.StatusBar.Background:SetAtlas("UI-HUD-CoolDownManager-Bar-BG")
+local meterBars = { meterBar }
+function meterWin:ForEachEntryFrame(fn) for _, b in ipairs(meterBars) do fn(b) end end
+function meterWin:GetSourceWindow() return self.MinimizeContainer.SourceWindow end
+
 local FP = loadForeverProbe()
 local function skin(s) SlashCmdList.FOREVERPROBE("skin " .. s) end
 local ns = {}
@@ -354,8 +377,49 @@ eq(follow.GlassUnitFrames, true, "the Follow switch is back")
 eq(SkinProbeDB.suiteWas[WoW.GUID], nil, "and this character's snapshot is cleared")
 T.suiteSnapshot()
 
--- The procedures are defined and every step's run and check works here.
-for _, name in ipairs({ "wave1", "map", "gradient", "merchant", "card", "suite", "suitecombat" }) do
+-- #49: the meter's state names the style and reads each window's bars.
+local style, windows = T.meterState("test")
+eq(style, "Bordered", "the style by its enum name")
+eq(windows, 1, "one session window")
+local line = SkinProbeDB.results["DM.test"]
+check(line:find("window1 shown=true", 1, true), "the window is read")
+check(line:find("header=ui-damagemeters-header-bar", 1, true), "with its header atlas")
+check(line:find("bars=1 bar1", 1, true), "and its first bar")
+check(line:find("bg=UI-HUD-CoolDownManager-Bar-BG", 1, true), "whose background atlas the style sets")
+meterStyle = 7
+eq(T.meterStyle(), "7", "an unknown style reads as its number")
+meterStyle = 2
+eq(T.meterStyle(), "Thin", "Thin")
+meterBars = {}
+check(T.meterState("no bars") ~= nil, "a window without bars is read too")
+check(not SkinProbeDB.results["DM.no bars"]:find("bar1", 1, true), "and has no bar line")
+meterBars = { meterBar }
+check(T.tree("meter", 8) > 0, "the meter's tree walks")
+-- PR #50 review: a solo fight may fill only window 2, and only a pinned
+-- breakdown survives the Measure click.
+local win2 = CreateFrame("Frame", "DamageMeterSessionWindow2", meter)
+win2.MinimizeContainer = CreateFrame("Frame", nil, win2)
+local src2 = CreateFrame("Frame", nil, win2.MinimizeContainer)
+win2.MinimizeContainer.SourceWindow = src2
+src2.CloseButton = CreateFrame("Button", nil, src2)
+local bar2 = CreateFrame("Button", nil, win2.MinimizeContainer)
+function win2:ForEachEntryFrame(fn) fn(bar2) end
+meterBars = {}
+local walked = T.barTree("solo")
+check(walked > 0, "the bar tree walks the window that has a bar")
+meterWin.MinimizeContainer.SourceWindow:Hide()
+src2.CloseButton:Hide()
+eq(T.sourceWindow(true), nil, "a breakdown that isn't pinned doesn't count")
+eq(T.sourceWindow(), src2, "though it is the open one")
+src2.CloseButton:Show()
+eq(T.sourceWindow(true), src2, "pinned, in window 2")
+src2:Hide()
+eq(T.sourceWindow(), nil, "no breakdown open")
+meterBars = { meterBar }
+win2:Hide()
+
+-- The procedures are defined and every step's run, wait and check works here.
+for _, name in ipairs({ "wave1", "map", "gradient", "merchant", "card", "suite", "suitecombat", "meter" }) do
     local p = FP.procedures["SkinProbe/" .. name]
     check(p ~= nil, "procedure " .. name .. " is defined")
     if p then
@@ -363,6 +427,10 @@ for _, name in ipairs({ "wave1", "map", "gradient", "merchant", "card", "suite",
             if st.run then
                 local ok, err = pcall(st.run)
                 check(ok, name .. " step " .. i .. " runs: " .. tostring(err))
+            end
+            if st.wait then
+                local ok, err = pcall(st.wait)
+                check(ok, name .. " step " .. i .. " wait runs: " .. tostring(err))
             end
             if st.check then
                 local ok, err = pcall(st.check)

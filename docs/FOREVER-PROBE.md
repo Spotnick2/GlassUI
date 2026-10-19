@@ -84,6 +84,46 @@ the scene showing through sharp, a gold-metal rim. One fixed size, not sliced.
 | G.1 | Does the atlas exist in game, and at what size? | `/fp steps skin card` step 1 | **70425: yes, 260x530.** |
 | G.2 | Beside Glass UI's clear and smoked glass at the same size, over bright and dark scenery: how does it read? | the same procedure, screenshots | **70425: it isn't glass.** In game the card is opaque: dark brown parchment, gold rim (owner: "it does not look like glass", no theme wanted). The see-through look at login is the cards' **disabled** state while the servers are down: `SetAlpha(0.55)` and desaturated (`SuperDistrict.lua:123-127`). Beside it, our clear and smoked glass read almost alike, a dark grey slab with the scene faint behind: the opaque backing (0.85 / 0.92) dominates the tint. Settled on the merchant (#4): clear's backing is now 0.35. |
 
+## The damage meter (#49)
+
+Discovery before the skin's plan. `Blizzard_DamageMeter` (`origin/forever` @70450) loads on Forever.
+`DamageMeter` is an Edit Mode system that holds up to three session windows,
+`DamageMeterSessionWindow1`-`3`, created on first use. Each window has:
+- a `Header` atlas;
+- `MinimizeContainer.Background`, whose alpha Blizzard sets from the Edit Mode Background setting;
+- pooled bars in a `ScrollBox`;
+- a `SourceWindow`, the breakdown of one bar.
+
+Style (Default, Bordered, Thin) swaps each bar's background atlas and its edge.
+`/fp steps skin meter` measures all of this; `/fp skin meter` reads the state at any time.
+The results are in `SkinProbeDB.results["DM.<label>"]` and the log.
+
+| # | Question | How | Result |
+|---|---|---|---|
+| DM.1 | The full tree in the current style: frames, regions, atlases, protection, and which textures ignore `SetAlpha`. | steps 1-4 | **70450:** see "What it's made of" below. Nothing in the tree is protected or forbidden. Of 112 textures, none ignores `SetAlpha`. |
+| DM.2 | What Bordered and Thin change on a bar, and how each style looks. | steps 5-9, screenshots | **70450:** only the bar's background. **Bordered** swaps it to `UI-HUD-CoolDownManager-Bar-BG` and hides `BackgroundEdge`. **Thin** keeps Default's atlases and edge, and only re-anchors the bar. The header, the window background and the buttons don't change with the style. At 16 px bars, the three styles look almost the same on screen. |
+| DM.3 | The breakdown window's tree. | steps 10-11 (Shift-click) | **70450:** `SourceWindow` is strata HIGH, with one `Background` (`common-dropdown-bg`) and its bars from the same entry template, 358 wide. Its `CloseButton` (`RedButton-Exit`) stays hidden. A plain click's breakdown closes at the next mouse press outside it (`GLOBAL_MOUSE_DOWN`), so pressing Measure closed it: the first run read its tree hidden but filled (two bars), with no screenshot. Shift-click pins it, and shows its close button (`InitEntry`, `SetSticky`). The procedure now waits for a pinned breakdown; **the pinned capture is still to run.** |
+| DM.4 | A second window: its name, and that it repeats window 1's tree. | steps 12-13 | **70450:** `DamageMeterSessionWindow2`, the same template and the same tree, one level higher. The owner already ran two windows (Healing Done, Damage Done), so no third was made. |
+| DM.5 | The minimized window. | step 14, screenshot | **70450:** the window stays shown with `IsMinimized()` true. Only the header and its buttons remain; the minimize button turns to "+". `IsMinimized()` reads nil until a window has been minimized once. |
+| DM.6 | In combat, are a bar's value and colour secret? | step 15 (optional) | **70450:** `StatusBar:GetValue()` is **secret in and out of combat**. `GetStatusBarColor()` reads plain white, because the class colour is a vertex colour on the fill texture (`DamageMeterEntry.lua:360`). The skin never needs to read the values; it restyles only textures. |
+
+**What it's made of** (70450, the owner's setup: style Default, Background 50%, window alpha 1, bars 16 px, windows 266x165 and 266x176):
+- `DamageMeter`: the Edit Mode system. It holds `Selection` (Edit Mode's highlight, shared by every system: not ours) and `EditModeResizeButton`, plus the windows as its children.
+- Each `DamageMeterSessionWindowN`:
+  - `Header`, BACKGROUND, `ui-damagemeters-header-bar`. `SessionTimer` and the dropdowns' text are fonts, left alone.
+  - Buttons:
+    - `MinimizeButton`: `UI-QuestTrackerButton-Collapse-All`, `-Pressed`, `-Red-Highlight`; the expand atlases when minimized.
+    - `SettingsDropdown.Icon`: `common-dropdown-a-button-settings-shadowless`.
+    - `SessionDropdown.Background`: `common-dropdown-c-button`, plus a hover `Arrow`; its `ResetButton` uses `auctionhouse-ui-filter-redx`.
+    - `DamageMeterTypeDropdown.Arrow`: `common-dropdown-a-button-shadowless`.
+  - `MinimizeContainer.Background`, BACKGROUND, `damagemeters-background`. Its alpha is the Edit Mode Background setting (0.50 here), set by Blizzard's `UpdateBackground` on every change.
+  - `MinimizeContainer.ResizeButton`: `damagemeters-scalehandle`, `-hover`, `-pressed`. Alpha 0 until hovered (Blizzard's animation).
+  - Bars (pooled, `ScrollBox.ScrollTarget.#n`) and the hidden `LocalPlayerEntry`, one template:
+    - an `Icon` frame (spec icon file);
+    - a `StatusBar` with its fill (unnamed, `UI-HUD-CoolDownManager-Bar`), `Background` (`ui-damagemeters-bar-shadowbg`) and `BackgroundEdge` (`ui-damagemeters-bar-shadowedge`);
+    - the `Name` and `Value` fonts.
+  - `ScrollBox.Shadows.Upper/Lower`: no art. `ScrollBar` is a MinimalScrollBar.
+
 ## Facts already known (don't re-measure)
 
 - **Glass UI is measured on 1.60.1.70450** (`MEASURED_ON_BUILD`). 70450 and 70425 are the same UI:
