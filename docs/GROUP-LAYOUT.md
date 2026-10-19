@@ -397,7 +397,7 @@ GlassActionBars#37, a compatible addition to GAB's `PUBLIC_API_VERSION` 1 (its d
     - and when it starts within 40 units of the screen edge **or of the bars already counted on that
       side**. A stack counts as a whole: the inner edge only grows, and the first gap over 40 ends it.
       On the owner's caster, MultiBar6 (x 46-87, beside MultiBar5 at 2-42) would otherwise not count,
-      and the grid would still cover it (GAB#37, PR #39).
+      and the grid would still cover it (GAB#37, PR GAB#40).
 - **GRF follows:** the side default's left edge becomes `left + 30`. The HUD is unaffected, and a
   dragged `layoutPos` stays as saved.
 - **Without GAB:** `left = 0`, as today.
