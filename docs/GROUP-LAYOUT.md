@@ -289,7 +289,7 @@ blocked, and after combat everything glides once to the new footprint. The owner
 - **No shared code yet:** each addon keeps its own small `Glide`. A shared copy becomes a LibGlass
   issue once both have proved it.
 
-### 5b. GlassActionBars: the pet bar follows the pet frame (owner, 2026-10-18)
+### 5b. GlassActionBars: the pet and stance bars follow GUF's frames (owner, 2026-10-18)
 
 The owner's hunter glide run (70450) showed Blizzard's pet action bar staying behind while GUF's
 player and pet frames slid. GlassActionBars (GAB) skins that bar, and it sat under the frames. The
@@ -298,18 +298,25 @@ the addon that owns its frame follows. There is no dependency either way.
 
 - **GUF announces its placement.**
   - The event `GlassUnitFrames.LayoutChanged` carries (`linked`, player l, b, w, h, pet l, b, w, h,
-    pet `dx`). `dx` is how far the link moved the pet frame from its own position, horizontally.
+    `dx`, `petDx`):
+    - `dx` is how far the link moved the **player** frame from its own position, horizontally;
+    - `petDx` is how far it moved the **pet** frame: the same as `dx` when the pet rides the player,
+      0 when the pet frame is saved absolute.
   - `GlassUF.LayoutState()` returns the same as a fresh table, or nil before GUF has built.
-  - It is announced out of combat after every link place or unplace (`dx` 0 when unlinked), never
+  - It is announced out of combat after every link place or unplace (both 0 when unlinked), never
     in combat, and once after combat if anything changed.
   - These are trailing-argument rules, like GRF's.
-- **GAB follows**, horizontally only.
-  - While GUF is linked and `dx ~= 0`, GAB moves the pet action bar by `dx` from its Edit Mode
-    position. Its own height is kept.
+- **GAB follows**, horizontally only:
+  - the **pet action bar** by `petDx`, from its Edit Mode position;
+  - the **stance bar** by `dx`, from its Edit Mode position (the owner, 2026-10-18: it sits by the
+    player frame too).
+  Each keeps its own height. A bar whose move is 0, or with GUF absent, goes back to its Edit Mode
+  position.
   - It acts out of combat, with Edit Mode closed.
   - It never writes the Edit Mode layout: the layout position is the set-aside position. With
-    `dx == 0`, or GUF absent, the bar goes back to it.
-- **How GAB moves it is GAB's design.** The pet bar is a Blizzard Edit Mode system, and the porting
+    a move of 0, or GUF absent, each bar goes back to it.
+- **How GAB moves them is GAB's design.** Both bars are Blizzard Edit Mode systems (`PetActionBar`,
+  `StanceBar`), and the porting
   guide calls moving one "a taint minefield" (`PORTING-TBC-TO-FOREVER.md:446-485`). Its measured way
   is the saved base methods, `ClearAllPointsBase`/`SetPointBase`, re-pinned from a deferred
   `ApplySystemAnchor` hook, out of combat, with Edit Mode closed.
@@ -419,3 +426,5 @@ the glide.
 
 **Extended after the owner's hunter glide run (2026-10-18):** GAB's pet action bar follows GUF's
 pet frame, horizontally (section 5b). GUF announces its placement for that.
+The stance bar follows the player frame too, so the announcement carries both `dx` (player) and
+`petDx` (pet).
