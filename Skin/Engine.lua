@@ -179,7 +179,7 @@ function Engine.Start()
     if Engine.started then return end
     Engine.started = true
     -- Hooks on Blizzard windows break the gamepad's secure navigation
-    -- (Ellesmere, EllesmereUIBlizzardSkin.lua:93-104): none this session.
+    -- (Ellesmere v9.6.1, EllesmereUIBlizzardSkin.lua:92-105): none this session.
     if gamepad() then Engine.standDown = "gamepad" return end
     for _, name in ipairs(Engine.SUITES) do
         if API.IsAddOnLoaded(name) then

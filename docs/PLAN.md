@@ -70,7 +70,7 @@ lines in each TOC are the authoritative list of Forever-only variants (FV below)
 | World map | `WorldMapFrame`, `QuestMapFrame` | Blizzard_WorldMap, always | `WorldMapFrameTemplate`, `frameBuffer="true"` | Leatrix Maps rebuilds the border (below); the frame buffer may flatten a child panel (probe) |
 | Bags | `ContainerFrame1..N`, `ContainerFrameCombinedBags` | always | `PortraitFrameFlatTemplate` | opened in combat, so first pass may wait; item buttons are on the use path: alpha only |
 | Tooltips | `GameTooltip`, `ShoppingTooltip1/2`, `ItemRefTooltip`, `EmbeddedItemTooltip` | always | `SharedTooltipTemplate` + `.NineSlice` | hook `SharedTooltip_SetBackdropStyle`, deferred a frame (it fires from secure code); `GameTooltip.StatusBar` is secure and secret: fade only; skip embedded tooltips; no `OnTooltipSetItem` (porting guide :488, :862) |
-| Menus | `Menu.GetManager()` menus | Blizzard_Menu (FV `Camelot\Menu.xml`) | `MenuStyle1Mixin`/`MenuStyle2Mixin` | **never `AddMenuAcquiredCallback`** (Ellesmere: a tainted Whisper entry broke chat, `EllesmereUIBlizzardSkin.lua:1387-1418`); hook `OpenMenu`/`OpenContextMenu` and the style mixins' `Generate` (flyouts), defer; no `CreateTexture` while a menu is open (`:1428`), and menus are reused (`:1359`): **a glass panel on a menu is unproven**, so the fallback is tint-only |
+| Menus | `Menu.GetManager()` menus | Blizzard_Menu (FV `Camelot\Menu.xml`) | `MenuStyle1Mixin`/`MenuStyle2Mixin` | **never `AddMenuAcquiredCallback`** (Ellesmere v9.6.1: a tainted Whisper entry broke chat, `EUI_BlizzardSkin_TooltipSkin.lua:944-967`); hook `OpenMenu`/`OpenContextMenu` and the style mixins' `Generate` (flyouts), defer; no `CreateTexture` while a menu is open (`:989-992`), and menus are reused (`:921-926`): **a glass panel on a menu is unproven**, so the fallback is tint-only |
 | Escape menu | `GameMenuFrame` | Blizzard_GameMenu, always | `MainMenuFrameTemplate`, buttons from a pool | the Esc path is taint-sensitive (porting guide :1536): taint pass |
 | Auction house | `AuctionHouseFrame` | Blizzard_AuctionHouseUI, LoD | `PortraitFrameTemplate` | Auctionator adds tabs |
 | Professions | `ProfessionsFrame`, `ProfessionsBookFrame` | Blizzard_Professions, Blizzard_ProfessionsBook, LoD | FV `ProfessionsFrameBase` (side tab, right tabs 1-7); `ButtonFrameTemplate` | recipe rows are protected (Ellesmere WindowPacks:1895); Skilled hooks it |
@@ -89,7 +89,7 @@ lines in each TOC are the authoritative list of Forever-only variants (FV below)
 - UI widget trees hold secret values: leave them alone.
 - **Gamepad interface style:** hooks on Blizzard windows taint its secure navigation and can loop
   until the client freezes. Ellesmere stands every skin down for the session in that mode
-  (`EllesmereUIBlizzardSkin.lua:93-104`). Glass UI does the same.
+  (`EllesmereUIBlizzardSkin.lua:92-105`, v9.6.1). Glass UI does the same.
 - Chat bubbles are forbidden in instances (not in scope anyway).
 
 **Who already owns what** (Glass UI skips these whenever the owner is loaded):
