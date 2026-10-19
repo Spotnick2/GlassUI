@@ -155,7 +155,9 @@ a failed build.
 ### Each addon (GUF and GRF, one issue each)
 
 1. **TOC:** `## OptionalDeps: GlassUI`, so Glass UI loads first when it's enabled.
-2. **At its own `ADDON_LOADED`, before it builds its LibGlass instance:**
+2. **After Glass UI is ready and before it builds any glass,** at its own `ADDON_LOADED` (with
+   `OptionalDeps: GlassUI`) or at `PLAYER_LOGIN` (every `ADDON_LOADED` has run by then, so no TOC
+   line is needed: GlassActionBars, docs/SUITE-LOOK.md):
    - `local G = rawget(_G, "GlassUI")`, then require `type(G) == "table"`,
      `type(G.Suite) == "table"`, `G.Suite.API == 1` (exactly, not `>= 1`), and that `Theme` and
      `Report` are functions. Anything else counts as absent: the released Glass UI has no `Suite`
