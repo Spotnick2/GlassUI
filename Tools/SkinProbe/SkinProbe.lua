@@ -2333,8 +2333,15 @@ local function allLoaded()
     return #missing == 0, #missing == 0 and "all loaded" or ("not loaded: " .. table.concat(missing, ", "))
 end
 
+-- One refresh's result, then the baseline re-armed: every texture at 0 again,
+-- the new ones included (their alpha now kept as their first), so the next
+-- refresh reports only what it changed itself (Codex, PR #65).
 local function holdMeasure(label)
-    return function() local back, new = holdCheck(label); return back, new end
+    return function()
+        local back, new = holdCheck(label)
+        holdOn()
+        return back, new
+    end
 end
 
 Probe:Steps("questing", {
@@ -2349,12 +2356,21 @@ Probe:Steps("questing", {
     { text = "Reads when each frame first appeared, and checks all three loaded.", auto = true,
       run = function() record("QS.firstSeen", seen); return lookFor("now") or true end,
       check = allLoaded },
-    { text = "Logs the frame trees of Questie's tracker, RestedXP's window and its arrow.", auto = true,
-      run = function() return tree("questing", 4) end },
     { text = "Track a quest so Questie's tracker shows (accept one if your log is empty).",
       wait = function() return shownName("Questie_BaseFrame"), "Questie's tracker isn't shown" end, timeout = 600 },
     { text = "Pick a leveling guide in RestedXP so its guide window shows.",
       wait = function() return shownName("RXPFrame"), "RestedXP's window isn't shown" end, timeout = 600 },
+    -- Only now: Questie builds its tracker in a staged startup after login, and
+    -- RestedXP fills its step frames once a guide is picked (Codex, PR #65).
+    { text = "Logs the frame trees of Questie's tracker, RestedXP's window and its arrow, now that they're built.",
+      auto = true, run = function() return tree("questing", 4) end,
+      check = function()
+          local missing = {}
+          for _, name in ipairs(TARGETS.questing) do
+              if not frameByName(name) then missing[#missing + 1] = name end
+          end
+          return #missing == 0, #missing == 0 and "all three" or ("missing: " .. table.concat(missing, ", "))
+      end },
     { text = "Reads whether Blizzard's tracker shows beside Questie's.", auto = true,
       run = function() return coexist().blizzard end },
     { text = "Press Next for a screenshot of both as they come.", screenshot = "questing, as it comes" },

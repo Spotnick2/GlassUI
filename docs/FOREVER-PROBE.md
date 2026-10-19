@@ -136,8 +136,9 @@ Questie 12.1.0 (`Questie_Camelot.toc`) and RestedXP v4.11.26, the versions the p
   first existed. SkinProbe loads after both addons, so "SkinProbe load" means at their own load or
   earlier.
 - **The hold** (`QS.hold.<refresh>`): the probe holds every texture of the three at 0, its own
-  touch. After each of their refreshes it reads which came back and which textures are new. Unfade
-  puts every one back. The refreshes are:
+  touch. After each of their refreshes it reads which came back and which textures are new, then
+  holds them all at 0 again, the new ones included, so each refresh reports only its own changes.
+  Unfade puts every one back at the alpha it had when first held. The refreshes are:
   - Questie's fader, a quest update, and its background option;
   - a RestedXP step, its theme, and its window reopened.
 - **Side by side** (`QS.coexist`): Questie's tracker and Blizzard's.

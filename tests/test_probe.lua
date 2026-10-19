@@ -662,7 +662,25 @@ local back, new = T.holdCheck("test")
 eq(back, 1, "the one that came back is counted")
 eq(new, 1, "and the new one")
 check(SkinProbeDB.results["QS.hold.test"].newList ~= "", "with its path")
-T.holdOn()
+-- Each refresh measured on its own: the baseline re-armed after a measure,
+-- so a second refresh doesn't report the first one's changes (Codex, PR #65).
+local measures = {}
+for _, st in ipairs(FP.procedures["SkinProbe/questing"].steps) do
+    if st.button == "Measure" then measures[#measures + 1] = st end
+end
+check(#measures >= 2, "the procedure measures each refresh")
+local treeAt, windowAt
+for i, st in ipairs(FP.procedures["SkinProbe/questing"].steps) do
+    if st.text:find("frame trees", 1, true) then treeAt = i end
+    if st.text:find("guide window shows", 1, true) then windowAt = i end
+end
+check(treeAt and windowAt and treeAt > windowAt, "the trees are logged after the tracker and the guide window show")
+measures[1].run()
+eq(bg:GetAlpha(), 0, "after a measure, everything is held at 0 again")
+eq(fresh:GetAlpha(), 0, "the new texture too")
+local back2, new2 = measures[2].run()
+eq(back2, 0, "a second refresh that changed nothing reports nothing back")
+eq(new2, 0, "and nothing new")
 T.holdOff()
 near(bg:GetAlpha(), 0.7, "Unfade gives back the alpha before the first hold, not the 0")
 eq(edgeTex:GetAlpha(), 1, "every held texture back")
