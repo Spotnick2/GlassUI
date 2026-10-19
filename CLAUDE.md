@@ -26,12 +26,12 @@ file doesn't cover something, check how those handle it before you invent a new 
   launch. Private repo for now; CurseForge project 1745875.
 
 **Status (scope correction, owner, 2026-10-18):** Glass UI is first the **suite orchestrator**,
-[docs/SUITE.md](docs/SUITE.md) (Codex consensus, round 3). The first step is #24: the Pearl suite
-theme, with GlassUnitFrames (GUF#129) and GlassRaidFrames (GRF#67) following it, and LibGlass's
-`pearl` preset (LibGlass#64). The skins are parked: the engine, kit, theme and merchant (#3, #4,
-70425/70450) are on `main`, the popups (#5) on branch `popups`, all to be revisited. Measured on
-1.60.1.70450. Next after #24: the group layout (a continuous GRF grid sized to the group, GUF
-beside it, moves animated like GUF's combat zoom).
+[docs/SUITE.md](docs/SUITE.md). Suite theme v1 is done (#24, closed, 70450): the Pearl theme with
+GlassUnitFrames and GlassRaidFrames following it, LibGlass r11's `pearl` preset, and the settings
+page. Next: the group layout (#28, [docs/GROUP-LAYOUT.md](docs/GROUP-LAYOUT.md), Codex consensus
+round 3), mostly GRF and GUF work, with a status line here. The skins are parked: the engine, kit,
+theme and merchant (#3, #4) are on `main`, the popups (#5) on branch `popups`, all to be revisited.
+Measured on 1.60.1.70450.
 
 ## The skin contract (non-negotiable)
 
