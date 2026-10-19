@@ -163,11 +163,11 @@ so Next alone can't pass them.
 
 | # | Question | Result |
 |---|---|---|
-| QT.1 | Each theme on the tracker (clear, smoked, class): readable, the right edge on the glass | not run yet |
-| QT.2 | The tracker and a section collapsed and expanded; Edit Mode move, Height, Text Size: the panel follows; no gold bar or shine flashes | not run yet |
-| QT.3 | Over bright ground: every line readable at clear's 0.35 backing (else a denser per-skin backing) | not run yet |
-| QT.4 | Off live: exactly Blizzard's; collapsed while off, on again: placed on the header | not run yet |
-| QT.5 | After a /reload; in combat; a quest routine under `taintLog 1`: nothing blocked, no error | not run yet |
+| QT.1 | Each theme on the tracker (clear, smoked, class): readable, the right edge on the glass | **70450: passes** (second account, runs #259-#260). Clear (backing 0.35), smoked (0.92) and class: each faded, blanked, panel `populated`, no failure. Every line readable, and the '-' on the glass (owner: yes). |
+| QT.2 | The tracker and a section collapsed and expanded; Edit Mode move, Height, Text Size: the panel follows; no gold bar or shine flashes | **70450: passes.** Collapsed: on the header. Expanded and the Quests section collapsed and expanded: `populated`. After an Edit Mode move with a new Height: `populated`, and the glass followed (screenshot). No gold bar or shine flashed (owner). |
+| QT.3 | Over bright ground: every line readable at clear's 0.35 backing (else a denser per-skin backing) | **70450: yes** (owner, over a bright pink sky): clear's 0.35 is enough, so no per-skin backing. |
+| QT.4 | Off live: exactly Blizzard's; collapsed while off, on again: placed on the header | **70450: off passes** (Quests header bar back, the owner: exactly Blizzard's). Collapsed while off, then on: not exercised. The tracker was collapsed while off (logged), but expanded again before Skin on was pressed (the screenshot shows it expanded and glassed), so the check FAILed on `collapsed`. The skin never collapses or expands it. The offline test covers the case (test_tracker). |
+| QT.5 | After a /reload; in combat; a quest routine under `taintLog 1`: nothing blocked, no error | **70450: partly.** After the /reload and in combat: on, `populated`. Nothing blocked, and no Glass UI failure. BugSack's only error was Blizzard's `BagsBar.lua:125` taint-log noise (50 times), as on the merchant's pass. **The quest routine (accept, progress, turn in) is still to do** (owner: later). |
 
 ## The damage meter (#49)
 
