@@ -44,6 +44,17 @@ WoW.meterBackground(1, 0.2)
 WoW.meterWindow(2)
 WoW.meterMinimize(1, true)
 WoW.meterBreakdown(2, true)
+-- The quest tracker (#55): layouts with pooled extras, collapses, Edit Mode,
+-- and its switch off and on (blanks given back with the atlas read before).
+WoW.layout("QuestObjectiveTracker", { blocks = 2, items = 1, groups = 1, bars = 1 })
+WoW.collapseModule("QuestObjectiveTracker", true)
+WoW.collapse(true)
+WoW.collapse(false)
+WoW.editMode(true)
+WoW.editMode(false)
+WoW.asBlizzard(function() ObjectiveTrackerFrame.NineSlice:SetAlpha(0.6) end)
+for _, cmd in ipairs({ "skin tracker off", "skin tracker on" }) do GUI._test.slash(cmd) end
+WoW.layout("QuestObjectiveTracker", { blocks = 1, items = 2 })
 for _, cmd in ipairs({ "skin merchant off", "skin merchant on", "skin meter off", "off", "on", "theme smoked",
                        "theme class", "theme clear", "skins", "skin held off" }) do
     GUI._test.slash(cmd)
@@ -59,11 +70,20 @@ WoW.loadAddOn("SomeAddOn")
 check((WoW.blizzCalls.SetAlpha or 0) > 0 and (WoW.blizzCalls.HookScript or 0) > 0,
       "the session called Blizzard objects (the record works)")
 check((WoW.blizzCalls.SetTexture or 0) > 0, "and blanked a texture (the argument rule is exercised)")
+local restored = 0
+for _, a in ipairs(WoW.textureArgs) do
+    if a[2] == "SetAtlas" and a[3] ~= nil then restored = restored + 1 end
+end
+check(restored > 0, "and gave an atlas back (the read-back rule is exercised)")
 for name in pairs(WoW.blizzCalls) do
     check(ALLOWED[name] or name:match("^Get") or name:match("^Is"), "C method on the allowlist: " .. name)
 end
+-- nil, or a value our code read from that same texture with the matching
+-- getter (the kit's restorable Blank, #55): never a value made up, nor one
+-- read from another texture.
 for _, a in ipairs(WoW.textureArgs) do
-    check(a[3] == nil, a[2] .. " on a Blizzard texture with nil only (got " .. tostring(a[3]) .. ")")
+    check(a[3] == nil or WoW.readBack(a[1], a[2], a[3]),
+          a[2] .. " on a Blizzard texture with nil or its own read-back value (got " .. tostring(a[3]) .. ")")
 end
 eq(#WoW.luaCalls, 0, "no Lua method of Blizzard's called (" .. table.concat(WoW.luaCalls, ", ") .. ")")
 local changes = WoW.fieldChanges()
@@ -87,5 +107,13 @@ local caught = table.concat(WoW.fieldChanges(), ",")
 check(caught:find("glassy", 1, true) and caught:find("selectedTab", 1, true), "the guard sees new and changed fields")
 eq(WoW.luaCalls[1], "UpdateMerchant", "the guard sees a Lua method call")
 eq(WoW.textureArgs[#WoW.textureArgs][3], "Interface\\Buttons\\WHITE8X8", "the guard sees a texture argument")
+check(not WoW.readBack(MerchantFrame.Bg, "SetTexture", "Interface\\Buttons\\WHITE8X8"), "a value made up is no read-back")
+-- Read-back is per texture and per getter: another texture's atlas is refused.
+local shine, glow = QuestObjectiveTracker.Header.Shine, QuestObjectiveTracker.Header.Glow
+WoW.asBlizzard(function() shine:SetAtlas("UI-QuestTracker-OBJFX-Shine") end)
+local read = shine:GetAtlas()
+check(WoW.readBack(shine, "SetAtlas", read), "an atlas read from a texture may go back on it")
+check(not WoW.readBack(glow, "SetAtlas", read), "but not on another texture")
+check(not WoW.readBack(shine, "SetTexture", read), "nor through the other setter")
 
 done("test_contract")

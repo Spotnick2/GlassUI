@@ -95,11 +95,15 @@ check(GUI.Glass ~= nil, "the glass was built for it")
 
 -- The body's wash: a factor of the material's, at first paint and live.
 local function washes(G)
-    local seen = {}
+    local seen, mine = {}, nil
     local real = G.Glass.SetWash
-    G.Glass.SetWash = function(g, v) seen[#seen + 1] = v; return real(g, v) end
+    G.Glass.SetWash = function(g, v)
+        if g == mine then seen[#seen + 1] = v end   -- this surface's paints, not the skins' panels'
+        return real(g, v)
+    end
     local f = CreateFrame("Frame")
     local g = G.Glass.Apply(f, "small")
+    mine = g
     G.Theme.Register(g, f:CreateTexture())
     G.Theme.Set("smoked")
     G.Theme.Set("clear")

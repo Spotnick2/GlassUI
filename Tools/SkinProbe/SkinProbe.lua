@@ -21,6 +21,7 @@
 --   #24 S.7 again, combat only                                 /fp steps skin suitecombat
 --   #58 Glass Panel in the suite: Pearl, its options, its edge /fp steps skin suitepanel
 --   #54 Glass UI's own skins on Pearl                         /fp steps skin pearl
+--   #55 the quest tracker                                      /fp steps skin tracker
 -- And Blizzard's own glass, the login ruleset card beside ours (#17): /fp steps skin card
 --
 -- Discovery for the next skin:
@@ -1643,6 +1644,160 @@ Probe:Steps("pearl", {
 })
 
 --------------------------------------------------------------------------------
+-- Acceptance: the quest tracker skin (#55, docs/QUEST-TRACKER.md part 2), on
+-- the real addon, from Glass Quest Tracker's look and collapse procedures:
+-- each theme, collapsing the tracker and a section, Edit Mode, bright ground,
+-- off and on live (a collapse while off), a /reload, combat, and a quest
+-- routine under the taint log. The look is judged from the screenshots; the
+-- checks read the skin's state (its panel's placement) and a few regions.
+--------------------------------------------------------------------------------
+
+local function trackerSwitch(on)
+    local G = glassUI()
+    if not (G and G.Engine) then return false, "Glass UI not loaded" end
+    return G.Engine.SetEnabled("tracker", on)
+end
+
+-- The switch, where our panel sits, the NineSlice's alpha, whether the
+-- Quests section's header bar is blanked, and the collapses: logged, and
+-- saved as QT.<label>.
+local function trackerState(label)
+    local G = glassUI()
+    local t = frameByName("ObjectiveTrackerFrame")
+    local q = frameByName("QuestObjectiveTracker")
+    local h = q and rawget(q, "Header")
+    local okN, nine = call(t and rawget(t, "NineSlice"), "GetAlpha")
+    local okB, atlas = call(h and rawget(h, "Background"), "GetAtlas")
+    local rec = {
+        status = G and G.Engine and G.Engine.Status("tracker") or "Glass UI not loaded",
+        panel = G and G.QuestTracker and G.QuestTracker.state,
+        nine = okN and plain(nine) or nil,
+        blanked = okB and plain(atlas) == nil,
+        collapsed = t ~= nil and plain(rawget(t, "isCollapsed")) == true,
+        section = q ~= nil and plain(rawget(q, "isCollapsed")) == true,
+        combat = InCombatLockdown() == true,
+        theme = G and G.Theme and G.Theme.Name(),
+    }
+    local failures = 0
+    for _ in pairs(G and G.failures or {}) do failures = failures + 1 end
+    rec.failures = failures
+    say("QT " .. label .. ": " .. rec.status .. "; panel=" .. show(rec.panel) .. " nine=" .. num(rec.nine)
+        .. " blanked=" .. tostring(rec.blanked) .. " collapsed=" .. tostring(rec.collapsed) .. " section="
+        .. tostring(rec.section) .. " theme=" .. show(rec.theme) .. " failures=" .. failures)
+    record("QT." .. label, rec)
+    return rec
+end
+
+-- A check: the skin on and holding (NineSlice faded, a header blanked, no
+-- failure), and each field of `want` as asked.
+local function trackerOn(label, want)
+    return function()
+        local rec = trackerState(label)
+        local bad = {}
+        if rec.status ~= "on" then bad[#bad + 1] = "status " .. rec.status end
+        if rec.nine ~= 0 then bad[#bad + 1] = "NineSlice alpha " .. num(rec.nine) end
+        if not rec.blanked then bad[#bad + 1] = "Quests header bar not blanked" end
+        if rec.failures > 0 then bad[#bad + 1] = rec.failures .. " failure(s): /glassui failures" end
+        for k, v in pairs(want or {}) do
+            if rec[k] ~= v then bad[#bad + 1] = k .. " " .. show(rec[k]) .. ", wanted " .. show(v) end
+        end
+        return #bad == 0, #bad == 0 and ("panel " .. show(rec.panel)) or table.concat(bad, "; ")
+    end
+end
+
+local function trackerWait(field, value, why)
+    return function()
+        local rec = trackerState("waiting")
+        return rec[field] == value, why
+    end
+end
+
+Probe:Steps("tracker", {
+    title = "Glass UI: the quest tracker skin (#55)",
+    { text = "Turns on script errors and the taint log (Logs\\taint.log), and reads the skin. With the taint log "
+          .. "on, Blizzard's own code throws 'attempt to call a nil value' errors (tooltips, the bag bar): ignore "
+          .. "those. A /reload turns the log off. Have a few quests tracked and the tracker expanded.",
+      auto = true, run = function()
+          if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
+          return setCVar("scriptErrors", "1"), setCVar("taintLog", "1"), trackerState("start").status
+      end,
+      check = trackerOn("start check", { panel = "populated" }) },
+    { text = "Clear glass, the default. Press Clear for a screenshot.", button = "Clear",
+      run = function() return themeTry("clear") end, check = trackerOn("clear", { theme = "clear" }),
+      screenshot = "tracker, clear" },
+    { text = "Smoked glass.", button = "Smoked", run = function() return themeTry("smoked") end,
+      check = trackerOn("smoked", { theme = "smoked" }), screenshot = "tracker, smoked" },
+    { text = "Class colour glass.", button = "Class", run = function() return themeTry("class") end,
+      check = trackerOn("class", { theme = "class" }), screenshot = "tracker, class" },
+    { text = "Back to your own theme.", button = "Restore", run = themeRestore },
+    { text = "Can you read every quest line, and is the '-' beside the 'Quests' title fully on the glass?",
+      ask = true, screenshot = "tracker, the right edge" },
+    { text = "Collapse the whole tracker: click the '-' beside 'All Objectives'.",
+      wait = trackerWait("collapsed", true, "not collapsed yet"), timeout = 300,
+      check = trackerOn("collapsed", { collapsed = true, panel = "header" }), screenshot = "tracker, collapsed" },
+    { text = "Expand it again with the same button.",
+      wait = trackerWait("collapsed", false, "still collapsed"), timeout = 300,
+      check = trackerOn("expanded", { panel = "populated" }) },
+    { text = "Collapse the 'Quests' section: click the '-' at the right of its title.",
+      wait = trackerWait("section", true, "the Quests section isn't collapsed yet"), timeout = 300,
+      check = trackerOn("section collapsed", { panel = "populated" }), screenshot = "tracker, section collapsed" },
+    { text = "Expand the section again.",
+      wait = trackerWait("section", false, "the Quests section is still collapsed"), timeout = 300,
+      check = trackerOn("section expanded", { panel = "populated" }) },
+    { text = "While you did that, did a gold bar or a shine flash behind a section title? Say when in the Note.",
+      ask = true },
+    { text = "Open Edit Mode.", wait = function() return editMode(), "Edit Mode isn't open" end, timeout = 300 },
+    { text = "Click the tracker, drag it a little, change its Height and its Text Size, then close Edit Mode "
+          .. "(Save or Revert).", wait = function() return not editMode(), "Edit Mode is still open" end,
+      timeout = 600, check = trackerOn("after Edit Mode", { panel = "populated" }),
+      screenshot = "tracker, after Edit Mode" },
+    { text = "Stand or turn so the tracker is over bright ground or sky. Is every line easy to read?",
+      ask = true, screenshot = "tracker, bright ground" },
+    -- Off and on live; a collapse while off is placed right when it's back.
+    { text = "Switches the skin off, live.", button = "Skin off", screenshot = "tracker, skin off",
+      run = function() return trackerSwitch(false), trackerState("off").status end,
+      check = function()
+          local rec = trackerState("off check")
+          return rec.status == "off" and not rec.blanked, "status " .. rec.status .. ", blanked " .. tostring(rec.blanked)
+      end },
+    { text = "Does the tracker look exactly like Blizzard's own: the gold header bars and gold buttons back, "
+          .. "no glass?", ask = true },
+    { text = "While the skin is off, collapse the whole tracker.",
+      wait = trackerWait("collapsed", true, "not collapsed yet"), timeout = 300 },
+    { text = "Switches the skin on again, live: the glass should sit on the collapsed header.", button = "Skin on",
+      screenshot = "tracker, on again collapsed",
+      run = function() return trackerSwitch(true), trackerState("on again").status end,
+      check = trackerOn("on again", { collapsed = true, panel = "header" }) },
+    { text = "Expand the tracker.", wait = trackerWait("collapsed", false, "still collapsed"), timeout = 300,
+      check = trackerOn("on again, expanded", { panel = "populated" }) },
+    { text = "Reload.", reload = true },
+    { text = "After the reload. Press Next for a screenshot.", screenshot = "tracker, after reload",
+      check = trackerOn("after reload", { panel = "populated" }) },
+    { text = "Turns the taint log on again for the quest routine (the reload turned it off).", auto = true,
+      run = function() return setCVar("taintLog", "1") end },
+    { text = "The quest routine, as it comes: accept a quest, make progress on one (kill or loot), and turn one "
+          .. "in. A dungeon too if you're near one; Skip what you can't do now. Press Next when done.",
+      check = trackerOn("routine", { panel = "populated" }) },
+    { text = "Optional, Skip if it isn't easy: fight something and press Measure while in combat.",
+      button = "Measure", run = function() return trackerState("combat").combat end,
+      check = function()
+          local ok, why = trackerOn("combat check")()
+          return ok and InCombatLockdown(), why
+      end },
+    { text = "Reads what was blocked this session (it should be nothing).", auto = true,
+      run = function() return type(SkinProbeDB) == "table" and SkinProbeDB.suiteBlocked or 0 end,
+      check = function()
+          local n = type(SkinProbeDB) == "table" and SkinProbeDB.suiteBlocked or 0
+          return n == 0, n .. " blocked"
+      end },
+    { text = "Did you see any error, or a 'blocked' or 'interface action failed' message (Blizzard's 'nil "
+          .. "value' errors aside)?", ask = true },
+    { text = "Type /reload to save the results (and turn the taint log off).", reload = true },
+})
+
+Probe:Command("tracker", function() trackerState("now") end, "the quest tracker skin: its switch, panel and regions")
+
+--------------------------------------------------------------------------------
 -- Blizzard's own glass (#17): the ruleset screen's card at login
 -- (Blizzard_GlueXML\Mainline\SuperDistrict.xml:8) beside our panels
 --------------------------------------------------------------------------------
@@ -1967,4 +2122,5 @@ NS._test = { Probe = Probe, state = state, tree = tree, fade = fade, slashOwners
              meterState = meterState, meterStyle = meterStyle, meterBars = meterBars, treeOf = treeOf,
              barTree = barTree, sourceWindow = sourceWindow, barsOn = barsOn, barsOff = barsOff,
              barPanels = barPanels, headersFaded = headersFaded, panelState = panelState,
-             panelCheck = panelCheck, panelFollow = panelFollow, panelRestore = panelRestore, ownGlass = ownGlass }
+             panelCheck = panelCheck, panelFollow = panelFollow, panelRestore = panelRestore, ownGlass = ownGlass,
+             trackerState = trackerState, trackerOn = trackerOn }

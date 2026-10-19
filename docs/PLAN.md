@@ -217,9 +217,9 @@ Engine.Register({
   restore".
 - **Toggles:** `GlassUIDB.skins[key] = false` turns one off; `GlassUIDB.enabled = false` turns all
   off. **Live off/on only for skins with `live = true`**: those that only fade and add our own
-  panels. The kit restores the alpha Blizzard last asked for and hides our panels. Anything that
-  blanks, tints or shades is `live = false`: off means "takes effect after /reload". Universal live
-  restore is a non-goal.
+  panels, or that blank and tint audited regions (#55). The kit restores the alpha Blizzard last
+  asked for, gives back what it blanked and tinted, and hides our panels. Anything that shades is
+  `live = false`: off means "takes effect after /reload". Universal live restore is a non-goal.
 - **Gamepad stand-down:** if the gamepad interface style is active at login, no skin installs a
   hook this session; the settings page says why. (Which CVar or API reports it: probe.)
 
@@ -227,10 +227,11 @@ Engine.Register({
 The helpers every skin needs; nothing else.
 - `kit:Fade(region)` records **the latest alpha Blizzard asks for** (GlassQuestTracker's `Fade`
   fix) and is the only touch a `live` skin restores.
-- `kit:Blank(texture)`, `kit:Tint(texture, ...)` and `kit:Shade(fontString)` capture the **initial**
-  value only, so they are for audited, stable regions, and a skin that uses any of them is
-  `live = false`. Most Blizzard fonts already carry a shadow; a skin shades only where the glass
-  makes text hard to read.
+- `kit:Blank(texture)` and `kit:Tint(texture, ...)` capture the **initial** value only (the atlas or
+  file; the desaturation and vertex colour), so they are for audited, stable regions, where Blizzard
+  sets the image once. `Restore` gives them back, so a live skin may use them (#55,
+  docs/QUEST-TRACKER.md). `kit:Shade(fontString)` keeps `live = false`. Most Blizzard fonts already
+  carry a shadow; a skin shades only where the glass makes text hard to read.
 - `kit:Panel(window, size, insets)`: our glass panel, registered with Theme for repaints.
 - The widget kinds the windows share, each a small function over the ones above, only the kinds
   the waves need: the portrait/button frame (NineSlice, portrait, title bg, inset), close button,

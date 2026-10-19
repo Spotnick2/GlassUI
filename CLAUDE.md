@@ -58,16 +58,17 @@ audited exceptions and the reasons are in docs/PLAN.md, "The skin contract". In 
 | `Glass.lua` | our LibGlass instance, built at `ADDON_LOADED` on the suite theme (Pearl; clean below LibGlass r11, #54) |
 | `Theme.lua` | clear / smoked / class: tint, wash (`SetWash`, a factor of the material's) and the opaque backing, repainted live |
 | `Skin\Engine.lua` | `Register`, `Active`, owners/yields/handover, the switches, deferral and the combat wait, gamepad and suite stand-downs, `Status` |
-| `Skin\Kit.lua` | per-skin touches (`Fade` with read-back, `Blank`/`Tint`/`Shade` for `live = false`), `Panel`, widget kinds (`Shell`, `Inset`, `Tab`) |
+| `Skin\Kit.lua` | per-skin touches (`Fade` with read-back; `Blank`/`Tint`, given back by `Restore`; `Shade` for `live = false`), `Panel`, widget kinds (`Shell`, `Inset`, `Tab`) |
 | `Skin\Merchant.lua` | the merchant window (live) |
 | `Skin\DamageMeter.lua` | Blizzard's damage meter (live, #49, docs/DAMAGE-METER.md): the windows in glass, the bars stock |
+| `Skin\QuestTracker.lua` | the objective tracker (live, #55, docs/QUEST-TRACKER.md): Glass Quest Tracker's look on the suite theme, the panel placed by state; GQT loaded owns it |
 | `Suite.lua` | the suite contract (docs/SUITE.md): `GlassUI.Suite` (`API`, `Ready`, `Theme`, `Report`, `Open`), the roster, the follow switches, each member's state; the suite look (docs/SUITE-LOOK.md: `Look`, `SetLook`, `LookChanged`) |
 | `Options.lua` | the settings page: the suite theme, the family and its Follow switches, the raid frames (layout, click-casting); the "Suite look" subpage |
 | `GlassUI.lua` | bootstrap, `GlassUIDB`, `/glassui` |
 
 Planned, per docs/PLAN.md: `Skin\<Window>.lua` for the rest, `Hub.lua`.
 `Tools\SkinProbe\` is the ForeverProbe module (never shipped): `/fp skin`, the measurements
-`/fp steps skin wave1|map|gradient|meter`, each skin's acceptance (`/fp steps skin merchant|meterskin`),
+`/fp steps skin wave1|map|gradient|meter`, each skin's acceptance (`/fp steps skin merchant|meterskin|tracker`),
 the meter's glass bars preview (`/fp steps skin meterbars`), the suite's (`/fp steps skin suite`,
 #24) and Glass Panel's place in it (`/fp steps skin suitepanel`, #58), Glass UI's own skins on Pearl
 (`/fp steps skin pearl`, #54);

@@ -575,9 +575,50 @@ GlassUI.glassWhy = nil
 check(not builtStep.check(), "anything but Pearl fails, fallback or not")
 rawset(_G, "GlassUI", savedGUI)
 
+-- #55: the tracker skin as the procedure reads it.
+local tracker = CreateFrame("Frame", "ObjectiveTrackerFrame", UIParent)
+tracker.NineSlice = CreateFrame("Frame", nil, tracker)
+tracker.NineSlice:SetAlpha(0)
+local quests = CreateFrame("Frame", "QuestObjectiveTracker", tracker)
+quests.Header = CreateFrame("Frame", nil, quests)
+quests.Header.Background = quests.Header:CreateTexture()
+local trackerStatus, trackerPanel = "on", "populated"
+local savedGUI2 = rawget(_G, "GlassUI")
+rawset(_G, "GlassUI", { failures = {}, Engine = { Status = function() return trackerStatus end },
+                        QuestTracker = { state = trackerPanel }, Theme = { Name = function() return "clear" end } })
+local okT, whyT = T.trackerOn("t", { panel = "populated" })()
+check(okT, "the skin on and holding passes: " .. tostring(whyT))
+eq(SkinProbeDB.results["QT.t"].nine, 0, "the NineSlice's alpha is kept in the results")
+GlassUI.QuestTracker.state = "header"
+okT, whyT = T.trackerOn("t", { panel = "populated" })()
+check(not okT and whyT:find("panel header, wanted populated", 1, true), "the panel in the wrong place fails")
+GlassUI.QuestTracker.state = "populated"
+quests.Header.Background:SetAtlas("UI-QuestTracker-Secondary-Objective-Header")
+okT, whyT = T.trackerOn("t")()
+check(not okT and whyT:find("not blanked", 1, true), "a header bar back fails")
+quests.Header.Background:SetTexture(nil)
+tracker.NineSlice:SetAlpha(0.6)
+okT, whyT = T.trackerOn("t")()
+check(not okT and whyT:find("NineSlice alpha", 1, true), "a NineSlice showing fails")
+tracker.NineSlice:SetAlpha(0)
+trackerStatus = "off"
+okT, whyT = T.trackerOn("t")()
+check(not okT and whyT:find("status off", 1, true), "the skin off fails")
+trackerStatus = "on"
+GlassUI.failures.x = "boom"
+okT, whyT = T.trackerOn("t")()
+check(not okT and whyT:find("failure", 1, true), "a Glass UI failure fails")
+GlassUI.failures.x = nil
+rawset(tracker, "isCollapsed", true)
+eq(T.trackerState("c").collapsed, true, "the container's collapse is read")
+rawset(quests, "isCollapsed", true)
+eq(T.trackerState("c").section, true, "and the Quests section's")
+rawset(tracker, "isCollapsed", nil); rawset(quests, "isCollapsed", nil)
+rawset(_G, "GlassUI", savedGUI2)
+
 -- The procedures are defined and every step's run, wait and check works here.
 for _, name in ipairs({ "wave1", "map", "gradient", "merchant", "card", "suite", "suitecombat", "meter",
-                        "meterskin", "meterbars", "suitepanel", "pearl" }) do
+                        "meterskin", "meterbars", "suitepanel", "pearl", "tracker" }) do
     local p = FP.procedures["SkinProbe/" .. name]
     check(p ~= nil, "procedure " .. name .. " is defined")
     if p then
