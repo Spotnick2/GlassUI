@@ -209,8 +209,12 @@ blocked, and after combat everything glides once to the new footprint. The owner
       vertical bars at the left edge (MultiBar5/6, x 2-87).
   - **The first placement waits for the real UIParent size.** Right after a load, UIParent can
     still report its pre-scale size (1365x768 instead of 2133x1200, GRF run on 70450), and a refresh
-    corrected it 1.1 s later. GRF places and announces only once the size is real (GRF measures which
-    event marks that).
+    corrected it 1.1 s later. GRF places and announces only once the size is real.
+    - Measured (GRF item 16): at `ADDON_LOADED` UIParent is still 1365x768 at scale 1.
+      `DISPLAY_SIZE_CHANGED`/`UI_SCALE_CHANGED` fire twice, the second time with the real size, both
+      before `PLAYER_LOGIN`.
+    - So GRF places and announces nothing before `PLAYER_LOGIN`, and `LayoutState()` is nil until
+      then.
 - **The mover** moves the baseline, saved per role as `profiles[role].layoutPos`. While the layout
   is on, Reset clears `layoutPos`. `pos`, `petPos` and the legacy geometry stay set aside,
   untouched.
@@ -311,8 +315,13 @@ blocked, and after combat everything glides once to the new footprint. The owner
 - **Interruptions:** another change retargets from the on-screen point, and any canonical place
   snaps. A cell-size change snaps the size and glides the position.
 - **No reverse dependency:** no protected frame ever anchors to an animated visual.
-- **The first placement of a session snaps,** in every addon: there's no earlier on-screen place
-  worth gliding from, and a slide at every login would be noise.
+- **Nothing glides until the loading screen has lifted,** in every addon. Every placement before
+  `LOADING_SCREEN_DISABLED`, and the first one after it, snaps.
+  - There's no earlier on-screen place worth gliding from, and a slide at every login would be noise.
+  - "Only the first placement snaps" isn't enough. GRF measured on a full login (70450, GRF
+    FOREVER-PROBE item 16) that its first announcement can have width 0, because the party isn't
+    listed yet. The real one comes 1.7 s later, as the loading screen lifts, and would then glide
+    in view.
 - **In combat:** v1 animates only out-of-combat changes. In combat, the header's own reflow snaps
   (section 1).
 - **No shared code yet:** each addon keeps its own small `Glide`. A shared copy becomes a LibGlass
