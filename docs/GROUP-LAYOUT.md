@@ -364,16 +364,23 @@ the addon that owns its frame follows. There is no dependency either way.
 
 ### 5c. GlassActionBars announces its side bars' edges (owner, 2026-10-19)
 
-Bars docked to the screen's left or right edge (`MultiBar5`/`MultiBar6` placed there, or any GAB bar
-at an edge) take room the side grid must not cover. Same pattern as the rest of the suite: GAB owns
-those bars and announces, GRF follows. No dependency either way.
+Bars at the screen's left or right edge take room the side grid must not cover. Same pattern as the
+rest of the suite: GAB owns those bars and announces, GRF follows. No dependency either way. Built as
+GlassActionBars#37, a compatible addition to GAB's `PUBLIC_API_VERSION` 1 (its docs/PUBLIC-API.md).
 
 - **GAB announces:**
-  - `GlassActionBars.EdgeState()` returns `{ left = <the right edge of the bars docked at the left,
-    or 0>, right = <the left edge of the bars docked at the right, or UIParent's width> }`, in
-    UIParent units, or nil before GAB has read its bars;
-  - plus an `EventRegistry` event `GlassActionBars.EdgesChanged` (left, right), out of combat, when
-    either changes (an Edit Mode change, a bar shown or hidden, a scale change).
+  - `GlassActionBars.EdgeState()` returns `{ left, right, width }`, in UIParent units from its
+    bottom-left, or nil before GAB has measured:
+    - `left`: the right edge of the bars at the screen's left, or 0 with none;
+    - `right`: the left edge of the bars at the screen's right, or `width` with none.
+  - The `EventRegistry` event `GlassActionBars.EdgesChanged` (left, right, width) fires out of
+    combat, and only when a value changes: after Edit Mode closes or a layout applies, when a counted
+    bar shows or hides, and on a scale or display change. Consumers apply the latest values each time
+    (idempotent).
+  - **Which bars count:** the visible Action Bars 1-8 (their button union, as GAB's dock reads it),
+    GAB's Utility bar and its docked provider bars. A bar counts on a side when its outer edge is
+    within 40 units of that screen edge and it is taller than wide, so a horizontal bar near a bottom
+    corner doesn't push the grid.
 - **GRF follows:** the side default's left edge becomes `left + 30`. The HUD is unaffected, and a
   dragged `layoutPos` stays as saved.
 - **Without GAB:** `left = 0`, as today.
