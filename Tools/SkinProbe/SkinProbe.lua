@@ -1531,6 +1531,10 @@ local function edgeCheck(label)
     end
 end
 
+-- A session is read once Glass Panel has measured: right after a /reload the
+-- step comes first (70450: all three reads found no EdgeState yet).
+local function firstMeasure() return panelEdge() ~= nil, "waiting for Glass Panel's first measure" end
+
 Probe:Steps("suitepanel", {
     title = "Glass UI: Glass Panel in the suite (Pearl, its options, its top edge)",
     { text = "Needs Glass UI and Glass Panel loaded (XP+ on the panel for the edge steps). Turns on script errors, "
@@ -1547,7 +1551,7 @@ Probe:Steps("suitepanel", {
     { text = "Its own look first.", button = "Own look", run = function() return panelFollow(false) end },
     { text = "Reload.", reload = true },
     { text = "Reads its own look: Pearl (its default), nothing built for Glass UI, its edge announced.",
-      auto = true, run = function() return panelState("own").edge end,
+      wait = firstMeasure, timeout = 30,
       check = function() return panelCheck("own", false) end },
     { text = "Optional, so following shows: type /gpanel glass smoked (the bar's own glass), and type what you "
           .. "changed in the Note box to put it back at the end. Skip if you'd rather not." },
@@ -1558,7 +1562,7 @@ Probe:Steps("suitepanel", {
       end },
     { text = "Reload.", reload = true },
     { text = "Reads it following: built Pearl for Glass UI, its saved glass untouched.",
-      auto = true, run = function() return panelState("following").edge end,
+      wait = firstMeasure, timeout = 30,
       check = function() return panelCheck("following", true, "before following") end },
     { text = "Open Glass UI's page (/glassui options). Does Glass Panel's card read 'Glass UI preset: Pearl' with "
           .. "'Use Glass UI appearance' ticked?", ask = true, screenshot = "suite panel, Glass UI page" },
@@ -1584,7 +1588,7 @@ Probe:Steps("suitepanel", {
     { text = "Back to its own look.", button = "Own look again", run = function() return panelFollow(false) end },
     { text = "Reload.", reload = true },
     { text = "Reads its own look again, and compares its saved glass with the session before following.",
-      auto = true, run = function() return panelState("own again").edge end,
+      wait = firstMeasure, timeout = 30,
       check = function() return panelCheck("own again", false, "before following") end },
     { text = "Does the bar look as it did before following (Smoked, if you set it)?", ask = true,
       screenshot = "suite panel, own look again" },

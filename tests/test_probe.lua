@@ -469,6 +469,19 @@ eq(follow.GlassPanel, true, "the switch is back")
 eq(SkinProbeDB.panelWas, nil, "and the saved one cleared")
 local okNothing, whyNothing = T.panelRestore()
 check(okNothing and whyNothing == "nothing to restore", "a second restore finds nothing")
+-- Each session is read once Glass Panel has measured, not at once after the reload.
+local reads, waited = 0, 0
+for _, st in ipairs(FP.procedures["SkinProbe/suitepanel"].steps) do
+    if type(st.text) == "string" and st.text:find("^Reads it") then
+        reads = reads + 1
+        panelTop = nil
+        local before = st.wait and st.wait()
+        panelTop = 24
+        if st.wait and not before and st.wait() then waited = waited + 1 end
+    end
+end
+eq(reads, 3, "three sessions read")
+eq(waited, 3, "each waits for Glass Panel's first measure")
 
 -- #49: the meter's state names the style and reads each window's bars.
 local style, windows = T.meterState("test")
