@@ -395,6 +395,28 @@ check(T.meterState("no bars") ~= nil, "a window without bars is read too")
 check(not SkinProbeDB.results["DM.no bars"]:find("bar1", 1, true), "and has no bar line")
 meterBars = { meterBar }
 check(T.tree("meter", 8) > 0, "the meter's tree walks")
+-- PR #50 review: a solo fight may fill only window 2, and only a pinned
+-- breakdown survives the Measure click.
+local win2 = CreateFrame("Frame", "DamageMeterSessionWindow2", meter)
+win2.MinimizeContainer = CreateFrame("Frame", nil, win2)
+local src2 = CreateFrame("Frame", nil, win2.MinimizeContainer)
+win2.MinimizeContainer.SourceWindow = src2
+src2.CloseButton = CreateFrame("Button", nil, src2)
+local bar2 = CreateFrame("Button", nil, win2.MinimizeContainer)
+function win2:ForEachEntryFrame(fn) fn(bar2) end
+meterBars = {}
+local walked = T.barTree("solo")
+check(walked > 0, "the bar tree walks the window that has a bar")
+meterWin.MinimizeContainer.SourceWindow:Hide()
+src2.CloseButton:Hide()
+eq(T.sourceWindow(true), nil, "a breakdown that isn't pinned doesn't count")
+eq(T.sourceWindow(), src2, "though it is the open one")
+src2.CloseButton:Show()
+eq(T.sourceWindow(true), src2, "pinned, in window 2")
+src2:Hide()
+eq(T.sourceWindow(), nil, "no breakdown open")
+meterBars = { meterBar }
+win2:Hide()
 
 -- The procedures are defined and every step's run, wait and check works here.
 for _, name in ipairs({ "wave1", "map", "gradient", "merchant", "card", "suite", "suitecombat", "meter" }) do

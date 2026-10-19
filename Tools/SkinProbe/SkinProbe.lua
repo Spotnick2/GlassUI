@@ -520,10 +520,22 @@ local function editMode()
     return ok and plain(v) == true
 end
 
-local function sourceWindow()
-    local w = frameByName("DamageMeterSessionWindow1")
-    local ok, src = call(w, "GetSourceWindow")
-    return ok and src or nil
+local function shownFrame(f)
+    local ok, v = call(f, "IsShown")
+    return ok and plain(v) == true
+end
+
+-- The breakdown that is open, in whichever window: pinned (Shift-click, its
+-- close button shown) when `pinned`. A plain click's breakdown closes at the
+-- next mouse press outside it (GLOBAL_MOUSE_DOWN, DamageMeterSourceWindow.lua:45),
+-- the Measure button's included.
+local function sourceWindow(pinned)
+    for _, w in ipairs(meterWindows()) do
+        local mc = rawget(w, "MinimizeContainer")
+        local src = mc and rawget(mc, "SourceWindow")
+        if shownFrame(src) and (not pinned or shownFrame(rawget(src, "CloseButton"))) then return src end
+    end
+    return nil
 end
 
 local function meterShown()
@@ -596,19 +608,26 @@ end
 
 -- The first bar alone, at full depth: the regions a style changes.
 local function barTree(label)
-    local w = frameByName("DamageMeterSessionWindow1")
-    local bar = w and meterBars(w)[1]
+    -- The first window with a bar: a solo fight may fill only one of them.
+    local bar
+    for _, w in ipairs(meterWindows()) do
+        bar = bar or meterBars(w)[1]
+    end
     if not bar then say("DM " .. label .. ": no bar to walk"); return 0 end
     return treeOf(bar, "DM." .. label .. ".bar1", 4)
 end
 
--- The style the owner started with, so the last style step puts it back.
-local meterWas
+-- The style the owner started with, so the last style step puts it back, and
+-- how many windows were shown then, so "add a window" waits for a new one.
+local meterWas, windowsWere
 
 Probe:Steps("meter", {
     title = "Glass UI: the damage meter (#49)",
     { text = "Reads the damage meter's state: loaded, switched on, its Edit Mode settings, its windows.",
-      auto = true, run = function() meterWas = meterStyle(); return meterState("start") end,
+      auto = true, run = function()
+          meterWas, windowsWere = meterStyle(), meterShownWindows()
+          return meterState("start")
+      end,
       check = function() return loaded("Blizzard_DamageMeter"), "Blizzard_DamageMeter loaded" end },
     { text = "If the damage meter isn't on screen, turn it on (Options, Advanced) and set its Visibility to "
           .. "Always Visible in Edit Mode. This step goes on by itself once it shows.",
@@ -636,23 +655,26 @@ Probe:Steps("meter", {
       wait = function()
           return meterStyle() == (meterWas or "Default") and not editMode(), "style " .. show(meterStyle())
       end, timeout = 600 },
-    { text = "Click a bar in the meter to open its breakdown. This step goes on by itself.",
-      wait = function()
-          local ok, v = call(sourceWindow(), "IsShown")
-          return ok and plain(v) == true, "no breakdown open"
-      end, timeout = 300 },
+    { text = "Hold Shift and click a bar in the meter, so its breakdown stays open (it shows a close "
+          .. "button). This step goes on by itself.",
+      wait = function() return sourceWindow(true) ~= nil, "no pinned breakdown open" end, timeout = 300 },
     { text = "The breakdown. Press Measure.", button = "Measure", screenshot = "meter, breakdown",
       run = function()
-          local src = sourceWindow()
+          local src = sourceWindow(true)
           return meterState("breakdown"), src and treeOf(src, "DM.breakdown", 6, TREE_MAX.meter) or 0
       end },
-    { text = "Close the breakdown. Then open the gear menu on the meter and add a new window. "
+    { text = "Close the breakdown with its close button. Then open the gear menu on the meter and add a new window. "
           .. "This step goes on by itself.",
-      wait = function() local n = meterShownWindows(); return n >= 2, n .. " windows shown" end, timeout = 300 },
-    { text = "A second window. Press Measure.", button = "Measure", screenshot = "meter, two windows",
+      wait = function()
+          local n = meterShownWindows()
+          -- Three is Blizzard's maximum: nothing to add then.
+          return n > (windowsWere or 1) or n >= MAX_METER_WINDOWS, n .. " windows shown"
+      end, timeout = 300 },
+    { text = "The new window. Press Measure.", button = "Measure", screenshot = "meter, new window",
       run = function()
-          local w2 = frameByName("DamageMeterSessionWindow2")
-          return meterState("two windows"), w2 and treeOf(w2, "DM.window2", 7, TREE_MAX.meter) or 0
+          local all = meterWindows()
+          local last = all[#all]
+          return meterState("new window"), last and treeOf(last, "DM.newWindow", 7, TREE_MAX.meter) or 0
       end },
     { text = "Minimize one window with its button at the top right, then press Next for a screenshot.",
       screenshot = "meter, minimized",
@@ -1464,4 +1486,5 @@ NS._test = { Probe = Probe, state = state, tree = tree, fade = fade, slashOwners
              panels = panels, faded = faded, cardAtlas = cardAtlas, cardOn = cardOn, cardOff = cardOff,
              themeTry = themeTry, themeRestore = themeRestore, suiteSet = suiteSet, suiteRestore = suiteRestore,
              suiteState = suiteState, suiteCheck = suiteCheck, suiteSnapshot = suiteSnapshot,
-             meterState = meterState, meterStyle = meterStyle, meterBars = meterBars, treeOf = treeOf }
+             meterState = meterState, meterStyle = meterStyle, meterBars = meterBars, treeOf = treeOf,
+             barTree = barTree, sourceWindow = sourceWindow }
