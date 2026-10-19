@@ -120,19 +120,28 @@ blocked, and after combat everything glides once to the new footprint. The owner
 
 - **The grid header:** one `SecureGroupHeaderTemplate` replaces the eight, with 40 children
   precreated out of combat. Its attribute sets are complete:
-  - **Raid:**
-    - `showRaid`, and the party attributes off;
+  - **Columns** (more than 5 members):
+    - `showRaid`, with `showParty` and `showPlayer` kept on, and `showSolo` as the player set it.
+      The client checks RAID first (`SecureGroupHeaders.lua:266-272`), so inside a raid they change
+      nothing. Without them, a raid that falls back to a party in combat would show no cells at all,
+      not even the player, until combat ends (GRF session, 2026-10-18);
     - `groupBy GROUP`, `groupingOrder "1,2,3,4,5,6,7,8"`;
     - `point TOP`, `yOffset -6`, `xOffset 0`;
     - `unitsPerColumn 5`, `maxColumns 8`, `columnAnchorPoint LEFT`, `columnSpacing 6`.
     That makes `ceil(n/5)` columns: 10, 20 and 40 players give 2, 4 and 8, and 11 give 3.
-  - **Party and solo:**
-    - `showParty`, `showPlayer`, `showSolo`, and `showRaid` kept on, so a party turned raid in
-      combat lists its raid members;
+  - **The row** (5 members or fewer, party or raid):
+    - `showParty`, `showPlayer`, `showRaid`, and `showSolo` as the player set it. `showRaid` stays on,
+      so a party turned raid in combat lists its raid members;
+    - `groupBy` and `groupingOrder` cleared. In a party, the client's INDEX order (player, then
+      `party1..4`) is what keeps party pets under their owners; in a small raid, raid-index order;
     - `point LEFT`, `xOffset 6`, `yOffset 0`;
     - `unitsPerColumn 5`, `maxColumns 8`, `columnAnchorPoint BOTTOM`, `columnSpacing 6`.
-    That makes one row of up to 5. A raid formed in combat still fits, in rows of 5 stacked upward,
-    until combat ends and the raid set applies. Nothing is truncated.
+    That makes one row of up to 5. A group that grows past 5 in combat still fits, in rows of 5
+    stacked upward, until combat ends and the column set applies. Nothing is truncated.
+  - **Which set:** chosen by **member count**, not by raid or party, out of combat. The owner's
+    "2 and 5 players: one row" is about head count, and the raid set alone would make a raid of 2-5
+    a column. A raid of 5 or fewer gets the row, with its pets in the raid-pet column: the party-pet
+    row is for a party only, since a raid's order isn't `party1..4`.
   - **Changing orientation** (out of combat) is one batch, because each attribute change would
     otherwise re-lay the children at once (`SecureGroupHeaders.lua:66-68`):
     1. set the header's `_ignore`, which makes it skip updates;
@@ -161,7 +170,10 @@ blocked, and after combat everything glides once to the new footprint. The owner
 - **The baseline (HUD mode):** one stable point, the reference's 928 frame limit, at 152/1080 of
   UIParent's height above its bottom edge (M3 measures it against the action bars).
   - **Raid:** the grid's bottom is on the baseline, so its top is at baseline + 5 rows.
-  - **Party:** the grid's bottom is at baseline + 68 (top at 800), with the pet row under it.
+  - **The row:** the grid's bottom is at baseline + 68 (top at 800), with a party's pet row under
+    it. 68 is raw UIParent units, like the cells, so the row's top lines up with GUF's player and
+    target, whose centre is at baseline + 98 (section 4). Only the baseline itself is a fraction of
+    UIParent's height.
   - **Centring:** grid and pets are centred together on the whole union (grid, the 6 gap and every
     pet column), recomputed out of combat. The header's anchor is its bottom centre, shifted left by
     half the pet block's width.
@@ -345,3 +357,9 @@ Round 2 resolved eight and left four small gaps, all adopted:
 
 Round 3 found all four resolved and no new defect. It confirmed the batch: clearing `_ignore` never
 re-lays the header, and re-setting an attribute to the same value does.
+
+**Amended after the GRF session's reading of the client code (2026-10-18), before building:**
+- the column set keeps the party attributes on, so the grid never empties in combat;
+- the set is chosen by member count, so a raid of 2-5 is a row;
+- the row set clears `groupBy`;
+- the party lift is in raw units.
