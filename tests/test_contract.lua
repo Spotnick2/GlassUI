@@ -12,7 +12,32 @@ dofile("tests/harness.lua")
 
 -- CLAUDE.md, "The skin contract". Getters (Get*, Is*) too.
 local ALLOWED = { SetAlpha = true, SetVertexColor = true, SetDesaturated = true, SetShadowOffset = true,
-                  SetShadowColor = true, SetTexture = true, SetAtlas = true, HookScript = true }
+                  SetShadowColor = true, SetTexture = true, SetAtlas = true, HookScript = true,
+                  SetTextColor = true }   -- only on the audited titles: checked below
+
+-- The audited titles (docs/PLAN.md, "The accent on Blizzard's titles", #71),
+-- found by structure, never by what a kit registered: the tracker's headers
+-- and each meter window's title.
+local function audited()
+    local set = {}
+    local t = rawget(_G, "ObjectiveTrackerFrame")
+    if t and t.Header then set[t.Header.Text] = true end
+    for _, m in ipairs(t and t.modules or {}) do
+        if m.Header then set[m.Header.Text] = true end
+    end
+    for i = 1, 3 do
+        local w = rawget(_G, "DamageMeterSessionWindow" .. i)
+        if w then set[w.DamageMeterTypeDropdown.TypeName] = true end
+    end
+    return set
+end
+local function unaudited()
+    local set, out = audited(), {}
+    for _, fs in ipairs(WoW.textColorCalls) do
+        if not set[fs] then out[#out + 1] = fs end
+    end
+    return out
+end
 
 -- A skin that fails halfway through touching the merchant, and a protected
 -- one on it: their callbacks run on Blizzard's objects too.
@@ -92,6 +117,8 @@ for _, a in ipairs(WoW.textureArgs) do
     check(a[3] == nil or WoW.readBack(a[1], a[2], a[3]),
           a[2] .. " on a Blizzard texture with nil or its own read-back value (got " .. tostring(a[3]) .. ")")
 end
+check(#WoW.textColorCalls > 0, "the titles were coloured (the audited-list rule is exercised)")
+eq(#unaudited(), 0, "SetTextColor only on the audited titles")
 eq(#WoW.luaCalls, 0, "no Lua method of Blizzard's called (" .. table.concat(WoW.luaCalls, ", ") .. ")")
 local changes = WoW.fieldChanges()
 eq(#changes, 0, "no field written on a Blizzard object (" .. table.concat(changes, ", ") .. ")")
@@ -122,5 +149,15 @@ local read = shine:GetAtlas()
 check(WoW.readBack(shine, "SetAtlas", read), "an atlas read from a texture may go back on it")
 check(not WoW.readBack(glow, "SetAtlas", read), "but not on another texture")
 check(not WoW.readBack(shine, "SetTexture", read), "nor through the other setter")
+-- SetTextColor on anything else is caught, called directly or passed through
+-- a kit (which would register it).
+local line
+WoW.asBlizzard(function() line = WoW.blizzObject("FontString", QuestObjectiveTracker) end)
+line:SetTextColor(1, 0, 0)
+eq(#unaudited(), 1, "the guard sees a quest line coloured directly")
+WoW.textColorCalls = {}
+local kit = GUI.Engine.byKey.tracker.kit
+kit:TextColor(line, 1, 0, 0)
+eq(#unaudited(), 1, "and one passed through the kit")
 
 done("test_contract")

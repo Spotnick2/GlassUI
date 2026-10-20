@@ -25,6 +25,9 @@
 --           swapped meanwhile stays (the tracker's minimize buttons).
 --   Shade   a shadow under a font string. Not restorable live: a skin using
 --           it is live = false, and the kit refuses otherwise.
+--   TextColor  the suite accent on an audited Blizzard title only (#71,
+--           docs/PLAN.md "The accent on Blizzard's titles"): held like a
+--           fade, Blizzard's latest colour kept and given back by Restore.
 --   Panel   our glass: an unnamed, mouse-off frame of our own under the window.
 --
 -- Widget kinds, each written when the first skin needed it: Shell
@@ -161,6 +164,55 @@ local function untint(tex, s)
     pcall(tex.SetVertexColor, tex, API.Plain(s.r) or 1, API.Plain(s.g) or 1, API.Plain(s.b) or 1, API.Plain(s.a) or 1)
 end
 
+--------------------------------------------------------------------------------
+-- TextColor: the audited titles only (#71). Never a quest line, a bar's name
+-- or value, a timer: their colours carry information.
+--------------------------------------------------------------------------------
+
+local coloured = setmetatable({}, { __mode = "k" })   -- string -> { kit =, was = Blizzard's RGBA, want = ours, busy = }
+local textHooked = setmetatable({}, { __mode = "k" })
+
+-- Ours, with Blizzard's alpha. The busy flag keeps the hook from taking it
+-- for Blizzard's colour.
+local function paintText(fs, s)
+    s.busy = true
+    pcall(fs.SetTextColor, fs, s.want[1], s.want[2], s.want[3], s.was[4])
+    s.busy = false
+end
+
+local function rgba(r, g, b, a)
+    r, g, b, a = API.Plain(r), API.Plain(g), API.Plain(b), API.Plain(a)
+    if type(r) ~= "number" or type(g) ~= "number" or type(b) ~= "number" then return nil end
+    return { r, g, b, type(a) == "number" and a or 1 }
+end
+
+function K:TextColor(fs, r, g, b)
+    if type(fs) ~= "table" or type(fs.SetTextColor) ~= "function" then return false end
+    local s = coloured[fs]
+    if not s then
+        s = { kit = self, was = rgba(fs:GetTextColor()) or { 1, 1, 1, 1 } }
+        coloured[fs] = s
+    end
+    s.want = { r, g, b }
+    if not textHooked[fs] then
+        textHooked[fs] = true
+        hooksecurefunc(fs, "SetTextColor", function(f, ...)
+            local st = coloured[f]
+            if not st or st.busy then return end
+            st.was = rgba(...) or st.was
+            if GUI.Engine.Active(st.kit.key) then paintText(f, st) end
+        end)
+    end
+    paintText(fs, s)
+    return true
+end
+
+-- The capture dropped first, so the hook leaves Blizzard's colour alone.
+local function untext(fs, s)
+    coloured[fs] = nil
+    pcall(fs.SetTextColor, fs, s.was[1], s.was[2], s.was[3], s.was[4])
+end
+
 -- A shadow under a font string's text, where glass makes it hard to read.
 -- Its font and colour stay Blizzard's.
 function K:Shade(fs)
@@ -223,6 +275,9 @@ function K:Restore()
     end
     for tex, s in pairs(tinted) do
         if s.kit == self then untint(tex, s) end
+    end
+    for fs, s in pairs(coloured) do
+        if s.kit == self then untext(fs, s) end
     end
     self:HidePanels()
 end

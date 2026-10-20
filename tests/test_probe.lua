@@ -616,6 +616,21 @@ eq(T.trackerState("c").section, true, "and the Quests section's")
 rawset(tracker, "isCollapsed", nil); rawset(quests, "isCollapsed", nil)
 rawset(_G, "GlassUI", savedGUI2)
 
+-- #71: the titles' colours against the suite accent.
+local savedGUI3 = rawget(_G, "GlassUI")
+local accentNow = "ice"
+rawset(_G, "GlassUI", { Suite = { Accent = function() return { 0.65, 0.835, 0.905 } end,
+                                  Look = function() return { accent = accentNow } end } })
+quests.Header.Text = quests.Header:CreateFontString()
+tracker.Header = CreateFrame("Frame", nil, tracker)
+tracker.Header.Text = tracker.Header:CreateFontString()
+tracker.Header.Text:SetTextColor(0.65, 0.835, 0.905)
+local acRec = T.accentState("t")
+eq(acRec.accent, "ice", "the accent read")
+check(acRec.tracker and math.abs(acRec.tracker[3] - 0.905) < 0.001, "the tracker title's colour read")
+eq(acRec.meter, nil, "no meter window: nothing read, no error")
+rawset(_G, "GlassUI", savedGUI3)
+
 -- #56 discovery: Questie's tracker and RestedXP's window and arrow.
 -- When each frame first exists: the first place it was seen is kept.
 local qbase = CreateFrame("Frame", "Questie_BaseFrame", UIParent)
@@ -723,7 +738,7 @@ eq(a.last, 1.25, "with the angle")
 
 -- The procedures are defined and every step's run, wait and check works here.
 for _, name in ipairs({ "wave1", "map", "gradient", "merchant", "card", "suite", "suitecombat", "meter",
-                        "meterskin", "meterbars", "suitepanel", "pearl", "tracker", "questing" }) do
+                        "meterskin", "meterbars", "suitepanel", "pearl", "tracker", "questing", "accent" }) do
     local p = FP.procedures["SkinProbe/" .. name]
     check(p ~= nil, "procedure " .. name .. " is defined")
     if p then

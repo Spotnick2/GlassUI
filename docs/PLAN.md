@@ -133,14 +133,75 @@ lines in each TOC are the authoritative list of Forever-only variants (FV below)
   `MenuStyle1Mixin.Generate`/`MenuStyle2Mixin.Generate` (submenus: `GetOpenMenu()` returns only the
   root, `Blizzard_Menu\Menu.lua:1952`). Inside them we only **collect and schedule**: the styling
   runs a frame later.
+- **The accent on Blizzard's titles** (the owner, 2026-10-19: "the accent should recolor the yellow
+  header"; #71). `SetTextColor` is allowed on these title font strings only, named in the skin
+  files:
+  - the objective tracker's container and module headers (`ObjectiveTrackerFrame.Header.Text`, each
+    module's `Header.Text`);
+  - the damage meter's window titles (`DamageMeterTypeDropdown.TypeName`).
+
+  The rules:
+  - **Through the kit only:** `kit:TextColor(fs, r, g, b)`. It captures the colour Blizzard gave
+    (`GetTextColor`, through `API.Plain`: it may return secrets) the first time, and `Restore` gives
+    it back live, RGBA. That is the **effective** colour, written back as an explicit one, not the
+    font object's inheritance: a later change of the font object's own colour wouldn't show on a
+    restored string. Here, the fonts' colours are fixed gold (`Blizzard_ObjectiveTrackerFonts.xml`,
+    `GameFontNormalMed1`), so it doesn't matter. The skins never restore over a new owner after a
+    handover, as for every touch.
+  - **Hook instead of fight:** a `hooksecurefunc` on that instance's `SetTextColor` keeps
+    Blizzard's latest colour and puts ours back while the skin is active, as `Fade` does for the
+    alpha.
+    - It is hooked once per string.
+    - **Fade's busy guard** wraps every write of ours, accent refreshes included, so the hook
+      neither recurses nor takes our accent for Blizzard's colour.
+    - Restore drops the capture before writing Blizzard's colour back; turning the skin on again
+      captures afresh.
+  - **Blizzard never colours these strings itself** (wow-ui-source, forever):
+    - the headers' colour is their font object's (`ObjectiveTrackerHeaderFont`, `GameFontNormalMed1`);
+    - Blizzard only calls `SetText` on them (`Blizzard_ObjectiveTrackerModule.lua:122`,
+      `Blizzard_ObjectiveTrackerContainer.lua:49`, `DamageMeterSessionWindow.lua:804`);
+    - Edit Mode's Text Size changes the shared font object, not the string
+      (`Blizzard_ObjectiveTrackerManager.lua:97-105`);
+    - auto-scaling uses `SetTextScale`.
+
+    The skins still reapply the colour on every pass; the in-game check covers Text Size, with the
+    skin on and after turning it off.
+  - **Live, in both skins:** each subscribes to `LookChanged`, guarded by `Engine.Active`, and
+    recolours its titles:
+    - the tracker in its `recolour`, beside the buttons;
+    - the meter for every session window, the late ones included (its style pass and
+      `SetupSessionWindow` hook colour new windows).
+
+    The windows aren't protected (SkinProbe, 70450), so a change in combat applies at once.
+  - **Never** a quest title, an objective line, a bar's name or value, a timer, or a dropdown's own
+    `Text`: difficulty and class colours carry information.
+  - **`test_contract` enforces the list itself,** not the kit's registration (a quest title passed
+    through `kit:TextColor` would register too):
+    - the stubs record each `SetTextColor` receiver;
+    - each must be one of the audited strings, found by structure (the tracker's
+      `Header.Text`s, each meter window's `TypeName`).
+
+    Mutation-checked with a direct call on a quest line, and with a quest line passed through the
+    kit.
+  - **Tests:**
+    - the stubs gain `GetTextColor` with RGBA read-back;
+    - repeated accents;
+    - a colour Blizzard writes meanwhile (kept, ours put back, given back at off);
+    - restore of RGBA;
+    - off, a change while off, then on;
+    - a meter window made later;
+    - the handover;
+    - in combat.
 - **Never:** `Show`/`Hide`/`SetShown`/`SetPoint`/`SetParent`/`SetSize`/`SetScale`/`SetText`/
-  `SetFont*`/`SetTextColor`, mixin methods, `UIFrameFade*`, field writes on Blizzard tables,
-  reassigning a Blizzard global or method, opening or closing Blizzard windows from our code.
+  `SetFont*`/`SetTextColor` (except the audited title accent above), mixin methods, `UIFrameFade*`,
+  field writes on Blizzard tables, reassigning a Blizzard global or method, opening or closing
+  Blizzard windows from our code.
 - **Found by structure, never by texture path** (`GetTexture` returns file IDs here, GlassMail
   `Skin.lua:140`).
 - **Our glass is our own unnamed frame**, a child one level under the window (GlassMail's panel),
   or a sibling when the window flattens render layers (GlassActionBars' MicroMenu). Mouse off.
-- **Text keeps Blizzard's fonts and colours** (quality and difficulty colours carry information).
+- **Text keeps Blizzard's fonts and colours** (quality and difficulty colours carry information),
+  except the audited titles above.
   We add shadows only.
 - **Our state lives in our own weak tables**, keyed by the Blizzard object.
 - **Protected windows** (marked in the table): the first pass waits for

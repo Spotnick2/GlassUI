@@ -24,7 +24,11 @@
 --            pass B, 70374).
 --
 -- Text keeps Blizzard's colours and fonts (difficulty colours carry
--- information); the POI buttons and auto-quest popups stay stock.
+-- information), except the headers' titles ("All Objectives", "Quests"...),
+-- which wear the accent: the owner's audited exception (#71, docs/PLAN.md
+-- "The accent on Blizzard's titles"). Blizzard only sets their text, their
+-- gold is ObjectiveTrackerHeaderFont's. The POI buttons and auto-quest popups
+-- stay stock.
 --
 -- The glass is the damage meter's recipe (the owner, 2026-10-19: GQT's single
 -- panel put the minimize buttons on its rim): a small band over the "All
@@ -129,17 +133,29 @@ local function tintButton(kit, b)
     end
 end
 
--- Every button in the accent again (the kit keeps Blizzard's colour from the
--- first tint, so Restore gives that back however many times this ran).
+-- A header's title in the accent (#71): its Text only, never a quest line.
+local function title(kit, h)
+    if not tbl(h.Text) then return end
+    local c = accent()
+    kit:TextColor(h.Text, c[1], c[2], c[3])
+end
+
+-- Every button and title in the accent again (the kit keeps Blizzard's
+-- colours from the first touch, so Restore gives those back however many
+-- times this ran).
 local function recolour(kit, t)
     local h = tbl(t.Header)
     if h then
         tintButton(kit, h.MinimizeButton)
         tintButton(kit, h.FilterButton)
+        title(kit, h)
     end
     for _, m in ipairs(modules(t)) do
         local mh = tbl(m.Header)
-        if mh then tintButton(kit, mh.MinimizeButton) end
+        if mh then
+            tintButton(kit, mh.MinimizeButton)
+            title(kit, mh)
+        end
     end
 end
 
@@ -158,6 +174,7 @@ local function container(kit, t)
     kit:Fade(kit:Child(h, "Background"))
     tintButton(kit, h.MinimizeButton)
     tintButton(kit, h.FilterButton)
+    title(kit, h)
 end
 
 -- One module: its header, and the pooled extras this layout shows.
@@ -168,6 +185,7 @@ local function module(kit, m)
             if tbl(h[key]) then kit:Blank(h[key]) end
         end
         tintButton(kit, h.MinimizeButton)
+        title(kit, h)
     end
     for _, frame in pairs(tbl(m.usedRightEdgeFrames) or {}) do
         if tbl(frame) then fadeButtonArt(kit, frame) end

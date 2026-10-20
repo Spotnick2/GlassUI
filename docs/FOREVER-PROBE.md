@@ -155,6 +155,19 @@ Questie 12.1.0 (`Questie_Camelot.toc`) and RestedXP v4.11.26, the versions the p
 | QS.3 | Questie's tracker and Blizzard's: both shown, or does Questie hide Blizzard's? | not run yet |
 | QS.4 | The arrow: rotated by `SetRotation`, angle in `orientation`; where it sits against Glass Panel | not run yet |
 
+## The accent on the yellow titles (#71, docs/PLAN.md "The accent on Blizzard's titles")
+
+`/fp steps skin accent`, with the tracker and the meter on screen. Each check reads the tracker's
+"All Objectives" and window 1's meter title (`GetTextColor`) against `Suite.Accent()`, saved as
+`SkinProbeDB.results["AC.<label>"]`.
+
+| # | Question | Result |
+|---|---|---|
+| AC.1 | Ice and gold, live: both titles follow at once | not run yet |
+| AC.2 | Edit Mode's Text Size with the skins on: the accent holds | not run yet |
+| AC.3 | Skins off: Blizzard's gold back; Text Size while off keeps it; on again: the current accent | not run yet |
+| AC.4 | Changed in combat: at once, nothing blocked | not run yet |
+
 ## The quest tracker (#55, docs/QUEST-TRACKER.md part 2)
 
 `/fp steps skin tracker`, with Glass Quest Tracker **disabled**: while it's loaded, it owns the

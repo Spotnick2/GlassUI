@@ -95,6 +95,18 @@ WoW.meterWindow(2)
 eq(mine(2), 3, "shown again: no second set of panels")
 eq(mine(1), 3, "and window 1 untouched")
 
+-- The titles in the suite accent (#71): live, in combat too, a later window
+-- included; gold by default, which is Blizzard's own.
+local function title(i) return win(i).DamageMeterTypeDropdown.TypeName end
+near(select(2, title(1):GetTextColor()), 0.82, "the title in the accent: gold by default")
+GUI.Suite.SetLook("accent", "ice")
+near(select(3, title(1):GetTextColor()), 0.905, "'Damage Done' in ice at once")
+near(select(3, title(2):GetTextColor()), 0.905, "every window's title")
+WoW.combat = true
+GUI.Suite.SetLook("accent", "gold")
+WoW.combat = false
+near(select(3, title(1):GetTextColor()), 0, "in combat: at once")
+GUI.Suite.SetLook("accent", "ice")
 -- Live off: Blizzard's latest alphas back, our glass hidden, no /reload needed.
 WoW.chat = {}
 GUI._test.slash("skin meter off")
@@ -102,12 +114,21 @@ check(not table.concat(WoW.chat, "\n"):find("/reload", 1, true), "off is live: n
 eq(w1.MinimizeContainer.Background:GetAlpha(), 0.25, "the Background Blizzard set while the skin was on comes back")
 eq(w1.Header:GetAlpha(), 1, "the header bar comes back")
 check(not body:IsShown() and not header:IsShown(), "our panels hide")
+local tr, tg, tb, ta = title(1):GetTextColor()
+check(tr == 1 and tg == 0.82 and tb == 0 and ta == 1, "the title back in Blizzard's gold, RGBA")
+GUI.Suite.SetLook("accent", "gold")
+GUI.Suite.SetLook("accent", "ice")
+eq(select(1, title(1):GetTextColor()), 1, "off: an accent change touches nothing")
 WoW.meterBackground(1, 0.75)
 eq(w1.MinimizeContainer.Background:GetAlpha(), 0.75, "while off, Blizzard's Background applies")
 -- A window made while the skin is off, and the hook doing nothing meanwhile.
 WoW.meterWindow(3)
 untouched(3, nil, "while off, a new window is left stock")
 eq(mine(3), 0, "and gets no panel")
+GUI._test.slash("skin meter on")
+near(select(3, title(3):GetTextColor()), 0.905, "on again: a window made while off takes the current accent")
+GUI._test.slash("skin meter off")
+GUI.Suite.SetLook("accent", "gold")
 
 -- Live on: every window, the one made while off included.
 GUI._test.slash("skin meter on")

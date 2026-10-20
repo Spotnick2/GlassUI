@@ -192,7 +192,16 @@ function Methods.IsEnabled(w) return w._enabled ~= false end
 function Methods.SetChecked(w, v) w._checked = v and true or false end
 function Methods.SetText(w, t) w._text = t end
 function Methods.GetText(w) return w._text end
-function Methods.SetTextColor(w, r, g, b) w._textColor = { r, g, b } end
+-- RGBA, read back; a call from addon code on a Blizzard string is recorded
+-- with its receiver (WoW.textColorCalls) for test_contract's audited list.
+function Methods.SetTextColor(w, r, g, b, a)
+    if rawget(w, "_blizz") and not WoW.inBlizzard then table.insert(WoW.textColorCalls, w) end
+    w._textColor = { r, g, b, a or 1 }
+end
+function Methods.GetTextColor(w)
+    local c = w._textColor or { 1, 1, 1, 1 }
+    return c[1], c[2], c[3], c[4]
+end
 function Methods.GetAnimationGroups(w) return unpack(w._anims or {}) end
 function Methods.UnregisterAllEvents(w) w._events = {} end
 function Methods.SetHighlightTexture(w, file, blend)
@@ -371,6 +380,10 @@ function WoW.reset()
     WoW.style = 0
     WoW.blizz, WoW.blizzCalls, WoW.luaCalls, WoW.fieldWrites, WoW.textureArgs = {}, {}, {}, {}, {}
     WoW.reads = setmetatable({}, { __mode = "k" })
+    WoW.textColorCalls = {}
+    -- A fresh session: the last one's callbacks are gone with it (a stale
+    -- skin's LookChanged would otherwise touch this session's frames).
+    if EventRegistry then EventRegistry.callbacks = {} end
     WoW.hookedKeys = setmetatable({}, { __mode = "k" })
     WoW.snap = setmetatable({}, { __mode = "k" })
     WoW.inBlizzard = false
@@ -687,6 +700,7 @@ local function meterWindow(meter, i)
     w.SessionDropdown = blizz("DropdownButton", w)
     w.DamageMeterTypeDropdown = blizz("DropdownButton", w)
     w.DamageMeterTypeDropdown.TypeName = blizz("FontString", w.DamageMeterTypeDropdown, nil, "OVERLAY")
+    w.DamageMeterTypeDropdown.TypeName._textColor = { 1, 0.82, 0, 1 }   -- GameFontNormalMed1's gold
     local mc = blizz("Frame", w)
     mc._level = i
     w.MinimizeContainer = mc
@@ -766,6 +780,7 @@ local function makeHeader(parent, bgAtlas, collapse, expand, withAnim)
     local h = blizz("Frame", parent)
     h.Background = blizzTexture(h, bgAtlas)
     h.Text = blizz("FontString", h)
+    h.Text._textColor = { 1, 0.82, 0, 1 }   -- ObjectiveTrackerHeaderFont's gold
     h.MinimizeButton = blizzButton(h, collapse, collapse .. "-pressed", "ui-questtrackerbutton-red-highlight")
     if withAnim then
         h.Shine = blizzTexture(h, "UI-QuestTracker-OBJFX-Shine")
