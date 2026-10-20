@@ -38,6 +38,8 @@ Suite.ROSTER = {
     { name = "GlassMiniMapBar", title = "Glass MiniMap Bar" },
     { name = "GlassPanel", title = "Glass Panel" },
     { name = "GlassQuestTracker", title = "Glass Quest Tracker" },
+    -- Not a Glass addon by name, but a LibGlass one, and a tenant of the guild skin (#92).
+    { name = "GuildSpy", title = "GuildSpy" },
 }
 local member = {}
 for _, m in ipairs(Suite.ROSTER) do member[m.name] = true end
@@ -478,6 +480,57 @@ end
 
 function Suite.ReportOf(addon) return reports[addon] end
 function Suite.AnswerOf(addon) return answers[addon] end
+
+--------------------------------------------------------------------------------
+-- Tenants of Glass UI's own skins (#92, docs/GUILD.md): another addon's frames
+-- inside a window Glass UI skins, handed over by that addon (GuildSpy's side
+-- tabs and its in-guild panel). Additive within API 1: feature-detected one by
+-- one (type(rawget(Suite, "SkinTab")) == "function"). Accepted means
+-- registered, not styled: the skin applies them when it can, gives them back
+-- when it stops, and tells a panel's owner through its onSkin. Glass UI keeps
+-- them in its own weak tables and never writes a field on them.
+--------------------------------------------------------------------------------
+
+local tenants = {
+    tabs = setmetatable({}, { __mode = "k" }),      -- tab -> owner
+    panels = setmetatable({}, { __mode = "k" }),    -- host -> { owner =, onSkin =, applied = }
+    listener = nil,                                  -- the skin's: fn(kind, frame)
+}
+GUI.Tenants = tenants
+
+local function isFrame(f, kind)
+    if type(f) ~= "table" or type(f.GetObjectType) ~= "function" then return false end
+    local ok, t = pcall(f.GetObjectType, f)
+    return ok and (kind == nil or t == kind)
+end
+
+local function tell(kind, frame)
+    if tenants.listener then
+        local ok, err = pcall(tenants.listener, kind, frame)
+        if not ok then API.Fail("tenant:" .. kind, err) end
+    end
+end
+
+-- A side tab (a CheckButton) of the owner's, parented to CommunitiesFrame.
+function Suite.SkinTab(owner, tab)
+    if type(owner) ~= "string" or owner == "" or not isFrame(tab, "CheckButton") then return false end
+    local cf = rawget(_G, "CommunitiesFrame")
+    local okP, parent = pcall(tab.GetParent, tab)
+    if not cf or not okP or parent ~= cf then return false end
+    tenants.tabs[tab] = owner
+    tell("tab", tab)
+    return true
+end
+
+-- A panel host of the owner's inside CommunitiesFrame: our glass at its level
+-- + 1, onSkin(on, look) on every application and end of ours.
+function Suite.SkinPanel(owner, host, onSkin)
+    if type(owner) ~= "string" or owner == "" or not isFrame(host) then return false end
+    if onSkin ~= nil and type(onSkin) ~= "function" then return false end
+    tenants.panels[host] = { owner = owner, onSkin = onSkin, applied = false }
+    tell("panel", host)
+    return true
+end
 
 Suite._test = {
     answers = answers, reports = reports,

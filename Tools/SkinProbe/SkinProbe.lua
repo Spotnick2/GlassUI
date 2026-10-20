@@ -1687,6 +1687,150 @@ skinChecks.gmState, skinChecks.gmOn, skinChecks.settingsReturn = gmState, gmOn, 
 end
 
 --------------------------------------------------------------------------------
+-- Guild & Communities (#92, docs/GUILD.md): each pane against its section,
+-- each tab's selection art against its own checked state, the roster's taint
+-- (a note edited, a sort, a rank) under the taint log, IsProtected/IsForbidden
+-- on the frames we parent to, GuildSpy's tabs and panel when it hands them
+-- over. Saved as GD.<label>.
+--------------------------------------------------------------------------------
+
+do
+local function gdState(label)
+    local G = glassUI()
+    local T = G and G.Guild and G.Guild._test
+    local cf = frameByName("CommunitiesFrame")
+    local rec = { tabs = 0, mirrored = 0, panes = 0, panesRight = 0 }
+    rec.shown = cf ~= nil and seen(cf)
+    local okC, c = pcall(InCombatLockdown)
+    rec.combat = okC and plain(c) == true
+    if cf then
+        local okA, a = call(cf.NineSlice, "GetAlpha")
+        rec.shell = okA and plain(a) or nil
+        local h = T and T.wins[cf]
+        -- Each pane shows exactly while its section does.
+        local sections = { list = cf.CommunitiesList, chat = cf.Chat, roster = cf.MemberList, edit = cf.ChatEditBox }
+        for key, section in pairs(sections) do
+            local sec = h and h[key]
+            if sec and section then
+                rec.panes = rec.panes + 1
+                if seen(sec.fill) == seen(section) then rec.panesRight = rec.panesRight + 1 end
+            end
+        end
+        for tab, s in pairs(T and T.tabs or {}) do
+            if seen(tab) then
+                rec.tabs = rec.tabs + 1
+                local okK, k = call(tab, "GetChecked")
+                local lit = s.light and s.light:IsShown() == true
+                if okK and (plain(k) == true) == lit then rec.mirrored = rec.mirrored + 1 end
+            end
+        end
+        local prot = {}
+        for _, f in ipairs({ cf, cf.MemberList, cf.ChatEditBox, cf.Chat, cf.CommunitiesList }) do
+            local okP, pr = call(f, "IsProtected")
+            local okF, fb = call(f, "IsForbidden")
+            if (okP and plain(pr)) or (okF and plain(fb)) then prot[#prot + 1] = tostring(f.GetName and f:GetName() or "?") end
+        end
+        rec.protected = table.concat(prot, ",")
+    end
+    local tn = G and G.Tenants
+    rec.tenantTabs, rec.tenantPanels, rec.tenantApplied = 0, 0, 0
+    for _ in pairs(tn and tn.tabs or {}) do rec.tenantTabs = rec.tenantTabs + 1 end
+    for _, pnl in pairs(tn and tn.panels or {}) do
+        rec.tenantPanels = rec.tenantPanels + 1
+        if pnl.applied then rec.tenantApplied = rec.tenantApplied + 1 end
+    end
+    rec.blocked = type(SkinProbeDB) == "table" and SkinProbeDB.suiteBlocked or 0
+    say("GD " .. label .. ": shown " .. tostring(rec.shown) .. ", combat " .. tostring(rec.combat) .. ", panes "
+        .. rec.panesRight .. "/" .. rec.panes .. ", tabs mirrored " .. rec.mirrored .. "/" .. rec.tabs
+        .. ", tenants " .. rec.tenantTabs .. " tabs, " .. rec.tenantApplied .. "/" .. rec.tenantPanels
+        .. " panels applied, protected '" .. tostring(rec.protected) .. "', blocked " .. rec.blocked)
+    record("GD." .. label, rec)
+    return rec
+end
+
+local function gdOn(label, want)
+    want = want or {}
+    return function()
+        local r = gdState(label)
+        local bad = {}
+        local function want_(cond, why) if not cond then bad[#bad + 1] = why end end
+        want_(r.shown, "the window not shown")
+        if want.combat ~= nil then want_(r.combat == want.combat, "combat " .. tostring(r.combat)) end
+        want_(r.shell == 0, "shell " .. tostring(r.shell))
+        want_(r.panes > 0 and r.panesRight == r.panes, "panes right " .. r.panesRight .. " of " .. r.panes)
+        want_(r.tabs > 0 and r.mirrored == r.tabs, "tabs mirrored " .. r.mirrored .. " of " .. r.tabs)
+        want_(r.tenantApplied == r.tenantPanels, "tenant panels applied " .. r.tenantApplied .. " of " .. r.tenantPanels)
+        want_(r.blocked == 0, r.blocked .. " blocked")
+        return #bad == 0, #bad == 0 and "as Blizzard shows it" or table.concat(bad, "; ")
+    end
+end
+
+local function gdSwitch(on)
+    local G = glassUI()
+    if not (G and G.Engine) then return false, "Glass UI not loaded" end
+    return G.Engine.SetEnabled("guild", on)
+end
+
+local function guildShown()
+    local cf = frameByName("CommunitiesFrame")
+    return cf ~= nil and seen(cf)
+end
+
+Probe:Steps("guild", {
+    title = "Glass UI: Guild & Communities in glass (#92)",
+    { text = "Turns on script errors and the taint log, and counts blocked actions from now.", auto = true,
+      run = function()
+          if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
+          return setCVar("scriptErrors", "1"), setCVar("taintLog", "1")
+      end },
+    { text = "Type /reload, then don't open the guild window before the next step: its first opening has to be in "
+          .. "combat.", reload = true },
+    { text = "Get into combat, then press J to open Guild & Communities. This step goes on by itself once it's open "
+          .. "in combat; a screenshot is taken.", timeout = 180, screenshot = "guild, first opening in combat",
+      wait = function()
+          local okC, c = pcall(InCombatLockdown)
+          local fighting = okC and plain(c) == true
+          return guildShown() and fighting, fighting and "waiting for the window" or "waiting for combat"
+      end, check = gdOn("first in combat", { combat = true }) },
+    { text = "Out of combat, on the chat (the first side tab), press Next for a screenshot.",
+      screenshot = "guild, chat", check = gdOn("chat", { combat = false }) },
+    { text = "Does it read as the mockup: dark glass, the smoky title, the portrait's disc, recessed panes for the "
+          .. "list, chat and roster, glass side tabs with the selected one rimmed in gold? Anything off: the Note.",
+      ask = true },
+    { text = "Click the Roster tab (the second), then press Next.", screenshot = "guild, roster", check = gdOn("roster") },
+    { text = "In the roster: sort by a column (click its header), open a member's details, and edit a note (yours or "
+          .. "an officer note, if you can) or change a rank if you have the rights. Press Next.",
+      check = gdOn("roster actions") },
+    { text = "Did all that go without a 'blocked' or 'interface action failed' message?", ask = true },
+    { text = "Click the Guild Benefits tab, then Guild Info, then Preferred Play (those that show). Press Next on the "
+          .. "last one.", screenshot = "guild, info", check = gdOn("info") },
+    { text = "Back on the chat tab, click the minimize button (the arrows, top right): the small chat window. Press "
+          .. "Next.", screenshot = "guild, minimized", check = gdOn("minimized") },
+    { text = "Maximize it again. Shift-click the chat tab (it opens Social settings; close them), then press Next: "
+          .. "the selected look follows each tab's state.", check = gdOn("shift-click") },
+    { text = "If GuildSpy is installed: open its tab (the spyglass under the side tabs), then its professions tab, then "
+          .. "back to the chat. Press Next on the chat. Skip if GuildSpy isn't installed.",
+      screenshot = "guild, guildspy", check = gdOn("guildspy") },
+    { text = "With GuildSpy: do its tabs match Blizzard's, and does its panel read as part of the window? (Its own "
+          .. "panel art follows once GuildSpy's side is done.)", ask = true },
+    -- Off and on.
+    { text = "With the window open: switches the skin off (Blizzard's look).", button = "Skin off",
+      run = function() return gdSwitch(false) end, screenshot = "guild, skin off",
+      check = function()
+          local r = gdState("off")
+          local ok = r.shown and r.shell == 1 and r.tenantApplied == 0
+          return ok, ok and "Blizzard's look, tenants told" or "something of ours while off"
+      end },
+    { text = "Click another tab, then switch the skin on.", button = "Skin on",
+      run = function() return gdSwitch(true) end, screenshot = "guild, on again", check = gdOn("on again") },
+    taintOff(),
+    { text = "Type /reload to save the results.", reload = true },
+})
+
+skinChecks.gdState, skinChecks.gdOn = gdState, gdOn
+end
+
+--------------------------------------------------------------------------------
 -- The suite theme (#24, docs/SUITE.md "In-game validation", S.1-S.8): Glass
 -- UI coordinating Glass Unit Frames and Glass Raid Frames. It reads only
 -- public state: Glass UI's Suite record, each addon's glass instance (its
@@ -3566,7 +3710,7 @@ boot:SetScript("OnEvent", function(_, _, name)
     say("loaded (" .. SkinProbeDB.loads .. " loads). /fp skin for the commands, /fp steps skin wave1 to start")
 end)
 
-NS._test = { gmState = skinChecks.gmState, gmOn = skinChecks.gmOn, settingsReturn = skinChecks.settingsReturn, bagsState = skinChecks.bagsState,
+NS._test = { gdState = skinChecks.gdState, gdOn = skinChecks.gdOn, gmState = skinChecks.gmState, gmOn = skinChecks.gmOn, settingsReturn = skinChecks.settingsReturn, bagsState = skinChecks.bagsState,
     bagsOn = skinChecks.bagsOn, both = both, closeState = closeState, closeOn = closeOn, headerTry = headerTry, layoutState = layoutState, layoutOn = layoutOn, Probe = Probe, state = state, tree = tree, fade = fade, slashOwners = slashOwners,
              gamepad = gamepad, panelsOn = panelsOn, panelsOff = panelsOff, borderFade = borderFade,
              borderRestore = borderRestore, gradientOn = gradientOn, gradientOff = gradientOff,

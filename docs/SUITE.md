@@ -133,7 +133,32 @@ GlassUI.Suite.Open()                --> bool   (added within API 1)
   `type(rawget(Suite, "Open")) == "function"` before showing the button, and calls it under
   `pcall`. It never reaches into `GlassUI.Options`: `Suite` is the contract.
 - Glass UI **never reads** another addon's SavedVariables or tables beyond what `Report` handed it,
-  and **never writes** to them. It never asks an addon to restyle.
+  and **never writes** to them. It never asks an addon to restyle, with one opt-in exception: a
+  tenant that registered a panel through `SkinPanel` hears `onSkin` (below, #92).
+
+### Tenants of Glass UI's own skins (#92, docs/GUILD.md)
+
+Another addon's frames inside a window Glass UI skins, handed over by that addon (GuildSpy's side
+tabs and in-guild panel). Additive within API 1. Validate `Suite` and `API == 1`, then feature-detect
+**each** function on its own (`type(rawget(Suite, "SkinTab")) == "function"`), and call under `pcall`.
+
+```lua
+GlassUI.Suite.SkinTab(owner, tab)             --> bool   (a RightSideTabTemplate CheckButton in CommunitiesFrame)
+GlassUI.Suite.SkinPanel(owner, host, onSkin)  --> bool   (onSkin(on, { backing = { r, g, b } }) or nil)
+```
+
+- **Accepted means registered, not styled:** true for a valid call even while the guild skin is
+  off or stood down; false for an invalid one; never an error.
+- **A tab** gets the side-tab treatment (its frame and checked glow faded, our glass, the selected
+  look mirroring its own `GetChecked()`, never written). It's given back when the skin is off.
+- **A panel:**
+  - Our glass is at the host's level + 1, with no backing; the tenant's content must be at + 2 or
+    higher, and its opaque base stays its own.
+  - `onSkin(false)` at registration unless applied; `onSkin(true)` only once applied; `onSkin(false)`
+    once when an applied treatment ends (the switch, the master switch, a handover, through the
+    engine's `def.restored`).
+  - A failing callback is recorded as `tenant:<owner>:onSkin`, and never fails the skin.
+- That's tenant styling, separate from a member's own `Theme`/`Report` participation.
 
 ### Each member's state on Glass UI's page
 

@@ -18,6 +18,7 @@ Skin\Kit.lua
 Skin\Merchant.lua
 Skin\Bags.lua
 Skin\GameMenu.lua
+Skin\Guild.lua
 Skin\DamageMeter.lua
 Skin\QuestTracker.lua
 Options.lua

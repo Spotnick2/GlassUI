@@ -243,7 +243,7 @@ eq(rows.GlassUnitFrames.line:GetText(), "Glass UI preset: Pearl", "a follower's 
 eq(rows.GlassRaidFrames.line:GetText(), "Using addon settings", "a non-follower's card: Using addon settings")
 eq(rows.GlassUnitFrames.follow:GetChecked(), true, "Use Glass UI appearance is checked when it follows")
 eq(rows.GlassUnitFrames.open:IsShown(), true, "a Settings button when it reported one")
-eq(O.foldText:GetText(), "Theme sync unavailable (7)", "the other seven are folded")
+eq(O.foldText:GetText(), "Theme sync unavailable (8)", "the other eight are folded (GuildSpy joined, #92)")
 eq(O.list:IsShown(), false, "folded at first")
 O.fold:Click()
 eq(O.list:IsShown(), true, "a click unfolds them")

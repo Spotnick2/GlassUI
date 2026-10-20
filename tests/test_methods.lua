@@ -33,6 +33,11 @@ WoW.asBlizzard(function() MerchantFrame.Bg:SetAlpha(0.5) end)
 WoW.openBag(ContainerFrame1, { "empty", 133784 })
 WoW.showGameMenu()
 WoW.gameMenuRefresh()
+GUI.Suite.SkinTab("GuildSpy", CreateFrame("CheckButton", nil, CommunitiesFrame, "RightSideTabTemplate"))
+GUI.Suite.SkinPanel("GuildSpy", CreateFrame("Frame", nil, CommunitiesFrame), function() end)
+WoW.showGuild()
+WoW.guildMode("ROSTER")
+WoW.clickTab(CommunitiesFrame.ChatTab)
 WoW.openBag(ContainerFrameCombinedBags, { 133784, "empty" })
 GUI.Bags.SetHeaderHeight(30)
 GUI.Suite.Theme("GlassUnitFrames")
@@ -42,6 +47,7 @@ GUI.Options._test.lookPanel:Show()
 GUI.Options._test.lookRows["Tint"][2]:Click()
 for _, cmd in ipairs({ "failures", "version", "help", "", "skins", "skin merchant off", "skin merchant on",
                        "skin bags off", "skin bags on", "skin gamemenu off", "skin gamemenu on",
+                       "skin guild off", "skin guild on",
                        "off", "on", "theme smoked", "theme class", "theme clear",
                        "suite", "suite follow glassunitframes on", "options",
                        "look", "look tint class", "look preset soft" }) do
