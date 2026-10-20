@@ -284,9 +284,17 @@ local function region(w, wtype, layer)
     if wtype ~= "MaskTexture" then table.insert(w._regions, r) end
     return r
 end
-function Methods.CreateTexture(w, _, layer) return region(w, "Texture", layer) end
+function Methods.CreateTexture(w, _, layer, _, sub)
+    local r = region(w, "Texture", layer)
+    r._sub = sub
+    return r
+end
 function Methods.CreateMaskTexture(w) return region(w, "MaskTexture") end
-function Methods.CreateFontString(w, _, layer) return region(w, "FontString", layer) end
+function Methods.CreateFontString(w, _, layer, template)
+    local r = region(w, "FontString", layer)
+    r._font = template
+    return r
+end
 -- On a Blizzard object, addon code's argument is kept: the contract allows
 -- only nil, or giving back the value read before.
 local function textureArg(t, method, v)
@@ -435,6 +443,8 @@ end
 WoW.GUID = "Player-4618-0ABCDEF0"
 C_Item = { GetItemIconByID = function(id) return WoW.itemIcons[id] end }
 WoW.itemIcons = { [5500] = 134122 }
+-- The buyback count (MerchantFrame.lua:416, 547): WoW.buybackCount.
+function GetNumBuybackItems() return WoW.buybackCount or 0 end
 function UnitGUID(unit) return unit == "player" and WoW.GUID or nil end
 -- Seconds since the client started: what a test sets.
 WoW.now = 0

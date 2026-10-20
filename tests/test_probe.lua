@@ -766,6 +766,103 @@ eq(refreshed, 3, "repainted again")
 rawset(_G, "MerchantItem1", nil); rawset(_G, "MerchantItem2", nil); rawset(_G, "MerchantBuyBackItem", nil)
 rawset(_G, "GlassUI", savedGUI3)
 
+-- #84: the merchant's layout as the procedure reads it, and the switch.
+local function sec(host, shown)
+    local s = { fill = host:CreateTexture(), edges = {} }
+    s.fill:SetShown(shown)
+    return s
+end
+local lwin = CreateFrame("Frame", nil, merchant)
+local lbb = CreateFrame("Frame", "MerchantBuyBackItem", merchant)
+local tab1 = CreateFrame("Button", "MerchantFrameTab1", merchant)
+local tab2 = CreateFrame("Button", "MerchantFrameTab2", merchant)
+local lrow11 = CreateFrame("Frame", "MerchantItem11", merchant)
+lrow11._bottom = 60
+local hl1, hl2 = lwin:CreateTexture(), lwin:CreateTexture()
+hl2:Hide()
+local lu = { frame = merchant, bb = lbb, tabs = { [tab1] = hl1, [tab2] = hl2 },
+             inset = sec(lwin, true), money = sec(lwin, true), currency = sec(lwin, true),
+             boxLeft = sec(lwin, true), boxRight = sec(lwin, true), bar = sec(lwin, false),
+             line = lwin:CreateTexture(), square = sec(lbb, false), label = lbb:CreateFontString(),
+             empty = CreateFrame("Frame", nil, merchant) }
+lu.line:Hide(); lu.label:Hide(); lu.empty:Hide()
+local current, asked = "sections", {}
+rawset(_G, "GlassUI", { Merchant = {
+    Layout = function() return current end,
+    SetLayout = function(n) asked[#asked + 1] = n; if n == "sections" or n == "bar" then current = n; return true end
+        return false end,
+    _test = { ui = { [merchant] = lu } } } })
+local okL, whyL = T.layoutOn("t", { layout = "sections", tab = 1 })()
+check(okL, "sections on the Merchant tab: 5 panes, tab 1 lit: pass: " .. tostring(whyL))
+eq(SkinProbeDB.results["ML.t"].sections, 5, "the panes counted in the results")
+lu.boxRight.fill:Hide()
+okL, whyL = T.layoutOn("t", { layout = "sections", tab = 1 })()
+check(not okL and whyL:find("4 sections", 1, true), "a missing pane fails")
+lu.boxRight.fill:Show()
+lu.line:Show()
+okL, whyL = T.layoutOn("t", { layout = "sections", tab = 1 })()
+check(not okL and whyL:find("bar piece", 1, true), "a bar piece in sections fails")
+lu.line:Hide()
+hl2:Show()
+okL, whyL = T.layoutOn("t", { layout = "sections", tab = 1 })()
+check(not okL and whyL:find("tabs lit", 1, true), "both tabs lit fails")
+hl2:Hide()
+okL, whyL = T.layoutOn("t", { layout = "bar", tab = 1 })()
+check(not okL and whyL:find("layout sections", 1, true), "the wrong layout fails")
+-- The bar on the Buyback tab, empty.
+eq(select(1, T.layoutTry("bar")), true, "the switch asked through Glass UI")
+eq(asked[#asked], "bar", "bar")
+eq(select(1, T.layoutTry("glitter")), false, "an unknown layout refused")
+for _, k in ipairs({ "inset", "money", "currency", "boxLeft", "boxRight" }) do lu[k].fill:Hide() end
+lu.bar.fill:Show(); lu.line:Show(); lu.empty:Show()
+lbb:Hide(); hl1:Hide(); hl2:Show()
+lu.bar.fill._top = 30
+okL, whyL = T.layoutOn("t", { layout = "bar", tab = 2, empty = true })()
+check(okL, "bar, Buyback tab, empty: pass: " .. tostring(whyL))
+lu.empty:Hide()
+okL, whyL = T.layoutOn("t", { layout = "bar", tab = 2, empty = true })()
+check(not okL and whyL:find("empty state false", 1, true), "no empty state when wanted fails")
+lu.empty:Show()
+lu.bar.fill._top = 70
+okL, whyL = T.layoutOn("t", { layout = "bar", tab = 2 })()
+check(not okL and whyL:find("over row 11", 1, true), "the bar reaching row 11 fails")
+lu.bar.fill._top = 30
+-- The Merchant tab: the square, the label while empty.
+lbb:Show(); hl1:Show(); hl2:Hide(); lu.empty:Hide()
+lu.square.fill:Show(); lu.label:Show()
+okL, whyL = T.layoutOn("t", { layout = "bar", tab = 1, label = true })()
+check(okL, "bar, Merchant tab, the square and label: pass: " .. tostring(whyL))
+lu.square.fill:Hide()
+okL, whyL = T.layoutOn("t", { layout = "bar", tab = 1, label = true })()
+check(not okL and whyL:find("square false", 1, true), "no square fails")
+lu.square.fill:Show()
+okL, whyL = T.layoutOn("t", { layout = "bar", tab = 1, label = false })()
+check(not okL and whyL:find("label true", 1, true), "a label beside a sold item fails")
+okL, whyL = T.layoutOn("t", { layout = "bar", tab = 2 })()
+check(not okL and whyL:find("Buyback tab", 1, true), "the wrong tab fails")
+-- Run 2: the header and the tabs tucked under the window.
+local GM, hdr = rawget(_G, "GlassUI").Merchant, true
+GM.Header = function() return hdr end
+GM.SetHeader = function(on) hdr = on; return true end
+local tglass = CreateFrame("Frame", nil, tab1)
+tglass:SetFrameStrata("LOW")
+lu.tabGlass = { [tab1] = { glass = tglass } }
+okL, whyL = T.layoutOn("t", { layout = "bar", tab = 1, header = true })()
+check(okL, "the header Pearl, the tabs a strata under the window: pass: " .. tostring(whyL))
+eq(SkinProbeDB.results["ML.t"].tabStrata, "LOW", "the tabs' strata recorded")
+eq(SkinProbeDB.results["ML.t"].windowStrata, "MEDIUM", "and the window's")
+eq(select(1, T.headerTry(false)), true, "the header switched through Glass UI")
+eq(hdr, false, "off")
+okL, whyL = T.layoutOn("t", { layout = "bar", tab = 1, header = true })()
+check(not okL and whyL:find("header false", 1, true), "the header off when wanted on fails")
+T.headerTry(true)
+tglass:SetFrameStrata("MEDIUM")
+okL, whyL = T.layoutOn("t", { layout = "bar", tab = 1, header = true })()
+check(not okL and whyL:find("not tucked", 1, true), "the tabs in the window's strata fail")
+rawset(_G, "MerchantBuyBackItem", nil); rawset(_G, "MerchantFrameTab1", nil); rawset(_G, "MerchantFrameTab2", nil)
+rawset(_G, "MerchantItem11", nil)
+rawset(_G, "GlassUI", savedGUI3)
+
 -- #56 discovery: Questie's tracker and RestedXP's window and arrow.
 -- When each frame first exists: the first place it was seen is kept.
 local qbase = CreateFrame("Frame", "Questie_BaseFrame", UIParent)

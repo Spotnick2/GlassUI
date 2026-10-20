@@ -30,6 +30,9 @@
 --           fade, Blizzard's latest colour kept and given back by Restore.
 --   Panel   our glass: an unnamed, mouse-off frame of our own under the window.
 --   Disc    a LibGlass disc of ours behind a round region (a portrait, #48).
+--   Section a recessed pane of ours on a host's ARTWORK: a fill in the
+--           backing's colour and a 1 px edge, no glass (#84).
+--   Adopt   a frame of ours outside our panels, hidden and shown with them.
 --
 -- Widget kinds, each written when the first skin needed it: Shell
 -- (ButtonFrameTemplate / PortraitFrameTemplate), Inset (InsetFrameTemplate),
@@ -252,7 +255,7 @@ function K:Panel(window, size, insets, anchor, opts)
     local backing = (not opts or opts.backing ~= false) and self:Backing(panel, g) or nil
     GUI.Theme.Register(g, backing, self.backing)
     self.panels[#self.panels + 1] = panel
-    return panel, g
+    return panel, g, backing
 end
 
 -- The opaque backing (Glass Quest Tracker's): above the shadow (-8), under
@@ -286,6 +289,51 @@ function K:Disc(parent, around, opts)
     GUI.Theme.Register(g, nil, "clear")
     self.panels[#self.panels + 1] = host
     return host, g
+end
+
+-- A recessed pane (#84): a black fill on the host's ARTWORK 0 at
+-- SECTION_FILL, and four 1 px edges on ARTWORK 1 at SECTION_EDGE, anchored
+-- to the fill. In a glass host that is over its body (BACKGROUND) and under
+-- its rim (g.top). Black, not the backing's colour: over a window's
+-- near-opaque floor of that colour a pane of it didn't show (ML run 1,
+-- 70450). The caller anchors the fill and shows it (Kit.ShowSection); it
+-- starts hidden.
+Kit.SECTION_FILL, Kit.SECTION_EDGE = 0.4, 0.12
+local SIDES = { "TOP", "BOTTOM", "LEFT", "RIGHT" }
+function K:Section(host)
+    local fill = host:CreateTexture(nil, "ARTWORK", nil, 0)
+    fill:SetColorTexture(0, 0, 0, Kit.SECTION_FILL)
+    local edges = {}
+    for i, side in ipairs(SIDES) do
+        local e = host:CreateTexture(nil, "ARTWORK", nil, 1)
+        e:SetColorTexture(1, 1, 1, Kit.SECTION_EDGE)
+        if i <= 2 then
+            e:SetPoint(side .. "LEFT", fill, side .. "LEFT", 0, 0)
+            e:SetPoint(side .. "RIGHT", fill, side .. "RIGHT", 0, 0)
+            e:SetHeight(1)
+        else
+            e:SetPoint("TOP" .. side, fill, "TOP" .. side, 0, 0)
+            e:SetPoint("BOTTOM" .. side, fill, "BOTTOM" .. side, 0, 0)
+            e:SetWidth(1)
+        end
+        edges[i] = e
+    end
+    local s = { fill = fill, edges = edges }
+    Kit.ShowSection(s, false)
+    return s
+end
+
+function Kit.ShowSection(s, on)
+    if not s then return end
+    s.fill:SetShown(on)
+    for _, e in ipairs(s.edges) do e:SetShown(on) end
+end
+
+-- Our frame parented to a Blizzard one (so it hides with it): hidden by
+-- Restore and the handover, shown again by ShowPanels, like our panels.
+function K:Adopt(frame)
+    self.panels[#self.panels + 1] = frame
+    return frame
 end
 
 -- Our own frames: Show and Hide are ours to call.

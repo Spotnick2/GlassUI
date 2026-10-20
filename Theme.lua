@@ -22,7 +22,7 @@
 -- A window that opens over other UI is another case (#80, docs/MERCHANT.md):
 -- over RestedXP's guide window, clear's 0.35 let its bright text read through
 -- the merchant (the owner, 2026-10-20). Such a skin (Engine.Register's
--- backing = "window") gets at least WINDOW_BACKING (opaque now); its tint,
+-- backing = "window") gets at least WINDOW_BACKING (0.85 now); its tint,
 -- wash and the backing's colour stay the body's. The tracker and the meter,
 -- over the world, keep the body's.
 --
@@ -40,11 +40,13 @@ GUI.Theme = Theme
 Theme.NAMES = { "clear", "smoked", "class" }
 Theme.LABELS = { clear = "Clear glass", smoked = "Smoked glass", class = "Class colour glass" }
 
--- The window floor, opaque: at 0.6, 0.75 and 0.85 RestedXP's text still read
--- through the merchant, dimmed exactly by the floor (MS.1, 70450), and the
--- owner wants nothing behind a window (2026-10-20). The glass is the tint,
--- wash and rim over it.
-Theme.WINDOW_BACKING = 1
+-- The window floor: at 0.6, 0.75 and 0.85 RestedXP's text still read
+-- through the merchant, dimmed exactly by the floor (MS.1, 70450). The owner
+-- wanted nothing behind a window, then a bit less than opaque, as Blizzard's
+-- own bags, where a damage meter behind shows just a bit (2026-10-20): 0.85,
+-- tried against 0.8 and 0.9 in ML run 2. The glass is the tint, wash and rim
+-- over it.
+Theme.WINDOW_BACKING = 0.85
 
 -- { g = LibGlass regions, backing = our texture, kind = "window" | "clear" | nil }
 local surfaces = {}
