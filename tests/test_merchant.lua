@@ -141,7 +141,7 @@ local function glassOf(host)
 end
 local win = surfaceOf(panels[1])
 eq(win.backing._color[4], GUI.Theme.WINDOW_BACKING, "clear: the window at the window floor")
-eq(GUI.Theme.WINDOW_BACKING, 0.85, "a bit less than opaque, as Blizzard's bags (owner, ML run 1)")
+eq(GUI.Theme.WINDOW_BACKING, 0.93, "the item area denser: text behind stops competing (owner, #86)")
 -- The disc (#48): Pearl clear, no backing, whatever the tint (owner, MS.3).
 local disc = glassOf(panels[2])
 check(disc ~= nil, "the disc is painted by the theme")
@@ -153,7 +153,7 @@ local function isClear(msg)
 end
 isClear("clear on the clear tint")
 GUI._test.slash("theme smoked")
-eq(win.backing._color[4], 0.92, "smoked's 0.92 is over the floor: kept")
+eq(win.backing._color[4], GUI.Theme.WINDOW_BACKING, "smoked's 0.92 rises to the floor too")
 isClear("the disc stays clear on smoked")
 GUI._test.slash("theme class")
 eq(win.backing._color[4], GUI.Theme.WINDOW_BACKING, "class rises to the floor too")
@@ -190,11 +190,11 @@ eq(MerchantItem1.SlotTexture:GetAlpha(), 0, "the slot faded")
 check(not r1.red:IsShown(), "Blizzard's grey plate: no red")
 WoW.merchantRow(1, "red")
 check(r1.red:IsShown(), "can't use or afford: Blizzard's red mirrored on our glass")
-near(r1.red._color[4], 0.35, "at 0.35")
+near(r1.red._color[4], 0.12, "at 0.12: a burgundy undertone on a charcoal card (#86)")
 eq(r1.red._color[1], 1, "in red")
 check(r1.red._masks and r1.red._masks[1] == r1.g.mask, "inside the row's glass")
 WoW.merchantRow(1, "darkred")
-near(r1.red._color[4], 0.175, "sold out and red: Blizzard's dark red, fainter")
+near(r1.red._color[4], 0.06, "sold out and red: Blizzard's dark red, fainter")
 WoW.merchantRow(1, "normal")
 check(not r1.red:IsShown(), "grey again: no red")
 eq(_G.MerchantItem1NameFrame:GetAlpha(), 0, "the plate stays faded through Blizzard's recolours")
@@ -284,7 +284,9 @@ local u = R.ui[MerchantFrame]
 check(u ~= nil, "the layout is built at install")
 local win = ours(MerchantFrame)[1]
 local L = GUI.Merchant
-eq(L.Layout(), "sections", "sections by default (owner: closer to the original for now)")
+eq(L.Layout(), "bar", "the bar by default (owner, #86)")
+eq(L.Saved(), "bar", "saved: the default")
+check(L.SetLayout("sections"), "sections for the next checks (the probe's override)")
 local function on(sec) return sec ~= nil and sec.fill:IsShown() and sec.edges[1]:IsShown() and sec.edges[4]:IsShown() end
 local function off(sec) return sec == nil or (not sec.fill:IsShown() and not sec.edges[1]:IsShown()) end
 local function anchored(tex, point, rel, relPoint, x, y, msg) at(tex, point, rel, relPoint, x, y, msg) end
@@ -325,14 +327,26 @@ check(on(u.inset) and on(u.money), "the rest stays")
 WoW.merchantTab(1)
 check(on(u.boxLeft) and on(u.boxRight), "the Merchant tab: back")
 
--- The active tab: a light on its glass, following Blizzard's MiddleActive.
+-- The active tab: the stock tab's warm gradient on its glass, the other
+-- darker, following Blizzard's MiddleActive.
 local hl1, hl2 = u.tabs[MerchantFrameTab1], u.tabs[MerchantFrameTab2]
-check(hl1 and hl2, "a light on each tab")
+local dim1, dim2 = u.dims[MerchantFrameTab1], u.dims[MerchantFrameTab2]
+check(hl1 and hl2 and dim1 and dim2, "a glow and a dim on each tab")
 eq(hl1:GetParent(), ours(MerchantFrameTab1)[1], "on the tab's glass")
+check(hl1._masks and hl1._masks[1] == u.tabGlass[MerchantFrameTab1].g.mask, "inside its glass")
+check(dim1._masks and dim1._masks[1] == u.tabGlass[MerchantFrameTab1].g.mask, "the dim too")
 check(hl1:IsShown() and not hl2:IsShown(), "the Merchant tab lit")
-eq(hl1._color[4], R.TAB_ACTIVE, "at TAB_ACTIVE")
+check(dim2:IsShown() and not dim1:IsShown(), "the Buyback tab dimmed")
+local gr = hl1._gradient
+check(gr and gr[1] == "VERTICAL", "a vertical gradient")
+local gold = GUI.Suite.ACCENTS.gold
+check(gr and gr[2].r == gold[1] and gr[2].g == gold[2] and gr[2].a == R.TAB_GLOW, "the accent at TAB_GLOW at the bottom")
+check(gr and gr[3].r == gold[1] and gr[3].a == 0, "to nothing at the top")
+eq(dim1._color[1], 0, "the dim black")
+eq(dim1._color[4], R.TAB_DIM, "at TAB_DIM")
 WoW.merchantTab(2)
 check(hl2:IsShown() and not hl1:IsShown(), "the Buyback tab lit after the switch")
+check(dim1:IsShown() and not dim2:IsShown(), "and the Merchant tab dimmed")
 WoW.asBlizzard(function() MerchantFrameTab1.MiddleActive:Show() end)
 check(hl1:IsShown(), "MiddleActive shown alone lights it (the hook on the instance)")
 WoW.asBlizzard(function() MerchantFrameTab1.MiddleActive:Hide() end)
@@ -347,11 +361,42 @@ eq(MerchantFrame:GetFrameStrata(), "MEDIUM", "the window: a MEDIUM panel")
 eq(tg1:GetFrameStrata(), "LOW", "the tab's glass in the strata below, behind the window's floor")
 eq(R.ui[MerchantFrame].tabGlass[MerchantFrameTab1].g.top:GetFrameStrata(), "LOW", "its rim too")
 eq(ours(MerchantFrameTab2)[1]:GetFrameStrata(), "LOW", "both tabs")
-eq(R.TAB_ACTIVE, 0.2, "the active tab's light, brighter than run 1's 0.10")
+eq(R.TAB_GLOW, 0.3, "the glow")
+eq(R.TAB_DIM, 0.25, "the dim")
 
--- The header: the window's backing from the item inset's top down, clear Pearl above.
+-- The header: the window's backing from the item inset's top down, a smoky
+-- gradient of ours above, joined at the backing's own RGBA.
 local L0 = GUI.Merchant
-eq(L0.Header(), true, "the header Pearl by default")
+eq(L0.Header(), true, "the header on by default")
+local hd = u.header
+check(hd and hd:IsShown(), "the header shown")
+eq(hd:GetParent(), u.win, "on the window glass's host")
+eq(hd._layer, "BACKGROUND", "on the backing's layer")
+eq(hd._sub, -7, "its sublevel: under the tint and wash")
+check(hd._masks and hd._masks[1] ~= nil and hd._masks[1] == u.backing._masks[1], "clipped by the window glass's mask, as the backing")
+at(hd, "TOPLEFT", u.win, "TOPLEFT", 0, 0, "from the window's top")
+at(hd, "RIGHT", u.win, "RIGHT", 0, 0, "its width")
+at(hd, "BOTTOM", MerchantFrame.Inset, "TOP", 0, 0, "down to the inset's top, where the backing starts")
+local function headerColours()
+    local g = hd._gradient
+    return g and g[2], g and g[3]
+end
+local hb, ht = headerColours()
+local Br, Bg, Bb, Ba = GUI.Theme.Backing("window")
+eq(Ba, 0.93, "the window's backing now: the floor")
+check(hb and hb.r == Br and hb.a == Ba, "the bottom: the backing's own RGBA, no seam")
+check(ht and ht.r == Br and ht.a == R.HEADER_TOP, "the top: HEADER_TOP, smoky glass")
+eq(R.HEADER_TOP, 0.45, "0.45")
+-- The floor tried lower with smoked over it: the header follows the backing's real alpha.
+GUI.Theme.WINDOW_BACKING = 0.85
+GUI._test.slash("theme smoked")
+hb = headerColours()
+near(hb.a, 0.92, "smoked's 0.92 over a 0.85 floor: the header joins at 0.92 (Theme.Backing)")
+near(u.backing._color[4], 0.92, "as the backing is painted")
+GUI.Theme.WINDOW_BACKING = 0.93
+GUI._test.slash("theme clear")
+hb = headerColours()
+near(hb.a, 0.93, "back")
 local bk = u.backing
 eq(#bk._points, 4, "the backing on four points")
 at(bk, "TOP", MerchantFrame.Inset, "TOP", 0, 0, "its top at the item inset's")
@@ -359,24 +404,27 @@ at(bk, "LEFT", u.win, "LEFT", 0, 0, "the window's width")
 at(bk, "RIGHT", u.win, "RIGHT", 0, 0, "to its right")
 at(bk, "BOTTOM", u.win, "BOTTOM", 0, 0, "down to the window's bottom")
 check(L0.SetHeader(false), "the header switched off")
+check(not hd:IsShown(), "no header texture")
 eq(#bk._points, 1, "the backing whole again")
 eq(bk._points[1][1], "ALL", "on the whole window")
 L0.SetHeader(true)
 at(bk, "TOP", MerchantFrame.Inset, "TOP", 0, 0, "and back")
+check(hd:IsShown(), "the header back")
 
--- The red: Blizzard's plate in sections, much less in the bar.
+-- The red: one quiet peak in both layouts (#86).
 WoW.merchantRow(2, "red")
 local r2 = R.rows[MerchantItem2]
-near(r2.red._color[4], R.RED.sections, "sections: full red at 0.35")
+eq(R.RED, 0.12, "0.12")
+near(r2.red._color[4], R.RED, "sections: full red at RED")
 eq(L.SetLayout("glitter"), false, "an unknown layout is refused")
 eq(L.Layout(), "sections", "and changes nothing")
 
 -- The bar, live.
 check(L.SetLayout("bar"), "bar")
-near(r2.red._color[4], 0.12, "bar: the red repainted at once, at 0.12")
+near(r2.red._color[4], R.RED, "bar: the same")
 check(r2.red:IsShown(), "still shown")
 WoW.merchantRow(4, "darkred")
-near(R.rows[MerchantItem4].red._color[4], R.RED.bar * 0.5, "dark red: half of it")
+near(R.rows[MerchantItem4].red._color[4], R.RED * 0.5, "dark red: half of it")
 check(off(u.inset) and off(u.money) and off(u.currency) and off(u.boxLeft) and off(u.boxRight), "bar: no sections")
 check(on(u.bar), "one footer bar")
 check(u.line:IsShown(), "a header line")
@@ -434,6 +482,17 @@ WoW.hideMerchant()
 WoW.merchantTab(1)
 WoW.showMerchant()
 check(not u.empty:IsShown(), "reopened on the Merchant tab: none")
+-- The empty message in sections too (#86).
+L.SetLayout("sections")
+WoW.merchantTab(2)
+check(u.empty:IsShown(), "sections: the empty message on an empty Buyback page")
+WoW.buybackCount = 1
+WoW.merchantRow(1, "normal")
+check(not u.empty:IsShown(), "and gone with the first sale")
+WoW.buybackCount = 0
+WoW.merchantRow(1, "empty")
+WoW.merchantTab(1)
+L.SetLayout("bar")
 
 -- Off: nothing of ours; every hook a no-op; switching meanwhile; on: re-synced.
 WoW.merchantTab(2)
@@ -453,17 +512,119 @@ check(not hl1:IsShown() or not ours(MerchantFrameTab1)[1]:IsShown(), "nor light 
 check(L.SetLayout("sections"), "switching while off is kept")
 L.SetHeader(false)
 eq(u.backing._points[1][1], "TOP", "the header switched while off moves nothing")
-near(r2.red._color[4], R.RED.bar, "but repaints nothing while off")
+near(r2.red._color[4], R.RED, "the red unchanged while off")
 GUI._test.slash("skin merchant on")
 check(on(u.inset) and on(u.boxLeft) and off(u.bar), "on again: the layout chosen meanwhile")
 check(not u.square.host:IsShown() and not u.empty:IsShown(), "and none of the bar's pieces")
-near(r2.red._color[4], R.RED.sections, "its red")
+near(r2.red._color[4], R.RED, "its red")
 check(hl1:IsShown() and not hl2:IsShown(), "the tab lit as Blizzard shows it now")
 eq(u.backing._points[1][1], "ALL", "and the header as set while off")
 L.SetHeader(true)
-L.SetLayout("sections")
+L.SetLayout(nil)
 WoW.buybackSlot(nil)
 WoW.buybackCount = nil
+
+-- The setting (#86): saved sparsely, the probe's override over it.
+eq(L.Layout(), "bar", "no override: the saved bar")
+local refreshed = 0
+local realRefresh = GUI.Options.Refresh
+GUI.Options.Refresh = function() refreshed = refreshed + 1 end
+GUI._test.slash("merchant sections")
+eq(rawget(GlassUIDB, "merchantLayout"), "sections", "saved")
+eq(L.Saved(), "sections", "the saved value")
+eq(L.Layout(), "sections", "shown")
+check(on(u.inset) and off(u.bar), "applied live")
+eq(refreshed, 1, "the settings page redrawn")
+check(L.SetLayout("bar"), "the probe's override")
+eq(L.Layout(), "bar", "shows the bar")
+eq(L.Saved(), "sections", "the saved value untouched")
+check(on(u.bar), "laid out")
+check(L.SetLayout(nil), "dropped")
+eq(L.Layout(), "sections", "back to the saved one")
+check(on(u.inset), "laid out again")
+GUI._test.slash("merchant bar")
+eq(rawget(GlassUIDB, "merchantLayout"), nil, "the default: nothing saved")
+eq(L.Layout(), "bar", "the bar")
+eq(L.SetSaved("glitter"), false, "an unknown layout is refused")
+eq(rawget(GlassUIDB, "merchantLayout"), nil, "nothing saved")
+GUI._test.slash("skin merchant off")
+GUI._test.slash("merchant sections")
+eq(refreshed, 3, "the page redrawn while off too")
+check(u.bar.fill:IsShown() and not u.inset.fill:IsShown(), "off: nothing laid out (the bar's pieces as they were)")
+GUI._test.slash("skin merchant on")
+check(on(u.inset) and off(u.bar), "on: the setting saved while off")
+GUI._test.slash("merchant bar")
+GUI.Options.Refresh = realRefresh
+
+-- The close button (#86): Blizzard's red art faded, our disc and gold X.
+local cb = MerchantFrame.CloseButton
+for _, k in ipairs({ "_normal", "_pushed", "_disabled", "_highlight" }) do
+    eq(cb[k]:GetAlpha(), 0, "its " .. k:sub(2) .. " texture faded")
+end
+check(u.closeDisc and u.closeDisc:GetParent() == cb, "a disc of ours in the button: it hides with it")
+eq(u.closeDisc:GetWidth(), 24, "the button's size")
+eq(u.closeDisc:GetFrameLevel(), cb:GetFrameLevel() - 1, "one under it")
+at(u.closeDisc, "CENTER", cb, "CENTER", 0, 0, "centred on it")
+local x = u.closeFrame
+eq(x:GetParent(), cb, "the X's frame in the button")
+eq(x:GetFrameLevel(), cb:GetFrameLevel() + 1, "over the disc's rim and the faded art")
+check(not x._mouse, "no mouse: the click stays Blizzard's")
+eq(#u.closeX, 2, "two bars")
+eq(u.closeX[1]._width, R.CLOSE_X[1], "2 px")
+eq(u.closeX[1]._height, R.CLOSE_X[2], "12 px")
+near(u.closeX[1]._rotation, math.pi / 4, "one at 45 degrees")
+near(u.closeX[2]._rotation, -math.pi / 4, "the other at -45")
+local xc = u.closeX[1]._color
+check(xc and xc[1] == gold[1] and xc[2] == gold[2] and xc[4] == R.CLOSE_REST, "gold, at CLOSE_REST")
+eq(R.CLOSE_REST, 0.85, "0.85")
+at(x, "CENTER", cb, "CENTER", 0, 0, "at rest: centred")
+-- Feedback: our X only.
+WoW.asBlizzard(function() cb._scripts.OnEnter(cb) end)
+eq(u.closeX[1]._color[4], 1, "hover: full")
+WoW.asBlizzard(function() cb._scripts.OnMouseDown(cb) end)
+at(x, "CENTER", cb, "CENTER", 0, -1, "pressed: 1 px down")
+eq(u.closeX[2]._color[4], 1, "still full")
+WoW.asBlizzard(function() cb._scripts.OnMouseUp(cb) end)
+at(x, "CENTER", cb, "CENTER", 0, 0, "released")
+-- The accent changes: the X and the tab's glow follow (Theme.OnRefresh).
+GUI._test.slash("look accent ice")
+local ice = GUI.Suite.ACCENTS.ice
+check(u.closeX[1]._color[1] == ice[1] and u.closeX[1]._color[4] == 1, "the X in ice, at its current strength")
+check(hl1._gradient[2].r == ice[1] and hl1._gradient[2].a == R.TAB_GLOW, "the glow in ice")
+GUI._test.slash("look accent gold")
+check(u.closeX[1]._color[1] == gold[1], "and gold again")
+-- A hover that ends while off: re-synced when on.
+GUI._test.slash("skin merchant off")
+for _, k in ipairs({ "_normal", "_pushed", "_disabled", "_highlight" }) do
+    eq(cb[k]:GetAlpha(), 1, "off: its " .. k:sub(2) .. " art back")
+end
+check(not u.closeDisc:IsShown() and not x:IsShown(), "off: our disc and X hidden")
+WoW.asBlizzard(function() cb._scripts.OnLeave(cb) end)
+eq(u.closeX[1]._color[4], 1, "off: the leave is a no-op")
+GUI._test.slash("look accent ice")
+check(u.closeX[1]._color[1] == gold[1], "and an accent change paints nothing while off")
+WoW.mouseOver[cb] = false
+cb._buttonState = "PUSHED"
+GUI._test.slash("skin merchant on")
+eq(u.closeX[1]._color[4], R.CLOSE_REST, "on: the hover read back, gone")
+check(u.closeX[1]._color[1] == ice[1], "the accent set while off")
+at(x, "CENTER", cb, "CENTER", 0, -1, "and the press read back")
+check(u.closeDisc:IsShown() and x:IsShown(), "our disc and X back")
+cb._buttonState = nil
+WoW.mouseOver[cb] = true
+GUI._test.slash("look accent gold")
+GUI._test.slash("skin merchant off")
+GUI._test.slash("skin merchant on")
+eq(u.closeX[1]._color[4], 1, "on with the mouse over it: full")
+at(x, "CENTER", cb, "CENTER", 0, 0, "not pressed")
+WoW.mouseOver[cb] = nil
+WoW.asBlizzard(function() cb._scripts.OnLeave(cb) end)
+
+-- The saved layout after a reload.
+GUI = loadAddon({ db = { merchantLayout = "sections" } })
+WoW.showMerchant()
+eq(GUI.Merchant.Layout(), "sections", "a saved sections survives a reload")
+check(GUI.Merchant._test.ui[MerchantFrame].inset.fill:IsShown(), "and is laid out")
 
 -- The switch survives a reload.
 GUI = loadAddon({ db = { skins = { merchant = false } } })

@@ -214,6 +214,8 @@ function Methods.SetNormalTexture(w, file) w._normal = newWidget("Texture", w); 
 function Methods.GetNormalTexture(w) return w._normal end
 function Methods.GetPushedTexture(w) return w._pushed end
 function Methods.GetDisabledTexture(w) return w._disabled end
+-- "NORMAL" or "PUSHED"; a test sets w._buttonState.
+function Methods.GetButtonState(w) return w._buttonState or "NORMAL" end
 function Methods.SetCheckedTexture(w, file) w._checkedTex = newWidget("Texture", w) end
 function Methods.GetCheckedTexture(w) return w._checkedTex end
 
@@ -651,6 +653,15 @@ function WoW.makeMerchant()
         f.PortraitContainer.CircleMask = blizz("MaskTexture", f.PortraitContainer)
         f.PortraitContainer.CircleMask._width, f.PortraitContainer.CircleMask._height = 58, 58
         f.CloseButton = blizz("Button", f)
+        -- UIPanelCloseButton (SharedUIPanelTemplates.xml:134-140): 24 px at
+        -- level 510, its X baked into four atlases.
+        local cb = f.CloseButton
+        cb._level, cb._width, cb._height = 510, 24, 24
+        for key, atlas in pairs({ _normal = "RedButton-Exit", _pushed = "RedButton-exit-pressed",
+                                  _disabled = "RedButton-Exit-Disabled", _highlight = "RedButton-Highlight" }) do
+            cb[key] = blizz("Texture", cb)
+            cb[key]._atlas = atlas
+        end
         f.Inset = inset(f)
         f.FilterDropdown = blizz("DropdownButton", f)
         inset(f, "MerchantMoneyInset")

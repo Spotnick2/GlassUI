@@ -59,7 +59,8 @@ state, the lit tab, the buyback count, and the bar's top against row 11's bottom
 | ML.3 | The active tab lit, in both | **Run 1: lit as Blizzard shows it, but not visible at 0.10.** And the owner: "the tabs at the bottom need more work, they feel disconnected". Run 2: 0.2, and the tabs tucked under the window. |
 | ML.4 | Off: nothing of ours; the layout switched while off applies when on again | **Run 1: passes.** |
 | ML.5 | The owner's pick: sections or bar | **Run 1: unsure** ("i honestly have no idea what you are talking about": with the panes invisible, the two looked alike). The owner's ideas then: the top fully Pearl down to the first bar, and the window a bit less than opaque, like the stock bags. Run 2 asks again. |
-| ML.6 | Run 2: the panes visible; the tabs attached; the Pearl header kept; the floor 0.8, 0.85 or 0.9 | not run yet |
+| ML.6 | Run 2: the panes visible; the tabs attached; the Pearl header kept; the floor 0.8, 0.85 or 0.9 | **Run 2 (70450, 2026-10-20): every check passes.** Panes: yes. Tabs: yes, "but i think what's missing is the original gradient from the stock ui". Pearl header: kept. Floor: "85 is fine". Layout: Yes (sections). The screenshots still show RestedXP's guide readable through the rows at 0.85. Then the owner's mockup and an outside critique: #86 (docs/MERCHANT.md section 5), the layout a setting (the bar by default), the item area denser. |
+| ML.7 | Run 3 (#86): the guide behind hard to read at 0.93, the header smoky and joined; the red quieter; the tabs' gradient; the close button (rest, hover, press, it closes, reopened); the setting through the slash and across a /reload; off and on | not run yet |
 
 ### The merchant revisited (#80, #48, docs/MERCHANT.md)
 

@@ -32,9 +32,11 @@
 -- boxes, the money and currency boxes), or the owner's mockup ("bar": one
 -- footer bar, the buyback slot in a square with a label while empty, an empty
 -- state on the Buyback tab, less red). The probe switches them live
--- (SetLayout) until the owner picks. Either way the active tab is marked,
--- the tabs hang from under the window (TAB_TUCK), and the header above the
--- item inset is clear Pearl (SetHeader; ML run 1's ideas).
+-- (SetLayout); the owner's pick is a setting (#86, the bar by default). Either
+-- way the tabs hang from under the window (TAB_TUCK), the active one with the
+-- stock tab's warm gradient, the header above the item inset is smoky glass
+-- joined to the item area's floor, and the close button is a glass disc with
+-- a gold X over Blizzard's faded red art (#86).
 --
 -- Fades, hooks on instances and our own frames only, so the skin is live:
 -- off and on without a /reload. None of this window's 405 textures ignores
@@ -66,15 +68,21 @@ local ROWS = 12
 local ROW_INSETS = { -3, -3, -3, -3 }
 -- The disc: ring width around the portrait's mask, and the mask's XML width.
 local DISC_RING, MASK_WIDTH = 6, 58
--- The layouts (#84), and each one's red at full red: Blizzard's plate in
--- sections, much less in the bar, where the icon's own red tint carries it.
+-- The layouts (#84): a setting since #86 (GlassUIDB.merchantLayout, the bar
+-- by default: the owner), the probe's unsaved override over it.
 local LAYOUTS = { sections = true, bar = true }
-local RED = { sections = 0.35, bar = 0.12 }
-local layoutName = "sections"
--- The header (the owner, ML run 1): the window's backing starts at the item
--- inset's top, so above it (the portrait, the title) is clear Pearl glass,
--- like the portrait's disc; off, the backing covers the whole window.
-local headerPearl = true
+local LAYOUT_DEFAULT = "bar"
+local override
+-- The red mirror at full red (#86): one quiet peak in both layouts, a
+-- charcoal card with a burgundy undertone. Run 2 showed sections' 0.35 as
+-- solid red cards; the icon's own red tint carries the warning.
+local RED = 0.12
+-- The header (#86): the window's backing starts at the item inset's top, and
+-- above it a gradient of ours in the same colour, from the backing's own
+-- alpha at the inset line up to HEADER_TOP: smoky glass joined to the item
+-- area. Off (the probe), the backing covers the whole window.
+local headerOn = true
+local HEADER_TOP = 0.45
 -- The bottom band's two boxes, inside MerchantFrameBottomLeftBorder (334 x 61),
 -- { left, top, right, bottom } inward. Read off MS run 1's skin-off
 -- screenshot (70450); to be tuned.
@@ -86,8 +94,14 @@ local BAR_TOPLEFT = { 5, 12 }
 local SQUARE_OUTSET, ICON_OUTSET = 3, 4
 local BUYBACK_ICON = "Interface\\MerchantFrame\\UI-BuyBack-Icon"
 local EMPTY_TITLE, EMPTY_TEXT = "No items to buy back", "Items you sell will appear here."
--- The active tab's light, over its glass (0.10 didn't show, ML run 1).
-local TAB_ACTIVE = 0.2
+-- The active tab: the stock tab's warm gradient (the owner, run 2: "what's
+-- missing is the original gradient from the stock ui"), the accent at
+-- TAB_GLOW at its bottom to 0 at its top; the inactive one darker (#86).
+local TAB_GLOW, TAB_DIM = 0.3, 0.25
+-- The close button's X: two bars, its strength at rest (1 on hover).
+local CLOSE_X, CLOSE_REST = { 2, 12 }, 0.85
+-- Its four state textures, the X baked into each (SharedUIPanelTemplates.xml:134-140).
+local CLOSE_ART = { "GetNormalTexture", "GetPushedTexture", "GetDisabledTexture", "GetHighlightTexture" }
 
 local rows = setmetatable({}, { __mode = "k" })     -- row -> { glass, g, red, plate, button, icon }
 local discs = setmetatable({}, { __mode = "k" })    -- window -> the portrait's disc
@@ -95,18 +109,18 @@ local ui = setmetatable({}, { __mode = "k" })       -- window -> our layout's pi
 
 local function tbl(v) return type(v) == "table" and v or nil end
 
--- Blizzard's red on a plate, as our mirror's alpha: `peak` (0.35 by
+-- Blizzard's red on a plate, as our mirror's alpha: `peak` (RED by
 -- default) at full red (1, 0, 0), half that at its dark red (0.5, 0, 0);
 -- nil for its greys.
 local function redAlpha(r, g, b, peak)
     r, g, b = API.Plain(r), API.Plain(g), API.Plain(b)
     if type(r) ~= "number" or type(g) ~= "number" or type(b) ~= "number" then return nil end
-    if r > 0.4 and g < 0.1 and b < 0.1 then return (peak or RED.sections) * math.min(1, r) end
+    if r > 0.4 and g < 0.1 and b < 0.1 then return (peak or RED) * math.min(1, r) end
     return nil
 end
 
 local function paintRed(s, r, g, b)
-    local a = redAlpha(r, g, b, RED[layoutName])
+    local a = redAlpha(r, g, b)
     if a then s.red:SetColorTexture(1, 0, 0, a) end
     s.red:SetShown(a ~= nil)
 end
@@ -152,19 +166,66 @@ end
 
 -- What the layout shows now, from what Blizzard shows: MerchantBuyBackItem is
 -- shown exactly while the Merchant tab is (MerchantFrame.lua:479, 590).
--- The window's backing (ours): from the item inset's top down, or all of it.
+-- The saved layout, read when used (the DB loads after this file).
+local function saved()
+    local db = rawget(_G, "GlassUIDB")
+    local v = type(db) == "table" and db.merchantLayout or nil
+    return LAYOUTS[v] and v or LAYOUT_DEFAULT
+end
+
+local function current() return override or saved() end
+
+local function accent() return GUI.Suite.Accent() or { 1, 0.82, 0 } end
+
+-- The window's backing (ours): from the item inset's top down, the header's
+-- gradient above it joined at the backing's own RGBA (Theme.Backing: smoked's
+-- 0.92 too); or the backing all of it. A gradient ignores SetAlpha here
+-- (LibGlass #47): painted through its colours only.
 local function header(u)
     local b = u.backing
     if not b then return end
     b:ClearAllPoints()
-    if headerPearl and u.insetFrame then
+    local on = headerOn and u.insetFrame ~= nil and u.header ~= nil
+    if on then
         b:SetPoint("TOP", u.insetFrame, "TOP", 0, 0)
         b:SetPoint("LEFT", u.win, "LEFT", 0, 0)
         b:SetPoint("RIGHT", u.win, "RIGHT", 0, 0)
         b:SetPoint("BOTTOM", u.win, "BOTTOM", 0, 0)
+        local r, g, bl, a = GUI.Theme.Backing("window")
+        u.header:SetGradient("VERTICAL", CreateColor(r, g, bl, a), CreateColor(r, g, bl, HEADER_TOP))
     else
         b:SetAllPoints(u.win)
     end
+    if u.header then u.header:SetShown(on) end
+end
+
+-- The accent's pieces: the active tab's glow, the close button's X (at its
+-- current strength).
+local function paintAccent(u)
+    local c = accent()
+    for _, glow in pairs(u.tabs) do
+        glow:SetGradient("VERTICAL", CreateColor(c[1], c[2], c[3], TAB_GLOW), CreateColor(c[1], c[2], c[3], 0))
+    end
+    for _, t in ipairs(u.closeX or {}) do t:SetColorTexture(c[1], c[2], c[3], u.closeAlpha) end
+end
+
+-- The close button's feedback, on our X only: full on hover, 1 px down while
+-- pressed.
+local function closeFeedback(u, hover, pushed)
+    if not u.closeFrame then return end
+    u.hover, u.pushed = hover, pushed
+    u.closeAlpha = hover and 1 or CLOSE_REST
+    u.closeFrame:ClearAllPoints()
+    u.closeFrame:SetPoint("CENTER", u.close, "CENTER", 0, pushed and -1 or 0)
+    paintAccent(u)
+end
+
+-- From the button's getters: a hover or press that ended while we were off.
+local function closeSync(u)
+    if not u.close then return end
+    local okM, over = pcall(u.close.IsMouseOver, u.close)
+    local okS, state = pcall(u.close.GetButtonState, u.close)
+    closeFeedback(u, okM and API.Plain(over) == true, okS and API.Plain(state) == "PUSHED")
 end
 
 -- Each tab's glass in the strata below the window's (TAB_TUCK). A window in
@@ -184,7 +245,7 @@ local function tuck(u)
 end
 
 local function layout(u)
-    local bar = layoutName == "bar"
+    local bar = current() == "bar"
     header(u)
     local merchantTab = shown(u.bb)
     Kit.ShowSection(u.inset, not bar)
@@ -212,9 +273,13 @@ local function layout(u)
         u.label:SetShown(bar and not (s ~= nil and filled(s)))
     end
     if u.empty then
-        u.empty:SetShown(bar and shown(u.frame) and not merchantTab and buybackCount() == 0)
+        u.empty:SetShown(shown(u.frame) and not merchantTab and buybackCount() == 0)
     end
-    for tab, hl in pairs(u.tabs) do hl:SetShown(shown(tbl(tab.MiddleActive))) end
+    for tab, glow in pairs(u.tabs) do
+        local active = shown(tbl(tab.MiddleActive))
+        glow:SetShown(active)
+        if u.dims[tab] then u.dims[tab]:SetShown(not active) end
+    end
 end
 
 local function layoutAll()
@@ -290,14 +355,27 @@ end
 -- Our layout's pieces (#84): sections on the window glass's host, the
 -- buyback square and label on a frame of ours in MerchantBuyBackItem, the
 -- empty state on one in the window, each tab's light; hooks gated.
-local function buildLayout(kit, frame, win, backing, tabGlass)
-    local u = { frame = frame, tabs = {}, win = win, backing = backing, tabGlass = tabGlass }
+local function buildLayout(kit, frame, win, wg, backing, tabGlass)
+    local u = { frame = frame, tabs = {}, dims = {}, win = win, backing = backing, tabGlass = tabGlass,
+                closeAlpha = CLOSE_REST }
     ui[frame] = u
     u.bb = kit:Global("MerchantBuyBackItem")
     u.band = kit:Global("MerchantFrameBottomLeftBorder")
     u.moneyInset, u.currencyInset = kit:Global("MerchantMoneyInset"), kit:Global("MerchantExtraCurrencyInset")
     local inset = tbl(frame.Inset)
     u.insetFrame = inset
+    -- The header: on the backing's layer, under the tint and wash, clipped by
+    -- the window glass's mask, adjoining the backing at the inset's top.
+    if backing and inset then
+        local h = win:CreateTexture(nil, "BACKGROUND", nil, -7)
+        h:SetPoint("TOPLEFT", win, "TOPLEFT", 0, 0)
+        h:SetPoint("RIGHT", win, "RIGHT", 0, 0)
+        h:SetPoint("BOTTOM", inset, "TOP", 0, 0)
+        h:SetColorTexture(1, 1, 1, 1)
+        if wg and wg.mask then h:AddMaskTexture(wg.mask) end
+        h:Hide()
+        u.header = h
+    end
     local function section(a, b, ins)
         if not a then return nil end
         local sec = kit:Section(win)
@@ -366,18 +444,60 @@ local function buildLayout(kit, frame, win, backing, tabGlass)
         u.bb:HookScript("OnHide", relay)
     end
     for tab, t in pairs(tabGlass) do
-        local hl = t.glass:CreateTexture(nil, "ARTWORK")
-        hl:SetAllPoints(t.glass)
-        hl:SetColorTexture(1, 1, 1, TAB_ACTIVE)
-        if t.g and t.g.mask then hl:AddMaskTexture(t.g.mask) end
-        hl:Hide()
-        u.tabs[tab] = hl
+        local glow = t.glass:CreateTexture(nil, "ARTWORK")
+        glow:SetAllPoints(t.glass)
+        glow:SetColorTexture(1, 1, 1, 1)
+        local dim = t.glass:CreateTexture(nil, "ARTWORK")
+        dim:SetAllPoints(t.glass)
+        dim:SetColorTexture(0, 0, 0, TAB_DIM)
+        if t.g and t.g.mask then
+            glow:AddMaskTexture(t.g.mask)
+            dim:AddMaskTexture(t.g.mask)
+        end
+        glow:Hide()
+        dim:Hide()
+        u.tabs[tab], u.dims[tab] = glow, dim
         -- PanelTemplates_SelectTab / DeselectTab show and hide it (SharedUIPanelTemplates.lua:611-651).
         local active = tbl(tab.MiddleActive)
         if active then
             hooksecurefunc(active, "Show", relay)
             hooksecurefunc(active, "Hide", relay)
         end
+    end
+    -- The close button: a glass disc of ours under it (unsliced, clean at
+    -- 24 px), our X over it on a frame of ours one up (a plain frame takes no
+    -- mouse: the click stays Blizzard's), feedback by gated HookScript on the
+    -- instance.
+    local close = tbl(frame.CloseButton)
+    if close then
+        u.close = close
+        local level = close:GetFrameLevel()
+        local okW, w = pcall(close.GetWidth, close)
+        w = okW and API.Plain(w) or nil
+        if type(w) ~= "number" or w <= 0 then w = 24 end
+        u.closeDisc = kit:Disc(close, close, { ring = 0, width = w, level = level - 1 })
+        local x = kit:Adopt(CreateFrame("Frame", nil, close))
+        x:SetSize(w, w)
+        x:SetFrameLevel(level + 1)
+        u.closeX = {}
+        for i, rot in ipairs({ math.pi / 4, -math.pi / 4 }) do
+            local t = x:CreateTexture(nil, "OVERLAY")
+            t:SetSize(CLOSE_X[1], CLOSE_X[2])
+            t:SetPoint("CENTER", x, "CENTER", 0, 0)
+            t:SetRotation(rot)
+            u.closeX[i] = t
+        end
+        u.closeFrame = x
+        local function feedback(hover, pushed)
+            if GUI.Engine.Active("merchant") then
+                GUI.Engine.Run(kit.skin, "close", closeFeedback, u, hover, pushed)
+            end
+        end
+        close:HookScript("OnEnter", function() feedback(true, u.pushed) end)
+        close:HookScript("OnLeave", function() feedback(false, false) end)
+        close:HookScript("OnMouseDown", function() feedback(u.hover, true) end)
+        close:HookScript("OnMouseUp", function() feedback(u.hover, false) end)
+        closeFeedback(u, false, false)
     end
     return u
 end
@@ -397,7 +517,7 @@ GUI.Engine.Register({
     backing = "window",
     frames = function() return rawget(_G, "MerchantFrame") end,
     install = function(kit, frame)
-        local win, _, backing = kit:Panel(frame)
+        local win, wg, backing = kit:Panel(frame)
         local tabGlass = {}
         for _, name in ipairs(TABS) do
             local tab = kit:Global(name)
@@ -419,56 +539,82 @@ GUI.Engine.Register({
             local level = (pc and pc:GetFrameLevel() or frame:GetFrameLevel()) - 1
             discs[frame] = kit:Disc(frame, around, { ring = DISC_RING, width = MASK_WIDTH, level = level })
         end
-        buildLayout(kit, frame, win, backing, tabGlass)
+        buildLayout(kit, frame, win, wg, backing, tabGlass)
     end,
     style = function(kit, frame)
         kit:Shell(frame)
         for _, name in ipairs(INSETS) do kit:Inset(kit:Global(name)) end
         for _, name in ipairs(ART) do kit:Fade(kit:Global(name)) end
         for _, name in ipairs(TABS) do kit:Tab(kit:Global(name)) end
+        local close = tbl(frame.CloseButton)
+        if close then
+            for _, get in ipairs(CLOSE_ART) do
+                local ok, tex = pcall(close[get], close)
+                if ok then kit:Fade(tex) end
+            end
+        end
         eachRow(function(row) styleRow(kit, row) end)
-        if ui[frame] then
-            tuck(ui[frame])
-            layout(ui[frame])
+        local u = ui[frame]
+        if u then
+            tuck(u)
+            closeSync(u)
+            layout(u)
         end
     end,
 })
 
 GUI.Merchant = {}
 
-function GUI.Merchant.Layout() return layoutName end
+-- The layout shown: the probe's override, else the saved one.
+function GUI.Merchant.Layout() return current() end
 
--- The probe's live switch (#84): a known layout, its sections and red
--- repainted now when the skin is on. Not saved.
+-- The saved layout (the settings page's and the slash's).
+function GUI.Merchant.Saved() return saved() end
+
+-- The probe's live switch (#84): a known layout, or nil to drop back to the
+-- saved one; applied now when the skin is on. Not saved.
 function GUI.Merchant.SetLayout(name)
-    if not LAYOUTS[name] then return false end
-    layoutName = name
-    if GUI.Engine.Active("merchant") then
-        API.Try("merchant:layout", function()
-            for _, s in pairs(rows) do
-                if s.plate then
-                    local ok, r, g, b = pcall(s.plate.GetVertexColor, s.plate)
-                    if ok then paintRed(s, r, g, b) end
-                end
-            end
-            layoutAll()
-        end)
-    end
+    if name ~= nil and not LAYOUTS[name] then return false end
+    override = name
+    if GUI.Engine.Active("merchant") then API.Try("merchant:layout", layoutAll) end
     return true
 end
 
-function GUI.Merchant.Header() return headerPearl end
+-- The setting (#86): one setter for the page and the slash. Saved sparsely
+-- (the default is nil), applied when the skin is on, the page redrawn either way.
+function GUI.Merchant.SetSaved(name)
+    if not LAYOUTS[name] then return false end
+    local db = rawget(_G, "GlassUIDB")
+    if type(db) ~= "table" then return false end
+    if name == LAYOUT_DEFAULT then db.merchantLayout = nil else db.merchantLayout = name end
+    if GUI.Engine.Active("merchant") then API.Try("merchant:layout", layoutAll) end
+    if GUI.Options and GUI.Options.Refresh then GUI.Options.Refresh() end
+    return true
+end
 
--- The probe's live switch: the header clear Pearl, or the backing whole. Not saved.
+function GUI.Merchant.Header() return headerOn end
+
+-- The probe's live switch: the smoky header, or the backing whole. Not saved.
 function GUI.Merchant.SetHeader(on)
-    headerPearl = on and true or false
+    headerOn = on and true or false
     if GUI.Engine.Active("merchant") then API.Try("merchant:header", layoutAll) end
     return true
 end
 
+-- A tint, an accent or a floor changed (Theme.Refresh): the header and the
+-- accent's pieces follow; while off, the style pass repaints them.
+GUI.Theme.OnRefresh(function()
+    if not GUI.Engine.Active("merchant") then return end
+    for _, u in pairs(ui) do
+        header(u)
+        paintAccent(u)
+    end
+end)
+
 GUI.Merchant._test = { rows = rows, discs = discs, ui = ui, redAlpha = redAlpha, ROW_INSETS = ROW_INSETS,
                        DISC_RING = DISC_RING, MASK_WIDTH = MASK_WIDTH, RED = RED, BOX_LEFT = BOX_LEFT,
                        BOX_RIGHT = BOX_RIGHT, BAR_TOPLEFT = BAR_TOPLEFT, SQUARE_OUTSET = SQUARE_OUTSET,
-                       ICON_OUTSET = ICON_OUTSET, TAB_ACTIVE = TAB_ACTIVE, EMPTY_TITLE = EMPTY_TITLE,
+                       ICON_OUTSET = ICON_OUTSET, TAB_GLOW = TAB_GLOW, TAB_DIM = TAB_DIM, EMPTY_TITLE = EMPTY_TITLE,
                        EMPTY_TEXT = EMPTY_TEXT, BUYBACK_ICON = BUYBACK_ICON,
-                       TAB_TUCK = TAB_TUCK }
+                       TAB_TUCK = TAB_TUCK, HEADER_TOP = HEADER_TOP, CLOSE_X = CLOSE_X,
+                       CLOSE_REST = CLOSE_REST, LAYOUT_DEFAULT = LAYOUT_DEFAULT }

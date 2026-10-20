@@ -859,6 +859,48 @@ T.headerTry(true)
 tglass:SetFrameStrata("MEDIUM")
 okL, whyL = T.layoutOn("t", { layout = "bar", tab = 1, header = true })()
 check(not okL and whyL:find("not tucked", 1, true), "the tabs in the window's strata fail")
+tglass:SetFrameStrata("LOW")
+-- Run 3 (#86): the empty message in sections too; the saved layout; the close button.
+for _, k in ipairs({ "inset", "money", "currency" }) do lu[k].fill:Show() end
+lu.boxLeft.fill:Hide(); lu.boxRight.fill:Hide()
+lu.bar.fill:Hide(); lu.line:Hide(); lu.square.fill:Hide(); lu.label:Hide()
+lu.empty:Show(); lbb:Hide(); hl1:Hide(); hl2:Show()
+current = "sections"
+okL, whyL = T.layoutOn("t", { layout = "sections", tab = 2, empty = true })()
+check(okL, "sections with the empty message: pass: " .. tostring(whyL))
+lu.empty:Hide()
+okL, whyL = T.layoutOn("t", { layout = "sections", tab = 2, empty = true })()
+check(not okL and whyL:find("empty state false", 1, true), "sections without it when wanted fails")
+lbb:Show(); hl1:Show(); hl2:Hide()
+local okT, named = T.layoutTry(nil)
+eq(named, "saved", "nil: back to the saved layout")
+eq(SkinProbeDB.results["ML.layout"], "saved", "recorded as saved")
+local cbtn = CreateFrame("Button", nil, merchant)
+for _, k in ipairs({ "_normal", "_pushed", "_disabled", "_highlight" }) do
+    cbtn[k] = cbtn:CreateTexture()
+    cbtn[k]:SetAlpha(0)
+end
+lu.close, lu.closeDisc, lu.closeFrame = cbtn, CreateFrame("Frame", nil, cbtn), CreateFrame("Frame", nil, cbtn)
+lu.closeAlpha, lu.hover, lu.pushed = 0.85, false, false
+local okC, whyC = T.closeOn("c", false)()
+check(okC, "the close button at rest: pass: " .. tostring(whyC))
+eq(SkinProbeDB.results["ML.c"].blizzardArt, 0, "Blizzard's art recorded faded")
+okC = T.closeOn("c", true)()
+check(not okC, "not hovered when a hover is wanted fails")
+lu.hover, lu.closeAlpha = true, 1
+check(T.closeOn("c", true)(), "hovered at full: pass")
+lu.closeAlpha = 0.85
+check(not T.closeOn("c", true)(), "hovered but not full fails")
+check(not T.closeOn("c", false)(), "still hovered when the rest is wanted fails")
+lu.hover = false
+cbtn._highlight:SetAlpha(1)
+okC, whyC = T.closeOn("c", false)()
+check(not okC and whyC:find("art 1", 1, true), "Blizzard's art showing fails")
+cbtn._highlight:SetAlpha(0)
+lu.closeDisc:Hide()
+okC, whyC = T.closeOn("c", false)()
+check(not okC and whyC:find("disc false", 1, true), "no disc fails")
+lu.closeDisc:Show()
 rawset(_G, "MerchantBuyBackItem", nil); rawset(_G, "MerchantFrameTab1", nil); rawset(_G, "MerchantFrameTab2", nil)
 rawset(_G, "MerchantItem11", nil)
 rawset(_G, "GlassUI", savedGUI3)

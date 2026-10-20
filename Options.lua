@@ -458,14 +458,15 @@ local function refreshLook()
 end
 
 -- One row of choices under `anchor`: a heading, then the radios left to
--- right. get() returns the value to check; set(value) applies one.
-local function choiceRow(anchor, heading, values, get, set)
+-- right. get() returns the value to check; set(value) applies one; labels,
+-- if given, names the values (else the suite look's labels).
+local function choiceRow(anchor, heading, values, get, set, labels)
     local Suite = GUI.Suite
     local h = label(lookPanel, heading, "GameFontNormal")
     h:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -16)
     local group, prev = {}, nil
     for _, v in ipairs(values) do
-        local rb = radio(lookPanel, Suite.LOOK_LABELS[v] or v)
+        local rb = radio(lookPanel, (labels and labels[v]) or Suite.LOOK_LABELS[v] or v)
         rb.value = v
         if prev then
             rb:SetPoint("LEFT", prev, "RIGHT", 110, 0)
@@ -511,6 +512,9 @@ local function buildLook()
     prev = choiceRow(prev, "Hover", Suite.LOOK_VALUES.hover, lookOf("hover"), setter("hover"))
     prev = choiceRow(prev, "Press", Suite.LOOK_VALUES.press, lookOf("press"), setter("press"))
     prev = choiceRow(prev, "Empty slots", Suite.LOOK_VALUES.emptySlots, lookOf("emptySlots"), setter("emptySlots"))
+    -- Glass UI's own merchant skin (#86): its saved layout.
+    prev = choiceRow(prev, "Merchant window", { "bar", "sections" }, function() return GUI.Merchant.Saved() end,
+        function(v) GUI.Merchant.SetSaved(v) end, { bar = "One footer", sections = "Blizzard's boxes" })
     local followers = label(lookPanel, "", "GameFontHighlight")
     followers:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, -24)
     followers:SetWidth(560)

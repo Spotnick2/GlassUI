@@ -1068,13 +1068,56 @@ Probe:Steps("merchant", {
 -- check reads our pieces as the layout shows them. Saved as ML.<label>.
 --------------------------------------------------------------------------------
 
+-- A layout, or nil for the saved one (#86: the override dropped).
 local function layoutTry(name)
     local G = glassUI()
     if not (G and G.Merchant and G.Merchant.SetLayout) then return false, "Glass UI not loaded" end
     local ok = G.Merchant.SetLayout(name)
-    say("ML layout " .. name .. ": " .. tostring(ok))
-    record("ML.layout", name)
-    return ok, name
+    say("ML layout " .. tostring(name) .. ": " .. tostring(ok))
+    record("ML.layout", name or "saved")
+    return ok, name or "saved"
+end
+
+local function savedLayout()
+    local G = glassUI()
+    return G and G.Merchant and G.Merchant.Saved and G.Merchant.Saved() or nil
+end
+
+-- The close button (#86): our disc and X shown, Blizzard's four textures
+-- faded, the X's strength and offset as our feedback set them.
+local CLOSE_GETTERS = { "GetNormalTexture", "GetPushedTexture", "GetDisabledTexture", "GetHighlightTexture" }
+local function closeState(label)
+    local G = glassUI()
+    local frame = frameByName("MerchantFrame")
+    local u = G and G.Merchant and G.Merchant._test and frame and G.Merchant._test.ui[frame]
+    local rec = {}
+    if u and u.close then
+        rec.disc, rec.x = seen(u.closeDisc), seen(u.closeFrame)
+        rec.alpha, rec.hover, rec.pushed = u.closeAlpha, u.hover, u.pushed
+        local most = 0
+        for _, get in ipairs(CLOSE_GETTERS) do
+            local ok, tex = call(u.close, get)
+            local okA, a = call(ok and tex or nil, "GetAlpha")
+            a = okA and plain(a) or nil
+            if type(a) == "number" and a > most then most = a end
+        end
+        rec.blizzardArt = most
+    end
+    say("ML " .. label .. ": disc " .. tostring(rec.disc) .. ", X " .. tostring(rec.x) .. " at "
+        .. tostring(rec.alpha) .. ", hover " .. tostring(rec.hover) .. ", pushed " .. tostring(rec.pushed)
+        .. ", Blizzard's art at " .. tostring(rec.blizzardArt))
+    record("ML." .. label, rec)
+    return rec
+end
+
+local function closeOn(label, hover)
+    return function()
+        local r = closeState(label)
+        local ok = r.disc == true and r.x == true and r.blizzardArt == 0 and r.hover == hover
+            and r.alpha == (hover and 1 or 0.85)
+        return ok, ok and "disc, X, the art faded" or ("disc " .. tostring(r.disc) .. ", X " .. tostring(r.x)
+            .. ", art " .. tostring(r.blizzardArt) .. ", hover " .. tostring(r.hover) .. " at " .. tostring(r.alpha))
+    end
 end
 
 local function sectionSeen(sec) return sec ~= nil and seen(sec.fill) end
@@ -1161,7 +1204,8 @@ local function layoutOn(label, want)
         end
         if want.layout == "sections" then
             want_(r.sections == (tab1 and 5 or 3), tostring(r.sections) .. " sections")
-            want_(not r.bar and not r.line and not r.square and not r.label and not r.empty, "a bar piece shown")
+            want_(not r.bar and not r.line and not r.square and not r.label, "a bar piece shown")
+            if want.empty ~= nil then want_(r.empty == want.empty, "empty state " .. tostring(r.empty)) end
         else
             want_(r.sections == 0, tostring(r.sections) .. " sections in the bar layout")
             want_(r.bar and r.line, "no bar or line")
@@ -1176,57 +1220,65 @@ local function layoutOn(label, want)
     end
 end
 
--- Run 2 (ML run 1's findings, docs/FOREVER-PROBE.md): darker panes, the
--- tabs tucked under the window, the header clear Pearl, the floor tried.
+-- Run 3 (#86, docs/MERCHANT.md section 5): the layout a setting (the bar by
+-- default), the item area denser (0.93), a smoky header, quieter red, the
+-- tabs' gradient, the close button in glass.
 Probe:Steps("merchantlayout", {
-    title = "Glass UI: the merchant, run 2: panes, tabs, Pearl header, see-through, sections or bar (#84)",
-    rev = 2,
-    { text = "Sets the defaults: sections, the Pearl header, the window 85% opaque.",
-      auto = true, run = function() return setCVar("scriptErrors", "1"), layoutTry("sections"), headerTry(true),
-          floorRestore() end },
-    { text = "Talk to a vendor. Best where something sits behind the window (RestedXP's guide, a damage meter "
-          .. "dragged there), so you can judge the see-through.", event = "MERCHANT_SHOW" },
-    { text = "What changed: the panes are darker (the item area, the two boxes at the bottom, the money); the top, "
-          .. "above the item area, is clear Pearl glass like the portrait's ring; the tabs hang from under the window, "
-          .. "the open one lighter. Press Next for a screenshot.", screenshot = "run 2, defaults",
-      check = layoutOn("r2 defaults", { layout = "sections", tab = 1, header = true }) },
-    { text = "Can you see the darker panes now: the item area, the two boxes at the bottom, the money box?",
-      ask = true },
-    { text = "Do the tabs look attached to the window now, and is it clear which one is open? Anything still off: "
-          .. "say it in the Note.", ask = true },
-    -- The header.
-    { text = "For comparison, the top as before: the window's dark floor all the way up.", button = "Header off",
-      run = function() return headerTry(false) end, screenshot = "run 2, header off" },
-    { text = "The Pearl top again: clear glass above the item area.", button = "Header Pearl",
-      run = function() return headerTry(true) end },
-    { text = "Keep the Pearl top? Yes keeps it, No keeps the dark top.", ask = true },
-    -- The see-through.
-    { text = "How much shows through: 80% opaque.", button = "80%", run = function() return floorTry(0.8) end,
-      screenshot = "run 2, floor 0.8" },
-    { text = "90% opaque.", button = "90%", run = function() return floorTry(0.9) end,
-      screenshot = "run 2, floor 0.9" },
-    { text = "85% opaque (the default).", button = "85%", run = function() return floorTry(0.85) end },
-    { text = "Which reads best: 80, 85 or 90% opaque? Press Yes and write the number in the Note.", ask = true },
-    -- Sections or bar.
-    { text = "The other layout, BAR: no boxes; one strip at the bottom with the buyback slot (labelled while empty) "
-          .. "and the money. Press Next for a screenshot.", button = "Bar", run = function() return layoutTry("bar") end,
-      screenshot = "run 2, bar", check = layoutOn("r2 bar", { layout = "bar", tab = 1, header = true }) },
-    { text = "Open the Buyback tab. If nothing is sold this session, it says 'No items to buy back' with the bag "
-          .. "icon. Press Next for a screenshot.", screenshot = "run 2, bar buyback",
-      check = layoutOn("r2 bar buyback", { layout = "bar", tab = 2, header = true }) },
-    { text = "Open the Merchant tab again. Which layout do you prefer? Yes = SECTIONS (the boxes, the first "
-          .. "screenshots), No = BAR (the strip, now).", ask = true },
+    title = "Glass UI: the merchant, run 3: denser items, smoky header, tabs, close button, the setting (#86)",
+    rev = 3,
+    { text = "Sets the defaults: the saved layout (the bar unless you changed it), the smoky header, the window "
+          .. "93% opaque.", auto = true,
+      run = function() return setCVar("scriptErrors", "1"), layoutTry(nil), headerTry(true), floorRestore() end },
+    { text = "Talk to a vendor with something behind the window (RestedXP's guide, as in run 2), ideally one "
+          .. "selling an item you can't use (red).", event = "MERCHANT_SHOW" },
+    { text = "What changed: the item area denser; the top smoky glass running into it, a line between; the red "
+          .. "cards quieter (the icons stay red); the open tab with a warm gradient like Blizzard's, the other "
+          .. "darker; the close button a glass disc with a gold X. Press Next for a screenshot.",
+      screenshot = "run 3, defaults", check = layoutOn("r3 defaults", { layout = "bar", tab = 1, header = true }) },
+    { text = "Is the guide behind the rows hard enough to read now, and does the top read as smoky glass joined to "
+          .. "the item area? Anything off: the Note.", ask = true },
+    -- The floor.
+    { text = "For comparison, run 2's 85%.", button = "85%", run = function() return floorTry(0.85) end,
+      screenshot = "run 3, floor 0.85" },
+    { text = "And back to 93%.", button = "93%", run = function() return floorTry(0.93) end },
+    { text = "Keep 93%? Yes keeps it; No, and write the number you want in the Note.", ask = true },
+    -- The tabs.
+    { text = "Open the Buyback tab. Press Next for a screenshot.", screenshot = "run 3, buyback tab",
+      check = layoutOn("r3 buyback", { layout = "bar", tab = 2, header = true }) },
+    { text = "The open tab's warm gradient: does it read like Blizzard's selected tab, the other one darker? Hover "
+          .. "each tab: Blizzard's own hover glow shows?", ask = true },
+    -- The close button.
+    { text = "Open the Merchant tab, then rest the mouse on the close button (don't click) until this step goes "
+          .. "on by itself; a screenshot is taken.", screenshot = "run 3, close hover", timeout = 60,
+      wait = function()
+          local r = closeState("r3 close hover")
+          return r.hover == true, "waiting for the mouse on the close button"
+      end, check = closeOn("r3 close hover", true) },
+    { text = "Move the mouse away, then press Next: the X back to its resting gold.", check = closeOn("r3 close rest", false) },
+    { text = "Does the close button read as glass with a gold X, with clean round edges? Press and hold it a moment "
+          .. "(then move away before releasing, so the window stays): the X dips 1 px?", ask = true },
+    { text = "Now click the close button: the window closes.", event = "MERCHANT_CLOSED" },
+    { text = "Talk to the vendor again.", event = "MERCHANT_SHOW", check = closeOn("r3 close reopened", false) },
+    -- The setting, through the slash, across a /reload.
+    { text = "Type /glassui merchant sections (the setting, saved).", timeout = 120,
+      wait = function() return savedLayout() == "sections", "waiting for the setting" end,
+      screenshot = "run 3, sections saved", check = layoutOn("r3 sections saved", { layout = "sections", tab = 1, header = true }) },
+    { text = "Type /reload: the setting should hold.", reload = true },
+    { text = "Talk to a vendor again.", event = "MERCHANT_SHOW",
+      check = layoutOn("r3 sections after reload", { layout = "sections", tab = 1, header = true }) },
+    { text = "Type /glassui merchant bar (the default again, or keep sections: the setting is yours).", timeout = 120,
+      wait = function() return savedLayout() ~= nil, savedLayout() end },
     -- Off and on.
-    { text = "Switches the skin off (and the layout back to sections while it's off).", button = "Skin off",
-      run = function() return switch(false), layoutTry("sections") end, screenshot = "run 2, skin off",
+    { text = "Switches the skin off.", button = "Skin off", run = function() return switch(false) end,
+      screenshot = "run 3, skin off",
       check = function()
-          local r = layoutState("r2 off")
+          local r, c = layoutState("r3 off"), closeState("r3 close off")
           local ok = r.sections == 0 and not r.bar and not r.square and not r.empty and r.lit == ""
-          return ok, ok and "nothing of ours shown" or "something of ours shown while off"
+              and not c.disc and not c.x and c.blizzardArt == 1
+          return ok, ok and "nothing of ours shown, Blizzard's close art back" or "something of ours shown while off"
       end },
-    { text = "Switches the skin on: sections, the Pearl header, the tabs tucked.", button = "Skin on",
-      run = function() return switch(true) end, screenshot = "run 2, on again",
-      check = layoutOn("r2 on again", { layout = "sections", tab = 1, header = true }) },
+    { text = "Switches the skin on.", button = "Skin on", run = function() return switch(true) end,
+      screenshot = "run 3, on again", check = closeOn("r3 close on again", false) },
     { text = "Type /reload to save the results.", reload = true },
 })
 
@@ -3110,7 +3162,7 @@ boot:SetScript("OnEvent", function(_, _, name)
     say("loaded (" .. SkinProbeDB.loads .. " loads). /fp skin for the commands, /fp steps skin wave1 to start")
 end)
 
-NS._test = { headerTry = headerTry, layoutTry = layoutTry, layoutState = layoutState, layoutOn = layoutOn, Probe = Probe, state = state, tree = tree, fade = fade, slashOwners = slashOwners,
+NS._test = { closeState = closeState, closeOn = closeOn, headerTry = headerTry, layoutTry = layoutTry, layoutState = layoutState, layoutOn = layoutOn, Probe = Probe, state = state, tree = tree, fade = fade, slashOwners = slashOwners,
              gamepad = gamepad, panelsOn = panelsOn, panelsOff = panelsOff, borderFade = borderFade,
              borderRestore = borderRestore, gradientOn = gradientOn, gradientOff = gradientOff,
              panels = panels, faded = faded, cardAtlas = cardAtlas, cardOn = cardOn, cardOff = cardOff,

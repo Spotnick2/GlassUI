@@ -328,6 +328,124 @@ lost its backslashes). The box insets match Blizzard's boxes in the skin-off scr
 **Run 2** asks plainly: the panes, the tabs, the Pearl header (on and off), the floor at 0.8, 0.85
 and 0.9, then sections or bar (Yes / No).
 
+**Run 2** (2026-10-20, 70450): every check passed. The panes show; the tabs look attached ("they
+are, but i think what's missing is the original gradient from the stock ui"); the Pearl header kept;
+"85 is fine"; Yes (sections). Then the owner's mockup and an outside critique: section 5.
+
+## 5. Round 2: the layout a setting, denser items, a smoky header, quieter red, tabs and close (#86)
+
+Codex `gpt-6-astra` review: consensus in round 2 (2026-10-20). Round 1 found no BLOCKER; its four SHOULDs and NIT are taken in
+below (marked "(Codex)").
+
+From run 2's screenshots, the owner's mockup (one footer, charcoal cards, a smoky header, a glass
+close button) and an outside critique. **Owner decisions (2026-10-20):** the layout becomes a
+setting, the bar by default ("we might change idea when we get to other dialog ui or the bag ui");
+the tabs keep Blizzard's text colours (selected white, inactive gold: no new text exception); the
+item area denser.
+
+- **The setting.**
+  - `GlassUIDB.merchantLayout`, `"bar"` in `DEFAULTS` (saved only when it differs).
+  - `/glassui merchant bar|sections`, and a row on the "Suite look" page ("Merchant window: one
+    footer / Blizzard's boxes"), the same radio row the page already uses.
+  - One setter for the slash and the page, `GUI.Merchant.SetSaved(name)` (Codex):
+    - it validates the name and saves it sparsely (`nil` for bar);
+    - it applies it live when the skin is on;
+    - it calls `Options.Refresh()` even while the skin is off.
+  - On the page, the getter is the saved preference. `Merchant.Layout()` is the effective value,
+    the override or else the saved one. `choiceRow` gets the row's labels passed in, since it
+    reads only `Suite.LOOK_LABELS` today.
+  - The saved value is read when it's used, never cached at file scope (the DB loads later).
+  - The probe's switch stays unsaved: `SetLayout(name)` sets a session override, and
+    `SetLayout(nil)` drops it back to the saved value. The procedure drops it before testing the
+    saved setting live (Codex), and again at its end.
+- **Denser items, a smoky header** (the critique: "the header almost completely transparent,
+  followed by an abrupt transition into a dark item area"; RestedXP's guide readable through the
+  rows in run 2).
+  - The content floor `Theme.WINDOW_BACKING` 0.85 → **0.93**. It reaches only `backing =
+    "window"` skins, which today means the merchant: the tracker and meter keep the body's 0.35.
+  - The header: a second backing texture of ours, from the window's top to the item inset's top,
+    exactly adjoining the body's backing (no overlap).
+    - It sits on the backing's layer (BACKGROUND −7, under the tint and wash) and is masked by the
+      window glass's mask.
+    - It's a vertical gradient, bottom colour first: the body backing's **effective** RGBA at the
+      inset line, so there's no seam, up to `HEADER_TOP` (0.45) at the top: smoky glass.
+    - The effective RGBA is the one Theme paints a `"window"` backing with,
+      `max(body.backing[4], WINDOW_BACKING)`. It's exposed as `Theme.Backing("window")`, so it
+      stays right for smoked's 0.92 under the probe's 0.85 (Codex).
+    - It's never read from `GetAlpha`. A gradient ignores `SetAlpha` here (LibGlass #47), so it's
+      painted only through `SetGradient(CreateColor(...))`, as LibGlass does.
+  - **Repaint** (Codex): `Theme.OnRefresh(fn)`, a listener list that `Theme.Refresh` calls (each in
+    `API.Try`) after the surfaces. The merchant's listener is gated by `Engine.Active` and repaints:
+    - the header;
+    - the accent pieces (the tab glow, the close X).
+    
+    Theme refreshes on a tint change, an accent change (`Suite.SetLook`) and the probe's floor
+    tries. The style pass repaints too, for anything changed while the skin was off.
+  - `SetHeader(false)` (the probe) puts the backing back over the whole window, with no header
+    texture.
+  - **The separator:** the 1 px line along the inset's top in the bar; in sections the inset's own
+    top edge is that line (both at once would draw it twice).
+- **Quieter red.**
+  - One `RED` peak, 0.12, in both layouts: a charcoal card with a burgundy undertone. Run 2 showed
+    sections' 0.35 as solid red cards.
+  - The mirror still follows Blizzard's plate exactly: full red at full alpha, dark red at half, none
+    at none. What makes Blizzard turn it red (usable, affordable, …) stays Blizzard's: we read its
+    colour, never the reason.
+  - Blizzard's own red icon tint carries the warning, untouched.
+  - No behaviour change.
+- **The tabs** (text stays Blizzard's).
+  - **Active:** the stock active tab's warm gradient, in glass. A texture of ours on the tab's
+    glass, masked by it, a vertical gradient in the suite accent (`Suite.Accent()`, gold by default,
+    ice when chosen; repainted by the listener), `TAB_GLOW` (0.3) at the bottom to 0 at the top. This is Blizzard's `uiframe-activetab` look, dark at the top and gold
+    at the bottom. It replaces the flat white `TAB_ACTIVE` light.
+  - **Inactive:** a black texture at `TAB_DIM` (0.25) on the same glass: a darker surface.
+  - Both follow `MiddleActive` as now.
+  - **Hover:** Blizzard's own highlight textures (the template's `*Highlight`, ADD at 0.4) are not
+    faded (`K:Tab` fades only the six base pieces), so hover stays Blizzard's.
+- **The close button** (`MerchantFrame.CloseButton`, `UIPanelCloseButton` through
+  `PortraitFrameTemplate`; the X is baked into the `RedButton-*` atlases, SharedUIPanelTemplates.xml:134-140).
+  - Its four state textures, read with `GetNormalTexture`/`GetPushedTexture`/
+    `GetDisabledTexture`/`GetHighlightTexture`, are **faded** with `kit:Fade` (read-back, restored
+    when off).
+  - Under it, a glass **disc** of ours (`kit:Disc`, Pearl clear, the portrait's material). The disc
+    textures are unsliced, so a 24 px control avoids the sliced `small` mask's trouble at 16-22 px
+    squares (Codex NIT; GLASS-MATERIAL.md). The screenshot checks it for clean edges.
+  - Over it, our X: two 2 × 12 px textures of ours, rotated ±45° (`SetRotation`, in the dump), on
+    a frame of ours, `kit:Adopt`ed (so off hides it). It's a plain frame, which takes no mouse
+    (`EnableMouse(false)` was an equivalent mutant, so it was dropped), one level above the disc's
+    rim. The X is in the suite accent at `CLOSE_REST` (0.85), its RGB repainted by the
+    listener, keeping the current strength.
+    - Feedback by `HookScript` on the button, gated: 1 on `OnEnter`, back on `OnLeave`; 1 px down
+      on `OnMouseDown`, back on `OnMouseUp`.
+    - That moves only our own textures. The button and its click are never touched.
+    - **Re-synced in the style pass** (Codex), for a hover or press that ended while the skin was
+      off: the strength from `IsMouseOver()`, the offset from `GetButtonState() == "PUSHED"`
+      (both getters, in the dump).
+- **The empty Buyback message in both layouts**, not just the bar's: shown on the Buyback tab
+  with 0 items, gone with the first.
+- **Not doable within the contract:** the title beside the portrait, a shorter header, the buyback
+  slot left of the money on one line (all would move Blizzard regions); the critique's gold selected
+  tab text (owner: Blizzard's colours).
+- **Tests:**
+  - the setting (default bar, saved sparse, slash, the override and its `nil`);
+  - the floor 0.93; the header gradient's anchors, mask, colours and switch; the separator in both
+    layouts;
+  - `RED` 0.12 in both;
+  - the tab glow and dim following `MiddleActive`;
+  - the close button's four fades restored when off, our X's points and colour, the hooks gated;
+  - the empty message in sections;
+  - mutation-tested.
+- **In game (run 3):**
+  - the defaults (bar, header, red), with a screenshot over RestedXP;
+  - the floor 0.93 against 0.85;
+  - the tabs: active and inactive, hover;
+  - the close button: rest, hover, pressed, its disc's edges, and that it closes; off and on
+    after a hover; close and reopen;
+  - sections through the setting, and after a `/reload`;
+  - off and on.
+- **Built** (2026-10-20): as above. Tests: test_merchant 307, test_suite 320 (the page's row), test_probe
+  519; 40 mutants of the skin, the settings row and the probe, all killed but one equivalent (above).
+
 ## Tests
 
 - **Theme:** a "window" surface gets the floor on clear and class, and keeps smoked's 0.92; a body
