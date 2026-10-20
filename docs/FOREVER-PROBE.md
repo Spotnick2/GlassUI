@@ -150,10 +150,10 @@ Questie 12.1.0 (`Questie_Camelot.toc`) and RestedXP v4.11.26, the versions the p
 
 | # | Question | Result |
 |---|---|---|
-| QS.1 | When does each frame first exist (the engine attaches at their ADDON_LOADED)? | not run yet |
-| QS.2 | Which textures stay faded through their own refreshes, and what's re-created? | not run yet |
-| QS.3 | Questie's tracker and Blizzard's: both shown, or does Questie hide Blizzard's? | not run yet |
-| QS.4 | The arrow: rotated by `SetRotation`, angle in `orientation`; where it sits against Glass Panel | not run yet |
+| QS.1 | When does each frame first exist (the engine attaches at their ADDON_LOADED)? | **70450 (run #285, second account):** `RXPFrame` and `RXPG_ARROW` exist when SkinProbe loads, so at RestedXP's own load or earlier. **`Questie_BaseFrame` comes 2.8 s after PLAYER_ENTERING_WORLD** (2.7 s in the next session), late in Questie's startup. Questie's tracker can't be styled at its ADDON_LOADED: the skin has to wait for the frame. |
+| QS.2 | Which textures stay faded through their own refreshes, and what's re-created? | **70450:** 1074 textures held at 0, 1110 after RestedXP made more. **Questie:** its fader and a quest update brought nothing back and made nothing new. Its tracker is a backdrop (nine pieces plus `Center`) that Questie itself keeps at alpha 0 (tree dump, before the hold), with a sizer and a minimal-atlas scroll bar. There was no background option to try (skipped). **RestedXP:** a new step brought back 4 (the step frames' `Center`) and made 36 (a new step frame's backdrop, check buttons and highlight). Its theme changed and back brought back **954**: every backdrop piece of the window (106 backdrops, 9 pieces each). Closing and reopening it: 0 and 0. So RestedXP re-sets its backdrops' alpha on a theme change and builds frames per step: a skin needs hook-and-hold on each piece and a fresh pass after each step. |
+| QS.3 | Questie's tracker and Blizzard's: both shown, or does Questie hide Blizzard's? | **70450: Questie hides Blizzard's** (`ObjectiveTrackerFrame` not shown, alpha 1, so hidden, not faded; the owner: "only questie's"). Glass UI's tracker skin and a Questie skin never share the screen. |
+| QS.4 | The arrow: rotated by `SetRotation`, angle in `orientation`; where it sits against Glass Panel | **70450:** turned by its texture's `SetRotation` (7 calls while the owner turned), and `orientation` holds the last angle (-0.06 both). It is anchored `TOP` to the screen's `TOP` at (-9.4, -127.8): 128 px from the top. Glass Panel's bar edge is at 109, so it clears the bar by 19 px; the owner: not over it. Its black colour is the owner's own RestedXP arrow skin, not a fault. Nothing else looked broken (the owner). |
 
 ## The accent on the yellow titles (#71, docs/PLAN.md "The accent on Blizzard's titles")
 
