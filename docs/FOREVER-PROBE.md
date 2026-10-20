@@ -125,6 +125,36 @@ the scene showing through sharp, a gold-metal rim. One fixed size, not sliced.
 | G.1 | Does the atlas exist in game, and at what size? | `/fp steps skin card` step 1 | **70425: yes, 260x530.** |
 | G.2 | Beside Glass UI's clear and smoked glass at the same size, over bright and dark scenery: how does it read? | the same procedure, screenshots | **70425: it isn't glass.** In game the card is opaque: dark brown parchment, gold rim (owner: "it does not look like glass", no theme wanted). The see-through look at login is the cards' **disabled** state while the servers are down: `SetAlpha(0.55)` and desaturated (`SuperDistrict.lua:123-127`). Beside it, our clear and smoked glass read almost alike, a dark grey slab with the scene faint behind: the opaque backing (0.85 / 0.92) dominates the tint. Settled on the merchant (#4): clear's backing is now 0.35. |
 
+## Questie and RestedXP: discovery (#56, docs/QUEST-TRACKER.md part 3)
+
+`/fp steps skin questing`. It turns on Questie, QuestieDB (which Questie requires) and RXPGuides
+for this character only, after saving their enable states in `SkinProbeDB.questingWas[GUID]`.
+Its Restore step puts them back, and so does `/fp skin questing restore`. Installed on 70450:
+Questie 12.1.0 (`Questie_Camelot.toc`) and RestedXP v4.11.26, the versions the plan read.
+
+- **First seen** (`QS.firstSeen`): where each of `Questie_BaseFrame`, `RXPFrame` and `RXPG_ARROW`
+  first existed, kept by the run once its tracker and guide window show (Questie builds its tracker
+  late in its startup). SkinProbe loads after both addons, so "SkinProbe load"
+  means at their own load or earlier. The watcher runs every session into `QS.seenSession`, so the
+  last reload, with the addons off again, keeps the run's result.
+- **The hold** (`QS.hold.<refresh>`): the probe holds every texture of the three at 0, its own
+  touch. After each of their refreshes it reads which came back and which textures are new, then
+  holds them all at 0 again, the new ones included, so each refresh reports only its own changes.
+  Unfade puts every one back at the alpha it had when first held. The refreshes are:
+  - Questie's fader, a quest update, and its background option;
+  - a RestedXP step, its theme, and its window reopened.
+- **Side by side** (`QS.coexist`): Questie's tracker and Blizzard's.
+- **The arrow** (`QS.arrow.<x>`): its texture's `SetRotation` calls, from a hook on that texture,
+  and its `orientation` field. Also its anchor and distance from the screen's top, against Glass
+  Panel's `EdgeState().top`.
+
+| # | Question | Result |
+|---|---|---|
+| QS.1 | When does each frame first exist (the engine attaches at their ADDON_LOADED)? | not run yet |
+| QS.2 | Which textures stay faded through their own refreshes, and what's re-created? | not run yet |
+| QS.3 | Questie's tracker and Blizzard's: both shown, or does Questie hide Blizzard's? | not run yet |
+| QS.4 | The arrow: rotated by `SetRotation`, angle in `orientation`; where it sits against Glass Panel | not run yet |
+
 ## The quest tracker (#55, docs/QUEST-TRACKER.md part 2)
 
 `/fp steps skin tracker`, with Glass Quest Tracker **disabled**: while it's loaded, it owns the
@@ -136,11 +166,11 @@ so Next alone can't pass them.
 
 | # | Question | Result |
 |---|---|---|
-| QT.1 | Each theme on the tracker (clear, smoked, class): readable, the right edge on the glass | not run yet |
-| QT.2 | The tracker and a section collapsed and expanded; Edit Mode move, Height, Text Size: the panel follows; no gold bar or shine flashes | not run yet |
-| QT.3 | Over bright ground: every line readable at clear's 0.35 backing (else a denser per-skin backing) | not run yet |
-| QT.4 | Off live: exactly Blizzard's; collapsed while off, on again: placed on the header | not run yet |
-| QT.5 | After a /reload; in combat; a quest routine under `taintLog 1`: nothing blocked, no error | not run yet |
+| QT.1 | Each theme on the tracker (clear, smoked, class): readable, the right edge on the glass | **70450: passes** (second account, runs #259-#260). Clear (backing 0.35), smoked (0.92) and class: each faded, blanked, panel `populated`, no failure. Every line readable, and the '-' on the glass (owner: yes). |
+| QT.2 | The tracker and a section collapsed and expanded; Edit Mode move, Height, Text Size: the panel follows; no gold bar or shine flashes | **70450: passes.** Collapsed: on the header. Expanded and the Quests section collapsed and expanded: `populated`. After an Edit Mode move with a new Height: `populated`, and the glass followed (screenshot). No gold bar or shine flashed (owner). |
+| QT.3 | Over bright ground: every line readable at clear's 0.35 backing (else a denser per-skin backing) | **70450: yes** (owner, over a bright pink sky): clear's 0.35 is enough, so no per-skin backing. |
+| QT.4 | Off live: exactly Blizzard's; collapsed while off, on again: placed on the header | **70450: off passes** (Quests header bar back, the owner: exactly Blizzard's). Collapsed while off, then on: not exercised. The tracker was collapsed while off (logged), but expanded again before Skin on was pressed (the screenshot shows it expanded and glassed), so the check FAILed on `collapsed`. The skin never collapses or expands it. The offline test covers the case (test_tracker). |
+| QT.5 | After a /reload; in combat; a quest routine under `taintLog 1`: nothing blocked, no error | **70450: partly.** After the /reload and in combat: on, `populated`. Nothing blocked, and no Glass UI failure. BugSack's only error was Blizzard's `BagsBar.lua:125` taint-log noise (50 times), as on the merchant's pass. **The quest routine (accept, progress, turn in) is still to do** (owner: later). |
 
 ## The damage meter (#49)
 

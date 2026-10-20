@@ -22,6 +22,8 @@
 --   #58 Glass Panel in the suite: Pearl, its options, its edge /fp steps skin suitepanel
 --   #54 Glass UI's own skins on Pearl                         /fp steps skin pearl
 --   #55 the quest tracker                                      /fp steps skin tracker
+--
+-- Discovery for #56, Questie and RestedXP:                    /fp steps skin questing
 -- And Blizzard's own glass, the login ruleset card beside ours (#17): /fp steps skin card
 --
 -- Discovery for the next skin:
@@ -273,7 +275,7 @@ end
 
 local function eachTarget(key, fn)
     local names = TARGETS[key]
-    if not names then say("unknown target " .. show(key) .. " (merchant, popup, character, map, meter)"); return false end
+    if not names then say("unknown target " .. show(key) .. " (merchant, popup, character, map, meter, questing)"); return false end
     for _, name in ipairs(names) do
         local f = frameByName(name)
         if f then fn(f, name) else say(key .. " " .. name .. " MISSING") end
@@ -2098,6 +2100,344 @@ Probe:Command("meterbars", function(args)
 end, "#49: meterbars on|off: the glass bars preview (off puts every touched bar back)")
 
 --------------------------------------------------------------------------------
+-- Discovery: Questie's tracker and RestedXP's guide window and arrow (#56,
+-- docs/QUEST-TRACKER.md part 3, "Discovery first"). Measured, never shipped:
+--   QS.firstSeen  when each frame first exists, as the procedure's run read
+--                 it. SkinProbe loads after both (alphabetical), so "SkinProbe
+--                 load" means at their own load or earlier; the engine
+--                 attaches at their ADDON_LOADED. The watcher runs every
+--                 session and keeps its own QS.seenSession, so a later session
+--                 with the addons off again never overwrites the run's result
+--                 (Codex, PR #65).
+--   QS.hold.<x>   the probe holds every texture of the three at alpha 0 (its
+--                 own touch, all put back by Unfade), then after each of their
+--                 refreshes reads which came back and which regions are new.
+--   QS.coexist    Questie's tracker beside Blizzard's (Questie can hide it).
+--   QS.arrow.<x>  RestedXP's arrow: the rotation calls on its texture (a hook
+--                 on that instance), its orientation field, its place and
+--                 GlassPanel's announced top edge.
+-- The three addons are switched on for this character only (the GUID), their
+-- enable states saved first in SkinProbeDB.questingWas[GUID] and put back by
+-- the last step, or /fp skin questing restore.
+--------------------------------------------------------------------------------
+
+TARGETS.questing = { "Questie_BaseFrame", "RXPFrame", "RXPG_ARROW" }
+TREE_MAX.questing = 3000
+local QUESTING_ADDONS = { "Questie", "QuestieDB", "RXPGuides" }   -- Questie requires QuestieDB
+local SEEN_FOR = 120   -- seconds after PLAYER_ENTERING_WORLD to keep looking
+
+-- When each target first exists.
+local seen = {}
+local seenStart
+local function seenCount()
+    local n = 0
+    for _ in pairs(seen) do n = n + 1 end
+    return n
+end
+local function seenCopy()
+    local out = {}
+    for k, v in pairs(seen) do out[k] = v end
+    return out
+end
+local function lookFor(where)
+    local new = false
+    for _, name in ipairs(TARGETS.questing) do
+        if not seen[name] and frameByName(name) then seen[name] = where; new = true end
+    end
+    if new then record("QS.seenSession", seenCopy()) end
+    return new
+end
+lookFor("SkinProbe load")
+local seenWatch = CreateFrame("Frame")
+Probe:RegisterEvents(seenWatch, { "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD" })
+seenWatch:SetScript("OnEvent", function(self, event, name)
+    if event == "ADDON_LOADED" then
+        lookFor("ADDON_LOADED " .. tostring(name))
+        -- Seen before the saved table loaded: kept now, this session's only.
+        if name == ADDON and next(seen) then record("QS.seenSession", seenCopy()) end
+    elseif event == "PLAYER_LOGIN" then
+        lookFor("PLAYER_LOGIN")
+    else
+        lookFor("PLAYER_ENTERING_WORLD")
+        if seenStart then return end
+        seenStart = GetTime()
+        self:SetScript("OnUpdate", function(f)
+            local t = GetTime() - seenStart
+            lookFor(string.format("PEW+%.1fs", t))
+            if t > SEEN_FOR or seenCount() == #TARGETS.questing then
+                f:SetScript("OnUpdate", nil)
+            end
+        end)
+    end
+end)
+
+-- Their enable states, for this character only, saved once and put back.
+local function questingEnable()
+    if type(SkinProbeDB) ~= "table" then return false, "no saved table" end
+    local g = guid()
+    if not g then return false, "no character GUID" end
+    if type(SkinProbeDB.questingWas) ~= "table" then SkinProbeDB.questingWas = {} end
+    if type(SkinProbeDB.questingWas[g]) ~= "table" then
+        local was = {}
+        for _, n in ipairs(QUESTING_ADDONS) do was[n] = enableState(n) end
+        SkinProbeDB.questingWas[g] = was
+    end
+    local ok, parts = true, {}
+    for _, n in ipairs(QUESTING_ADDONS) do
+        setEnabled(n, true)
+        local s = enableState(n)
+        ok = ok and s ~= nil and s > 0
+        parts[#parts + 1] = n .. "=" .. show(s)
+    end
+    say("QS enabled " .. table.concat(parts, " "))
+    return ok, table.concat(parts, " ")
+end
+
+local function questingRestore()
+    local g = guid()
+    local all = type(SkinProbeDB) == "table" and SkinProbeDB.questingWas
+    local was = type(all) == "table" and g and all[g]
+    if type(was) ~= "table" then return true, "nothing to restore for this character" end
+    local ok, parts = true, {}
+    for _, n in ipairs(QUESTING_ADDONS) do
+        if type(was[n]) == "number" then
+            setEnabled(n, was[n] > 0)
+            local s = enableState(n)
+            ok = ok and s ~= nil and (s > 0) == (was[n] > 0)
+            parts[#parts + 1] = n .. "=" .. show(s)
+        end
+    end
+    all[g] = nil
+    say("QS restored " .. table.concat(parts, " "))
+    return ok, table.concat(parts, " ")
+end
+
+-- The hold test: every texture of the targets at alpha 0, the alpha before
+-- kept once per region (with its path) so Unfade puts every one back, however
+-- the frames changed meanwhile.
+local heldWas = {}       -- region -> { alpha =, path = }
+local function eachTexture(fn)
+    for _, name in ipairs(TARGETS.questing) do
+        local f = frameByName(name)
+        if f then
+            walk(f, name, 4, function(kind, obj, path)
+                if kind ~= "region" then return end
+                local _, otype = call(obj, "GetObjectType")
+                if plain(otype) == "Texture" then fn(obj, path) end
+            end, { n = 0, max = TREE_MAX.questing })
+        end
+    end
+end
+
+local function holdOn()
+    if InCombatLockdown() then return false, "not in combat" end
+    local n = 0
+    eachTexture(function(r, path)
+        if not heldWas[r] then
+            local ok, a = call(r, "GetAlpha")
+            a = ok and plain(a) or nil
+            if type(a) ~= "number" then return end
+            heldWas[r] = { alpha = a, path = path }
+        end
+        call(r, "SetAlpha", 0)
+        n = n + 1
+    end)
+    say("QS hold on: " .. n .. " textures at 0")
+    return n > 0, n .. " textures"
+end
+
+-- Which held textures came back, and which textures are new since the hold.
+local function holdCheck(label)
+    local back, new = {}, {}
+    for r, s in pairs(heldWas) do
+        local ok, a = call(r, "GetAlpha")
+        a = ok and plain(a) or nil
+        if a ~= 0 then back[#back + 1] = s.path .. "=" .. num(a) end
+    end
+    eachTexture(function(r, path)
+        if not heldWas[r] then new[#new + 1] = path end
+    end)
+    table.sort(back); table.sort(new)
+    local rec = { back = #back, new = #new, backList = table.concat(back, ", "), newList = table.concat(new, ", ") }
+    say("QS hold " .. label .. ": " .. #back .. " back (" .. rec.backList .. "); " .. #new .. " new ("
+        .. rec.newList .. ")")
+    record("QS.hold." .. label, rec)
+    return #back, #new
+end
+
+local function holdOff()
+    local n = 0
+    for r, s in pairs(heldWas) do
+        call(r, "SetAlpha", s.alpha)
+        heldWas[r] = nil
+        n = n + 1
+    end
+    say("QS hold off: " .. n .. " textures put back")
+    return true, n .. " put back"
+end
+
+local function shownName(name) return shownFrame(frameByName(name)) end
+
+-- Questie's tracker beside Blizzard's.
+local function coexist()
+    local blizz = frameByName("ObjectiveTrackerFrame")
+    local okA, a = call(blizz, "GetAlpha")
+    local rec = { questie = shownName("Questie_BaseFrame"), blizzard = shownFrame(blizz),
+                  blizzardAlpha = okA and plain(a) or nil, rxp = shownName("RXPFrame"), arrow = shownName("RXPG_ARROW") }
+    say("QS coexist: Questie " .. tostring(rec.questie) .. ", Blizzard's " .. tostring(rec.blizzard) .. " (alpha "
+        .. num(rec.blizzardAlpha) .. "), RestedXP window " .. tostring(rec.rxp) .. ", arrow " .. tostring(rec.arrow))
+    record("QS.coexist", rec)
+    return rec
+end
+
+-- The arrow: its texture's SetRotation calls, counted from a hook on that
+-- texture (never on RestedXP's code), its orientation field, its place, and
+-- GlassPanel's top edge to compare.
+local arrowSeen = { calls = 0 }
+local function arrowHook()
+    if arrowSeen.hooked then return true end
+    local af = frameByName("RXPG_ARROW")
+    local tex = af and rawget(af, "texture")
+    if type(tex) ~= "table" or type(tex.SetRotation) ~= "function" then return false end
+    hooksecurefunc(tex, "SetRotation", function(_, angle)
+        arrowSeen.calls = arrowSeen.calls + 1
+        arrowSeen.last = plain(angle)
+    end)
+    arrowSeen.hooked = true
+    return true
+end
+
+local function arrowState(label)
+    arrowHook()
+    local af = frameByName("RXPG_ARROW")
+    local rec = { calls = arrowSeen.calls, last = arrowSeen.last, shown = shownFrame(af) }
+    rec.orientation = af and plain(rawget(af, "orientation")) or nil
+    local okP, point, rel, relPoint, x, y = call(af, "GetPoint", 1)
+    if okP then
+        rec.point = plain(point)
+        rec.relPoint = plain(relPoint)
+        rec.x, rec.y = plain(x), plain(y)
+        local okN, relName = call(rel, "GetName")
+        rec.rel = okN and plain(relName) or nil
+    end
+    local okT, top = call(af, "GetTop")
+    local okU, uiTop = call(UIParent, "GetTop")
+    top, uiTop = okT and plain(top) or nil, okU and plain(uiTop) or nil
+    if type(top) == "number" and type(uiTop) == "number" then rec.fromTop = uiTop - top end
+    local GP = rawget(_G, "GlassPanel")
+    local okE, edge = pcall(function() return GP.EdgeState() end)
+    rec.panelEdge = okE and type(edge) == "table" and plain(edge.top) or nil
+    say("QS arrow " .. label .. ": shown=" .. tostring(rec.shown) .. " rotations=" .. rec.calls .. " last="
+        .. num(rec.last) .. " orientation=" .. num(rec.orientation) .. " point=" .. show(rec.point) .. " "
+        .. show(rec.rel) .. " " .. show(rec.relPoint) .. " " .. num(rec.x) .. "," .. num(rec.y) .. " fromTop="
+        .. num(rec.fromTop) .. " GlassPanel edge=" .. num(rec.panelEdge))
+    record("QS.arrow." .. label, rec)
+    return rec
+end
+
+local function allLoaded()
+    local missing = {}
+    for _, n in ipairs(QUESTING_ADDONS) do
+        if not loaded(n) then missing[#missing + 1] = n end
+    end
+    return #missing == 0, #missing == 0 and "all loaded" or ("not loaded: " .. table.concat(missing, ", "))
+end
+
+-- One refresh's result, then the baseline re-armed: every texture at 0 again,
+-- the new ones included (their alpha now kept as their first), so the next
+-- refresh reports only what it changed itself (Codex, PR #65).
+local function holdMeasure(label)
+    return function()
+        local back, new = holdCheck(label)
+        holdOn()
+        return back, new
+    end
+end
+
+Probe:Steps("questing", {
+    title = "Glass UI: discovery for Questie's tracker and RestedXP's guide window and arrow (#56)",
+    { text = "Turns on script errors and reads which of Questie, QuestieDB and RestedXP are loaded. The procedure "
+          .. "turns them on for this character only and puts them back at the end.",
+      auto = true, run = function() return setCVar("scriptErrors", "1"), allLoaded() end },
+    { text = "Turns on Questie, QuestieDB and RestedXP for this character (their states are saved first).",
+      button = "Enable", run = questingEnable },
+    { text = "Reload. If Questie or RestedXP open a welcome or setup window, close it or pick the defaults.",
+      reload = true },
+    { text = "Reads when each frame first appeared, and checks all three loaded.", auto = true,
+      run = function()
+          lookFor("now")
+          record("QS.firstSeen", seenCopy())
+          return seenCount()
+      end,
+      check = allLoaded },
+    { text = "Track a quest so Questie's tracker shows (accept one if your log is empty).",
+      wait = function() return shownName("Questie_BaseFrame"), "Questie's tracker isn't shown" end, timeout = 600 },
+    { text = "Pick a leveling guide in RestedXP so its guide window shows.",
+      wait = function() return shownName("RXPFrame"), "RestedXP's window isn't shown" end, timeout = 600 },
+    -- Only now: Questie builds its tracker in a staged startup after login, and
+    -- RestedXP fills its step frames once a guide is picked (Codex, PR #65).
+    { text = "Logs the frame trees of Questie's tracker, RestedXP's window and its arrow, now that they're built, "
+          .. "and keeps when each first appeared (Questie's tracker comes late in its startup).",
+      auto = true, run = function()
+          -- The run's result, final: the waits above let late frames appear
+          -- (Codex, PR #65). The step after the reload kept an early copy.
+          lookFor("now")
+          record("QS.firstSeen", seenCopy())
+          return tree("questing", 4)
+      end,
+      check = function()
+          local missing = {}
+          for _, name in ipairs(TARGETS.questing) do
+              if not frameByName(name) then missing[#missing + 1] = name end
+          end
+          return #missing == 0, #missing == 0 and "all three" or ("missing: " .. table.concat(missing, ", "))
+      end },
+    { text = "Reads whether Blizzard's tracker shows beside Questie's.", auto = true,
+      run = function() return coexist().blizzard end },
+    { text = "Press Next for a screenshot of both as they come.", screenshot = "questing, as it comes" },
+    { text = "Do you see both trackers, Questie's and Blizzard's 'All Objectives'? Say which in the Note.", ask = true },
+    { text = "Holds every texture of the three at 0 (the probe's own touch; Unfade puts them back).",
+      button = "Fade", run = holdOn, screenshot = "questing, held at 0" },
+    { text = "Move the mouse over Questie's tracker and away again (its fader), then press Measure.",
+      button = "Measure", run = holdMeasure("questie fader") },
+    { text = "Make progress on a quest, or accept or abandon one, so Questie's tracker updates. Then Measure.",
+      button = "Measure", run = holdMeasure("questie update") },
+    { text = "In Questie's options (Tracker), switch its background off and on again, if it has the choice. Then "
+          .. "Measure (Skip if there's no such option).", button = "Measure", run = holdMeasure("questie background") },
+    { text = "In RestedXP's window, go to the next step (or skip one). Then Measure.", button = "Measure",
+      run = holdMeasure("rxp step") },
+    { text = "If RestedXP's options have a theme or window style, change it and change it back. Then Measure "
+          .. "(Skip if not).", button = "Measure", run = holdMeasure("rxp theme") },
+    { text = "Reload the guide view: close RestedXP's window and open it again (its minimize or /rxp). Then "
+          .. "Measure.", button = "Measure", run = holdMeasure("rxp reopen"), screenshot = "questing, after refreshes" },
+    { text = "Puts every texture back as it was.", button = "Unfade", run = holdOff },
+    { text = "Follow a guide step with a destination so RestedXP's arrow shows, and turn around a few times.",
+      wait = function()
+          local rec = arrowState("waiting")
+          return rec.shown and rec.calls >= 5, rec.calls .. " rotations"
+      end, timeout = 600, screenshot = "questing, the arrow" },
+    { text = "Reads the arrow's place against Glass Panel's top edge.", auto = true,
+      run = function() return arrowState("place").fromTop end },
+    { text = "Is the arrow over Glass Panel's bar or its zoomed XP bar right now? Say where in the Note.", ask = true },
+    { text = "Did anything look broken in Questie or RestedXP during this run (beyond the faded art)?", ask = true },
+    { text = "Puts back which of the three were enabled for this character.", button = "Restore",
+      run = questingRestore },
+    { text = "Type /reload to save the results (and unload them, if they were off before).", reload = true },
+})
+
+Probe:Command("questing", function(args)
+    args = args or ""
+    if args:match("restore") then questingRestore()
+    elseif args:match("unfade") then holdOff()
+    else
+        say("QS first seen this session: " .. (next(seen) and "" or "nothing yet"))
+        for name, where in pairs(seen) do say("  " .. name .. ": " .. where) end
+        coexist()
+        arrowState("now")
+    end
+end, "#56: Questie and RestedXP: first seen, side by side, the arrow (restore: enable states; unfade: textures)")
+
+--------------------------------------------------------------------------------
 -- Boot
 --------------------------------------------------------------------------------
 
@@ -2123,4 +2463,6 @@ NS._test = { Probe = Probe, state = state, tree = tree, fade = fade, slashOwners
              barTree = barTree, sourceWindow = sourceWindow, barsOn = barsOn, barsOff = barsOff,
              barPanels = barPanels, headersFaded = headersFaded, panelState = panelState,
              panelCheck = panelCheck, panelFollow = panelFollow, panelRestore = panelRestore, ownGlass = ownGlass,
-             trackerState = trackerState, trackerOn = trackerOn }
+             trackerState = trackerState, trackerOn = trackerOn, questingEnable = questingEnable,
+             questingRestore = questingRestore, holdOn = holdOn, holdCheck = holdCheck, holdOff = holdOff,
+             coexist = coexist, arrowState = arrowState, seen = seen, lookFor = lookFor }
