@@ -136,3 +136,15 @@ Our glass, with no `layoutIndex`, is left out of the menu's layout (LayoutFrame.
   - 12 mutants of the skin and 10 of the probe's checks, all killed.
 - **The probe:** the bags and game menu blocks are now each in their own `do` scope, since Lua 5.1
   allows 200 locals in a chunk's main function and the file reached it.
+
+## Run 1's tuning (2026-10-20)
+
+The owner, after GM run 1: "a bit more pearl except for the buttons since the stock ui was already
+translucent ... maybe more like the quest tracker".
+- **The window:** the suite's body backing (clear 0.35, the quest tracker's), no longer the window
+  floor. The skin's `backing = "window"` is dropped.
+- **The buttons** keep their density: each button's glass gets its own backing at the window floor.
+  That's `kit:Panel`'s new `opts.kind`, a panel's backing kind when it isn't its skin's. It stacks
+  with the window's to about 0.95 (before: 0.93 under unbacked glass).
+- **The title tab:** still no backing.
+- Tested and mutation-tested (5 mutants, all killed).

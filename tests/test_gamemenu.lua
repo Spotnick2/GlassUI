@@ -35,12 +35,24 @@ check(win ~= nil, "the window glass, built at the first show (in combat: a plain
 eq(win:GetFrameLevel(), M:GetFrameLevel() - 1, "under the menu")
 eq(rawget(win, "layoutIndex"), nil, "no layoutIndex: the menu's layout leaves it out")
 eq(M.Border:GetAlpha(), 0, "the dialog border faded (its tiled Bg with it)")
+-- More Pearl than a window (the owner, GM run 1): the body's backing, as the quest tracker.
+local function backingOf(host)
+    for _, r in ipairs(host._regions) do
+        if r._layer == "BACKGROUND" and r._sub == -7 then return r end
+    end
+end
+local wb = backingOf(win)
+local body = GUI.Suite.Body("clear").backing
+check(wb ~= nil, "the window has a backing")
+near(wb._color[4], body[4], "the body's (clear 0.35), not the window floor")
+check(wb._color[4] < GUI.Theme.WINDOW_BACKING, "lighter than a window")
 for _, k in ipairs({ "LeftBG", "RightBG", "CenterBG" }) do eq(M.Header[k]:GetAlpha(), 0, "the header's " .. k .. " faded") end
 eq(M.Header.Text:GetAlpha(), 1, "the title text Blizzard's")
 local hg = G.menus[M].header
 check(hg ~= nil and hg:GetParent() == M.Header, "the title tab: glass on the header")
 eq(hg:GetFrameLevel(), M.Header:GetFrameLevel() - 1, "under it")
 eq(ours(M.Header)[1], hg, "one glass on the header")
+eq(backingOf(hg), nil, "the title tab: no backing")
 eq(M.NewOptionsFrame:GetAlpha(), 1, "the NEW badge left")
 
 -- The buttons: styled at the first show by the style pass.
@@ -52,6 +64,9 @@ for i, b in ipairs(first) do
     eq(s.glass:GetParent(), b, "button " .. i .. ": in the button")
     eq(s.glass:GetFrameLevel(), b:GetFrameLevel() - 1, "button " .. i .. ": under it")
     eq(s.g.top:GetFrameLevel(), s.glass:GetFrameLevel(), "button " .. i .. ": its rim under the text")
+    local bb = backingOf(s.glass)
+    check(bb ~= nil, "button " .. i .. ": a backing of its own")
+    near(bb._color[4], GUI.Theme.WINDOW_BACKING, "button " .. i .. ": the window floor's, as dense as before")
     for _, k in ipairs({ "Left", "Right", "Center" }) do eq(b[k]:GetAlpha(), 0, "button " .. i .. ": " .. k .. " faded") end
     eq(b._highlight._desat, true, "button " .. i .. ": the hover glow desaturated")
     local c = b._highlight._vertex

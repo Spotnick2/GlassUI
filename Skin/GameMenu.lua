@@ -11,10 +11,12 @@
 -- or mixin method; it only reacts to Blizzard showing it, with fades, tints
 -- and our own frames.
 --
--- The window glass with the floor (the dialog border faded); the title on a
--- glass tab (the header's diamond-metal art faded, its text Blizzard's);
--- each button on small glass, its red slices faded, Blizzard's own hover glow
--- tinted white. Our glass has no layoutIndex, so the menu's vertical layout
+-- The window glass in the suite's Pearl body, as the quest tracker (the
+-- owner, GM run 1: "a bit more pearl except for the buttons, since the stock
+-- ui was already translucent"; the dialog border faded); the title on a glass
+-- tab (the header's diamond-metal art faded, its text Blizzard's); each button
+-- on small glass with the window floor's backing, as dense as before, its red
+-- slices faded, Blizzard's own hover glow tinted white. Our glass has no layoutIndex, so the menu's vertical layout
 -- leaves it out (LayoutFrame.lua:22-39).
 
 local GUI = GlassUI
@@ -36,9 +38,10 @@ local menus = setmetatable({}, { __mode = "k" })    -- the menu -> { header glas
 local function tbl(v) return type(v) == "table" and v or nil end
 
 -- Our small glass behind a Blizzard frame, its rim at its own level (under
--- the frame's text and art), no backing: the window's floor is under it.
-local function glassUnder(kit, frame, insets)
-    local glass, g = kit:Panel(frame, "small", insets, nil, { backing = false })
+-- the frame's text and art). opts: the panel's (no backing for the title tab,
+-- the window floor's for a button).
+local function glassUnder(kit, frame, insets, opts)
+    local glass, g = kit:Panel(frame, "small", insets, nil, opts)
     if g and g.top then g.top:SetFrameLevel(glass:GetFrameLevel()) end
     return glass, g
 end
@@ -47,7 +50,7 @@ end
 -- touches. Idempotent: the style pass and the InitButtons hook both call it.
 local function styleButton(kit, b)
     if not buttons[b] then
-        local glass, g = glassUnder(kit, b, BUTTON_INSETS)
+        local glass, g = glassUnder(kit, b, BUTTON_INSETS, { kind = "window" })
         buttons[b] = { glass = glass, g = g }
     end
     for _, key in ipairs(SLICES) do kit:Fade(kit:Child(b, key)) end
@@ -68,12 +71,13 @@ GUI.Engine.Register({
     title = "Game menu",
     risk = "plain",
     live = true,
-    backing = "window",
+    -- The body's backing (clear 0.35), not the window floor: the stock menu
+    -- was translucent already.
     frames = function() return rawget(_G, "GameMenuFrame") end,
     install = function(kit, frame)
         kit:Panel(frame)
         local header = tbl(frame.Header)
-        menus[frame] = { header = header and (glassUnder(kit, header, HEADER_INSETS)) or nil }
+        menus[frame] = { header = header and (glassUnder(kit, header, HEADER_INSETS, { backing = false })) or nil }
         -- Blizzard rebuilds the buttons on every show and on a store or trial
         -- event (GameMenuFrame.lua:69-102); the first show's ran before this.
         hooksecurefunc(frame, "InitButtons", function(f)
