@@ -1062,6 +1062,145 @@ Probe:Steps("merchant", {
 })
 
 --------------------------------------------------------------------------------
+-- The merchant's layout (#84, docs/MERCHANT.md section 4): sections (closer
+-- to Blizzard's) or the mockup's bar, switched live through Glass UI's own
+-- GUI.Merchant.SetLayout (not saved: a /reload is sections again). Each
+-- check reads our pieces as the layout shows them. Saved as ML.<label>.
+--------------------------------------------------------------------------------
+
+local function layoutTry(name)
+    local G = glassUI()
+    if not (G and G.Merchant and G.Merchant.SetLayout) then return false, "Glass UI not loaded" end
+    local ok = G.Merchant.SetLayout(name)
+    say("ML layout " .. name .. ": " .. tostring(ok))
+    record("ML.layout", name)
+    return ok, name
+end
+
+local function sectionSeen(sec) return sec ~= nil and seen(sec.fill) end
+
+-- What our layout shows now, beside what Blizzard shows.
+local function layoutState(label)
+    local G = glassUI()
+    local u = G and G.Merchant and G.Merchant._test and G.Merchant._test.ui[frameByName("MerchantFrame") or {}]
+    local rec = { layout = G and G.Merchant and G.Merchant.Layout and G.Merchant.Layout() or nil }
+    if u then
+        rec.merchantTab = seen(u.bb)
+        rec.sections = (sectionSeen(u.inset) and 1 or 0) + (sectionSeen(u.money) and 1 or 0)
+            + (sectionSeen(u.currency) and 1 or 0) + (sectionSeen(u.boxLeft) and 1 or 0)
+            + (sectionSeen(u.boxRight) and 1 or 0)
+        rec.bar = sectionSeen(u.bar)
+        rec.line = seen(u.line)
+        rec.square = u.square ~= nil and sectionSeen(u.square)
+        rec.label = seen(u.label)
+        rec.empty = seen(u.empty)
+        local lit = {}
+        for tab, hl in pairs(u.tabs) do
+            if seen(hl) then
+                local ok, n = call(tab, "GetName")
+                lit[#lit + 1] = ok and plain(n) or "?"
+            end
+        end
+        table.sort(lit)
+        rec.lit = table.concat(lit, ",")
+        local okN, n = pcall(GetNumBuybackItems)
+        rec.buyback = okN and plain(n) or nil
+        if u.bar then
+            local okT, top = call(u.bar.fill, "GetTop")
+            local okB, bottom = call(u.bar.fill, "GetBottom")
+            rec.barTop, rec.barBottom = okT and plain(top) or nil, okB and plain(bottom) or nil
+        end
+        local r11 = frameByName("MerchantItem11")
+        local okR, rb = call(r11, "GetBottom")
+        rec.row11Bottom = okR and plain(rb) or nil
+    end
+    say("ML " .. label .. ": " .. tostring(rec.layout) .. ", merchant tab " .. tostring(rec.merchantTab)
+        .. ", sections " .. tostring(rec.sections) .. ", bar " .. tostring(rec.bar) .. ", square "
+        .. tostring(rec.square) .. ", label " .. tostring(rec.label) .. ", empty " .. tostring(rec.empty)
+        .. ", lit " .. tostring(rec.lit) .. ", buyback " .. tostring(rec.buyback))
+    record("ML." .. label, rec)
+    return rec
+end
+
+-- A check: the layout's pieces as `want` says ({ layout, tab = 1 | 2, label,
+-- empty }); sections shows its 5 (Merchant tab) or 3 (Buyback tab), the bar
+-- its bar and line and, on the Merchant tab, its square.
+local function layoutOn(label, want)
+    return function()
+        local r = layoutState(label)
+        local bad = {}
+        local function want_(cond, why) if not cond then bad[#bad + 1] = why end end
+        want_(r.layout == want.layout, "layout " .. tostring(r.layout))
+        local tab1 = want.tab == 1
+        want_(r.merchantTab == tab1, "not on the " .. (tab1 and "Merchant" or "Buyback") .. " tab")
+        want_(r.lit == (tab1 and "MerchantFrameTab1" or "MerchantFrameTab2"), "tabs lit: " .. tostring(r.lit))
+        if want.layout == "sections" then
+            want_(r.sections == (tab1 and 5 or 3), tostring(r.sections) .. " sections")
+            want_(not r.bar and not r.line and not r.square and not r.label and not r.empty, "a bar piece shown")
+        else
+            want_(r.sections == 0, tostring(r.sections) .. " sections in the bar layout")
+            want_(r.bar and r.line, "no bar or line")
+            want_(r.square == tab1, "square " .. tostring(r.square))
+            if want.label ~= nil then want_(r.label == want.label, "label " .. tostring(r.label)) end
+            if want.empty ~= nil then want_(r.empty == want.empty, "empty state " .. tostring(r.empty)) end
+            if not tab1 and r.barTop and r.row11Bottom then
+                want_(r.barTop <= r.row11Bottom, "the bar over row 11")
+            end
+        end
+        return #bad == 0, #bad == 0 and (tostring(r.layout) .. " as wanted") or table.concat(bad, "; ")
+    end
+end
+
+Probe:Steps("merchantlayout", {
+    title = "Glass UI: the merchant's layout, sections or bar (#84)",
+    { text = "Turns on script errors, sets the default layout (sections). For the empty Buyback page, nothing "
+          .. "may be sold this session: if your Buyback tab lists items, buy them back first, or log out and in.",
+      auto = true, run = function() return setCVar("scriptErrors", "1"), layoutTry("sections") end },
+    { text = "Talk to a vendor, ideally one with an item you can't use or afford (red).", event = "MERCHANT_SHOW" },
+    -- Sections: Blizzard's structure in glass.
+    { text = "SECTIONS (closer to Blizzard's): the item area, the two boxes of the bottom band and the money boxes, "
+          .. "each a recessed pane. Press Next for a screenshot.", screenshot = "layout, sections",
+      check = layoutOn("sections merchant", { layout = "sections", tab = 1 }) },
+    { text = "Do the panes sit where Blizzard's boxes are (the bottom two especially)? Say what's off in the Note.",
+      ask = true },
+    { text = "Open the Buyback tab (nothing sold yet). Press Next for a screenshot.", screenshot = "layout, sections buyback",
+      check = layoutOn("sections buyback", { layout = "sections", tab = 2 }) },
+    -- The bar: the mockup.
+    { text = "BAR (the mockup), on the Buyback tab: an empty page should say 'No items to buy back'.",
+      button = "Bar", run = function() return layoutTry("bar") end, screenshot = "layout, bar empty buyback",
+      check = layoutOn("bar empty", { layout = "bar", tab = 2, empty = true }) },
+    { text = "Open the Merchant tab: one footer bar with the buyback slot in a square, labelled 'Buyback', and the "
+          .. "money; less red on red items. Press Next for a screenshot.", screenshot = "layout, bar merchant",
+      check = layoutOn("bar merchant", { layout = "bar", tab = 1, label = true }) },
+    { text = "Sell an item (right-click it in your bags). The slot shows it, with its name instead of the label.",
+      screenshot = "layout, bar sold", check = layoutOn("bar sold", { layout = "bar", tab = 1, label = false }) },
+    { text = "Open the Buyback tab: the item, no empty message.", screenshot = "layout, bar buyback item",
+      check = layoutOn("bar buyback item", { layout = "bar", tab = 2, empty = false }) },
+    { text = "Stay on the Buyback tab and buy that item back (click it): the empty message comes back.",
+      check = layoutOn("bar bought back", { layout = "bar", tab = 2, empty = true }) },
+    { text = "Close the window while on the Buyback tab, then talk to the vendor again.", event = "MERCHANT_SHOW" },
+    { text = "It opens on the Merchant tab: no empty message. Press Next.",
+      check = layoutOn("bar reopened", { layout = "bar", tab = 1 }) },
+    { text = "Optional (Skip if not easy): sell 12 cheap items, open the Buyback tab, press Next: rows 11 and 12 "
+          .. "should sit clear above the bar.", screenshot = "layout, bar buyback full",
+      check = layoutOn("bar buyback full", { layout = "bar", tab = 2, empty = false }) },
+    { text = "Which reads better: SECTIONS or BAR? Say which in the Note, and anything to change.", ask = true },
+    -- Off and on, the layout switched while off.
+    { text = "Open the Merchant tab. Switches the skin off, then the layout to sections while it's off.",
+      button = "Skin off", run = function() return switch(false), layoutTry("sections") end,
+      screenshot = "layout, skin off",
+      check = function()
+          local r = layoutState("off")
+          local ok = r.sections == 0 and not r.bar and not r.square and not r.empty and r.lit == ""
+          return ok, ok and "nothing of ours shown" or "something of ours shown while off"
+      end },
+    { text = "Switches the skin on: sections, as set while off.", button = "Skin on",
+      run = function() return switch(true) end, screenshot = "layout, on again",
+      check = layoutOn("on again", { layout = "sections", tab = 1 }) },
+    { text = "Type /reload to save the results (the layout is sections again after it).", reload = true },
+})
+
+--------------------------------------------------------------------------------
 -- The suite theme (#24, docs/SUITE.md "In-game validation", S.1-S.8): Glass
 -- UI coordinating Glass Unit Frames and Glass Raid Frames. It reads only
 -- public state: Glass UI's Suite record, each addon's glass instance (its
@@ -2941,7 +3080,7 @@ boot:SetScript("OnEvent", function(_, _, name)
     say("loaded (" .. SkinProbeDB.loads .. " loads). /fp skin for the commands, /fp steps skin wave1 to start")
 end)
 
-NS._test = { Probe = Probe, state = state, tree = tree, fade = fade, slashOwners = slashOwners,
+NS._test = { layoutTry = layoutTry, layoutState = layoutState, layoutOn = layoutOn, Probe = Probe, state = state, tree = tree, fade = fade, slashOwners = slashOwners,
              gamepad = gamepad, panelsOn = panelsOn, panelsOff = panelsOff, borderFade = borderFade,
              borderRestore = borderRestore, gradientOn = gradientOn, gradientOff = gradientOff,
              panels = panels, faded = faded, cardAtlas = cardAtlas, cardOn = cardOn, cardOff = cardOff,

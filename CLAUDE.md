@@ -59,8 +59,8 @@ audited exceptions and the reasons are in docs/PLAN.md, "The skin contract". In 
 | `Glass.lua` | our LibGlass instance, built at `ADDON_LOADED` on the suite theme (Pearl; clean below LibGlass r11, #54) |
 | `Theme.lua` | clear / smoked / class, the suite look's tint (#67): paints `Suite.Body`'s tint, wash (`SetWash`, a factor of the material's) and opaque backing, repainted live; a window skin's backing at least `WINDOW_BACKING` (#80) |
 | `Skin\Engine.lua` | `Register`, `Active`, owners/yields/handover, the switches, deferral and the combat wait, gamepad and suite stand-downs, `Status` |
-| `Skin\Kit.lua` | per-skin touches (`Fade` with read-back; `Blank`/`Tint`, given back by `Restore`; `TextColor` for the audited titles only, #71; `Shade` for `live = false`), `Panel` (with or without a backing), `Disc` (a LibGlass disc behind a round region, #48), widget kinds (`Shell`, `Inset`, `Tab`) |
-| `Skin\Merchant.lua` | the merchant window (live; docs/MERCHANT.md): a window floor, its item rows in glass with Blizzard's red mirrored, the portrait's disc |
+| `Skin\Kit.lua` | per-skin touches (`Fade` with read-back; `Blank`/`Tint`, given back by `Restore`; `TextColor` for the audited titles only, #71; `Shade` for `live = false`), `Panel` (with or without a backing), `Disc` (a LibGlass disc behind a round region, #48), `Section` (a recessed pane on a glass host, #84), `Adopt`, widget kinds (`Shell`, `Inset`, `Tab`) |
+| `Skin\Merchant.lua` | the merchant window (live; docs/MERCHANT.md): a window floor, its item rows in glass with Blizzard's red mirrored, the portrait's disc; its layout (#84): Blizzard's sections, or the mockup's footer bar and empty buyback, switched live by the probe |
 | `Skin\DamageMeter.lua` | Blizzard's damage meter (live, #49, docs/DAMAGE-METER.md): the windows in glass, the bars stock |
 | `Skin\QuestTracker.lua` | the objective tracker (live, #55, docs/QUEST-TRACKER.md): Glass Quest Tracker's look on the suite theme, the panel placed by state, the quest timers on a pill (#73); GQT loaded owns it |
 | `Suite.lua` | the suite contract (docs/SUITE.md): `GlassUI.Suite` (`API`, `Ready`, `Theme`, `Report`, `Open`), the roster, the follow switches, each member's state; the suite look (docs/SUITE-LOOK.md: `Look`, `SetLook`, `LookChanged`, the `accent` key and `Accent`); the body (`BODY`, `Body`, #67) |
@@ -69,7 +69,7 @@ audited exceptions and the reasons are in docs/PLAN.md, "The skin contract". In 
 
 Planned, per docs/PLAN.md: `Skin\<Window>.lua` for the rest, `Hub.lua`.
 `Tools\SkinProbe\` is the ForeverProbe module (never shipped): `/fp skin`, the measurements
-`/fp steps skin wave1|map|gradient|meter|questing`, each skin's acceptance (`/fp steps skin merchant|meterskin|tracker|accent|timer|timerfake`),
+`/fp steps skin wave1|map|gradient|meter|questing`, each skin's acceptance (`/fp steps skin merchant|merchantlayout|meterskin|tracker|accent|timer|timerfake`),
 the meter's glass bars preview (`/fp steps skin meterbars`), the suite's (`/fp steps skin suite`,
 #24) and Glass Panel's place in it (`/fp steps skin suitepanel`, #58), Glass UI's own skins on Pearl
 (`/fp steps skin pearl`, #54);

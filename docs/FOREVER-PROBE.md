@@ -45,6 +45,21 @@ The look is judged from the procedure's screenshots; `Logs\taint.log` is read af
 |---|---|---|
 | Merchant (#4) | `/fp steps skin merchant`: the looks side by side (clear at 0.85, 0.6 and 0.35 backing, smoked, class); buy, sell, buyback, repair; skin off and on live; after /reload; in combat (optional) | **70425: passes.** Buy, sell and buyback work; repair not tested (nothing to repair). The screenshots show the gold shell gone, glass under the window and tabs, and the item rows keeping Blizzard's red. Off live: exactly stock (owner: yes); on live: faded again; after /reload: on, faded at the first show. No `ADDON_ACTION_BLOCKED`/`FORBIDDEN` in the three sessions. Combat skipped (a plain, unprotected window). **Looks:** all five read well, and 0.35 looks the most like glass (owner): clear and class now use backing 0.35, smoked keeps 0.92. **Taint pass on 70450 (typed `/console taintLog 1`, buy/sell/buyback, full exit):** the log was on (BugGrabber: the bag-bar error 84 times that session, see the facts below), and `Logs\taint.log` was not rewritten. At level 1 the client writes only when something is blocked, so nothing was. A level-2 pass over every wave-1 skin goes into the v0.1.0 release check (#9). |
 
+### The merchant's layout (#84, docs/MERCHANT.md section 4)
+
+`/fp steps skin merchantlayout`: sections (closer to Blizzard's) against the mockup's bar, switched
+live. Each check reads our pieces against Blizzard's tab state. The results are saved as
+`SkinProbeDB.results["ML.<label>"]`: the panes shown, the bar, the square, the label, the empty
+state, the lit tab, the buyback count, and the bar's top against row 11's bottom.
+
+| # | Question | Result |
+|---|---|---|
+| ML.1 | Sections: 5 panes on the Merchant tab, 3 on Buyback, where Blizzard's boxes are; the box insets right? | not run yet |
+| ML.2 | Bar: the empty state on an empty Buyback page; the square and label on the Merchant tab; the label gone after a sale, back after buying it back on Buyback; reopened on the Merchant tab; rows 11-12 clear of the bar | not run yet |
+| ML.3 | The active tab lit, in both | not run yet |
+| ML.4 | Off: nothing of ours; the layout switched while off applies when on again | not run yet |
+| ML.5 | The owner's pick: sections or bar | not run yet |
+
 ### The merchant revisited (#80, #48, docs/MERCHANT.md)
 
 `/fp steps skin merchant`, extended. The checks read our rows' glass against Blizzard's item buttons,

@@ -142,6 +142,169 @@ For each `MerchantItem1`..`12` and `MerchantBuyBackItem`, found by global name (
 - **The other portrait windows** (#48 names them): later, through the same kit method
   (`kit:PortraitDisc(frame)`), once each window's skin exists.
 
+## 4. The layout: sections, or the mockup's bar (#84)
+
+Codex `gpt-6-astra` review: consensus in round 1, 2026-10-20 (no BLOCKER or SHOULD; one NIT, the
+acceptance's lifecycle cases, taken into `merchantlayout`).
+
+**Why:** the skin fades Blizzard's item inset, the two boxes of its bottom band
+(`MerchantFrameBottomLeftBorder`, atlas `UI-Merchant-BotFrame`) and its money and currency insets.
+That leaves one flat slab where the buyback arrow (`MerchantBuyBackItemItemButton.UndoFrame.Arrow`,
+greyed while nothing is sold) and the money float. The owner's words were "icons seem to be just
+there without purpose".
+
+The owner sent a mockup and GPT's critique of it, then said: "make it a bit closer to the original
+UI for the moment, but I'd be curious to try both". So there are two layouts, switched live by the
+probe:
+- **`sections`**, the default: closer to Blizzard's;
+- **`bar`**: the mockup's.
+
+Nothing of Blizzard's is moved, resized, retexted or recoloured. Every new piece is our own.
+
+### What's read (wow-ui-source `forever`, 70450)
+
+- **The bottom band** is `MerchantFrameBottomLeftBorder`: 334 × 61 at the frame's BOTTOMLEFT (1, 26),
+  so x 1-335 and y 26-87.
+  - **Its two boxes**, measured off the skin-off screenshot of MS run 1 (1.79 px per unit) and
+    still to be tuned:
+    - left: x 6-196;
+    - right: x 200-330;
+    - both: y 27-75, which is 12 below the band's top and 1 above its bottom.
+  - **The left box** holds the repair buttons (repair vendors) and Sell All Junk (when
+    `C_MerchantFrame.IsSellAllJunkEnabled`). Otherwise it's empty.
+  - **The right box** holds `MerchantBuyBackItem`: 115 × 37, at MerchantItem10's BOTTOMLEFT (+30,
+    −53), with its ItemButton at the item's TOPLEFT.
+- **The money strip:**
+  - `MerchantExtraCurrencyInset`: BOTTOMLEFT (4, 4) to (169, 27);
+  - `MerchantMoneyInset`: (−171, 27) to BOTTOMRIGHT (−5, 4);
+  - both `useParentLevel`.
+- **The Buyback tab** (`MerchantFrame_UpdateBuybackInfo`, MerchantFrame.lua:532-597):
+  - it hides the band, `MerchantBuyBackItem`, the repair and junk buttons and the page controls;
+  - it shows `BuybackBG` and rows 11-12, which sit where the band was (MerchantItem11 is 15 under
+    item 9);
+  - the merchant tab (:470-490) shows the band and `MerchantBuyBackItem` again;
+  - **so `MerchantBuyBackItem` is shown exactly while the Merchant tab is.**
+- **The selected tab** (`PanelTemplates_SelectTab`, SharedUIPanelTemplates.lua:629):
+  - it hides `Left`/`Middle`/`Right`, shows `LeftActive`/`MiddleActive`/`RightActive` and
+    disables the tab;
+  - `PanelTemplates_DeselectTab` does the reverse;
+  - the kit fades all six (`K:Tab`), so today only the text colour tells the tabs apart.
+- **The Buyback tab's portrait** is `SetPortraitToAsset("Interface\\MerchantFrame\\UI-BuyBack-Icon")`
+  (:533). The tab's label is the global string `BUYBACK` (MerchantFrame.xml:599).
+- **Levels, measured on 70450:** MerchantFrame 1, rows 2, PortraitContainer 400.
+  - Our window glass is at 0 and the rows' glass at 1.
+  - LibGlass paints a panel's body in its host's BACKGROUND (−8 to −3), and its rims and gloss on
+    `g.top` (OVERLAY).
+  - **So a texture in the window glass's host, on BORDER or ARTWORK, draws over the window's body,
+    under its rim, and under every row's glass (level 1).** This is where sections go, with no
+    frame-level ties: a frame of our own at 0 or 1 would tie with the window's glass or the rows'.
+
+### The pieces
+
+- **A section:** two textures of ours in the window glass's host:
+  - a fill: ARTWORK, the backing colour at `SECTION_FILL` (0.25);
+  - an edge: four 1 px lines on BORDER (no, ARTWORK 1), white at `SECTION_EDGE` (0.12).
+  
+  The result is a recessed pane with a restrained edge. That is Pearl's "edge highlight", and not
+  another LibGlass panel, which would add a second gloss over the items (the GPT critique: "free of
+  added reflection overlays"). Each section is anchored to Blizzard regions by `SetPoint` on our
+  texture, which never touches theirs.
+  - **The colour** is `Suite.BACKING`, the one backing colour for every tint (only the
+    alpha differs per tint). So nothing needs repainting: the planned Theme surface kind was
+    dropped in the code, because its mutant survived as a no-op.
+- **The tab state:** `HookScript("OnShow"/"OnHide")` on `MerchantBuyBackItem`, gated, calls
+  `layout()`. So does the style pass.
+- **`sections`:**
+  - the item inset: `MerchantFrame.Inset`, all points (the content area under the header);
+  - Merchant tab only: the band's two boxes, anchored to `MerchantFrameBottomLeftBorder` with
+    `BOX_INSETS`;
+  - always: the money inset and the currency inset, all points of each.
+- **`bar`:**
+  - **The header line:** one 1 px edge along the inset's top.
+  - **The footer bar:** one section.
+    - Merchant tab: from the band's TOPLEFT (+5, −12) to the money inset's BOTTOMRIGHT.
+    - Buyback tab: from the currency inset's TOPLEFT to the money inset's BOTTOMRIGHT, so it stays
+      clear of rows 11-12.
+    - It's re-anchored by `layout()`, on our own texture.
+  - **The buyback square:**
+    - a frame of ours parented to `MerchantBuyBackItem`, so it hides with it on the Buyback tab;
+    - at that item's level, under its ItemButton (level + 1);
+    - a section's fill and edge round the ItemButton (`SQUARE_OUTSET` 3);
+    - shown always on the Merchant tab, so the arrow sits in a slot.
+  - **The label:**
+    - a FontString of ours in that frame, `GameFontHighlight`, text `BUYBACK` (else "Buyback");
+    - LEFT on the ItemButton's RIGHT +8;
+    - shown while the slot is empty, by the same `filled()` test and the same `SetTexture`/
+      `SetAtlas` hooks the slot already has;
+    - with an item, Blizzard's own name shows there instead.
+  - **The empty state:**
+    - a frame of ours, a child of MerchantFrame at its level + 1, centred on `MerchantFrame.Inset`;
+    - inside: the buyback icon (that asset, on our texture, 40 px, on a buyback-square-like
+      section), "No items to buy back" (`GameFontHighlightLarge`) and "Items you sell will appear
+      here." (`GameFontDisable`);
+    - shown when the window is shown, `MerchantBuyBackItem` is hidden (the Buyback tab) and
+      `GetNumBuybackItems() == 0`;
+    - re-checked by `layout()`, which is called from the tab hooks, the style pass and the rows'
+      existing ItemButton OnShow/OnHide hooks (the Buyback tab's first row shows or hides when the
+      count leaves or reaches 0).
+  - **Less red:**
+    - the row's red mirror at `RED_BAR` 0.12 instead of 0.35, at full red (half at dark red);
+    - Blizzard's own red icon tint carries the warning, untouched;
+    - in `sections` the red stays 0.35, as Blizzard's plate.
+- **For both, the active tab:**
+  - one texture of ours on each tab's glass host: ARTWORK, white at `TAB_ACTIVE` (0.10), masked by
+    its glass;
+  - shown while that tab's `MiddleActive` is shown;
+  - `hooksecurefunc(tab.MiddleActive, "Show"/"Hide")` on the instance, gated, plus the style
+    pass reading `MiddleActive:IsShown()`.
+
+  Blizzard's text colours stay.
+- **The switch:**
+  - `GUI.Merchant.SetLayout("sections" | "bar")`: live, it repaints through `layout()` and the red
+    mirrors;
+  - not saved: the probe sets it;
+  - after the owner's pick, the other is removed or becomes a setting, the owner's call;
+  - an unknown name is refused.
+- **Off:**
+  - section textures and our frames live under our panels or are added to `kit.panels`, so off
+    hides them all;
+  - `layout()` runs only while `Engine.Active("merchant")`;
+  - on again, the style pass re-runs it.
+
+### Not in this
+
+- **The title's place** (the mockup left-aligns it next to the portrait), the coins' size, and the
+  money and buyback slot sharing one line: all three would move Blizzard's regions.
+- **The close button as a Pearl control:** that means replacing its art, which is a later step, if
+  wanted.
+- **Thinner rims on the window glass:** those are LibGlass's material, so it's a LibGlass question
+  for all the siblings.
+
+### Tests (planned)
+
+- Both layouts, built and switched live: which sections show on each tab, their anchors on
+  Blizzard's regions, and their parent (the window host) and layers.
+- The bar re-anchored per tab.
+- The square and the label: the label shown only while the slot is empty, and following the hooks.
+- The empty state: only on the Buyback tab with 0 items. It hides on the first sale and on the
+  Merchant tab.
+- The red: 0.35 in sections, 0.12 in bar, and repainted live by the switch.
+- The active tab: following MiddleActive's Show/Hide, and gated.
+- Off: nothing of ours shown, every hook a no-op. On: re-synced.
+- A section's fill is the backing colour at `SECTION_FILL`, and its edges are white at
+  `SECTION_EDGE`, 1 px.
+
+### In game (`/fp steps skin merchantlayout`)
+
+On a vendor with an unusable item, both layouts, live, a screenshot each:
+- the Merchant tab, sections then bar;
+- after a sale, the buyback slot;
+- the Buyback tab with nothing sold (a fresh vendor visit, before selling), in both layouts;
+- the tabs' active marking;
+- off and on.
+
+The owner picks a layout, and the box insets get tuned from the screenshots.
+
 ## Tests
 
 - **Theme:** a "window" surface gets the floor on clear and class, and keeps smoked's 0.92; a body
