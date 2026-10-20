@@ -22,7 +22,7 @@
 -- A window that opens over other UI is another case (#80, docs/MERCHANT.md):
 -- over RestedXP's guide window, clear's 0.35 let its bright text read through
 -- the merchant (the owner, 2026-10-20). Such a skin (Engine.Register's
--- backing = "window") gets at least WINDOW_BACKING (0.85 now); its tint,
+-- backing = "window") gets at least WINDOW_BACKING (0.93 now); its tint,
 -- wash and the backing's colour stay the body's. The tracker and the meter,
 -- over the world, keep the body's.
 --
@@ -43,10 +43,11 @@ Theme.LABELS = { clear = "Clear glass", smoked = "Smoked glass", class = "Class 
 -- The window floor: at 0.6, 0.75 and 0.85 RestedXP's text still read
 -- through the merchant, dimmed exactly by the floor (MS.1, 70450). The owner
 -- wanted nothing behind a window, then a bit less than opaque, as Blizzard's
--- own bags, where a damage meter behind shows just a bit (2026-10-20): 0.85,
--- tried against 0.8 and 0.9 in ML run 2. The glass is the tint, wash and rim
--- over it.
-Theme.WINDOW_BACKING = 0.85
+-- own bags (2026-10-20): 0.85 in ML run 2. But RestedXP's guide still read
+-- through the merchant's rows, so the item area denser (the owner, #86): 0.93.
+-- The merchant's header above it is a lighter gradient of its own. The glass
+-- is the tint, wash and rim over it.
+Theme.WINDOW_BACKING = 0.93
 
 -- { g = LibGlass regions, backing = our texture, kind = "window" | "clear" | nil }
 local surfaces = {}
@@ -91,6 +92,21 @@ local function paint(s, name, tint)
     end
 end
 
+-- The RGBA a backing of this kind is painted with now: what a texture of a
+-- skin's own must match to join it (the merchant's header, #86).
+function Theme.Backing(kind)
+    local c = GUI.Suite.Body(Theme.Name()).backing
+    local a = c[4]
+    if kind == "window" then a = math.max(a, Theme.WINDOW_BACKING) end
+    return c[1], c[2], c[3], a
+end
+
+-- Called after every Refresh (a tint, an accent, a floor change), each in
+-- API.Try: a skin's own textures that follow the theme (#86). The listener
+-- checks its own Engine.Active.
+local listeners = {}
+function Theme.OnRefresh(fn) listeners[#listeners + 1] = fn end
+
 -- Add a surface (and the backing under it, if any) and paint it with the
 -- current theme. kind: "window" for the window floor, "clear" for a surface
 -- painted clear whatever the tint.
@@ -107,6 +123,7 @@ function Theme.Refresh()
     local name = Theme.Name()
     local tint, known = tintFor(name)
     for _, s in ipairs(surfaces) do API.Try("theme:paint", paint, s, name, tint) end
+    for _, fn in ipairs(listeners) do API.Try("theme:listener", fn) end
     Theme.pending = not known
     return known
 end

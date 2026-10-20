@@ -15,6 +15,9 @@
 --           Fade(region, onAlpha) also hands that latest alpha to onAlpha, at
 --           once and whenever Blizzard sets it (the damage meter's glass
 --           follows its Background setting).
+--   Dim     a fade held at an alpha other than 0 (#86: a disabled page
+--           button's label), restored the same way; Dim(region, nil) gives
+--           one region back now.
 --   Blank   for art a fade can't hold (an animation's setToFinalAlpha, a
 --           gradient): SetTexture(nil), the atlas or file read back first and
 --           given back by Restore (Glass Quest Tracker's Unblank, #55). Safe
@@ -30,8 +33,8 @@
 --           fade, Blizzard's latest colour kept and given back by Restore.
 --   Panel   our glass: an unnamed, mouse-off frame of our own under the window.
 --   Disc    a LibGlass disc of ours behind a round region (a portrait, #48).
---   Section a recessed pane of ours on a host's ARTWORK: a fill in the
---           backing's colour and a 1 px edge, no glass (#84).
+--   Section a recessed pane of ours on a host's ARTWORK: a black fill and a
+--           1 px edge, no glass (#84).
 --   Adopt   a frame of ours outside our panels, hidden and shown with them.
 --
 -- Widget kinds, each written when the first skin needed it: Shell
@@ -64,28 +67,31 @@ end
 -- Fade
 --------------------------------------------------------------------------------
 
-local faded = setmetatable({}, { __mode = "k" })    -- region -> { kit =, alpha = latest Blizzard alpha, busy =, onAlpha = }
+local faded = setmetatable({}, { __mode = "k" })    -- region -> { kit =, alpha = latest Blizzard alpha, to = held alpha, busy =, onAlpha = }
 local hooked = setmetatable({}, { __mode = "k" })
 
 local function hold(region)
     local s = faded[region]
     if not s or s.busy then return end
     s.busy = true                                     -- our own SetAlpha re-enters the hook
-    pcall(region.SetAlpha, region, 0)
+    pcall(region.SetAlpha, region, s.to or 0)
     s.busy = false
 end
 
 -- Blizzard's latest alpha to the region's onAlpha: a plain number only, never
--- the 0 we hold.
+-- the alpha we hold.
 local function tell(region, s)
     if not s.onAlpha or type(API.Plain(s.alpha)) ~= "number" then return end
     local ok, err = pcall(s.onAlpha, s.alpha)
     if not ok then API.Fail("fade:" .. s.kit.key .. ":" .. describe(region) .. ":onAlpha", err) end
 end
 
-function K:Fade(region, onAlpha)
+-- Hold a Blizzard region at `to` (0: faded), against Blizzard's own SetAlpha,
+-- remembering Blizzard's latest alpha for the restore.
+local function holdAt(kit, region, to, onAlpha)
     if type(region) ~= "table" or type(region.SetAlpha) ~= "function" then return false end
-    if not faded[region] then faded[region] = { kit = self, alpha = API.Plain(region:GetAlpha()) } end
+    if not faded[region] then faded[region] = { kit = kit, alpha = API.Plain(region:GetAlpha()) } end
+    faded[region].to = to
     faded[region].onAlpha = onAlpha
     if not hooked[region] then
         hooked[region] = true
@@ -103,21 +109,36 @@ function K:Fade(region, onAlpha)
     hold(region)
     -- A texture with a gradient ignores SetAlpha, whatever the order, and
     -- GetAlpha reads 1 (SkinProbe W1.6, 70374). Read it back: such a region
-    -- needs Blank, and the skin file needs fixing.
-    if API.Plain(region:GetAlpha()) ~= 0 then
+    -- needs Blank, and the skin file needs fixing. Within 0.01: a fractional
+    -- alpha may not come back exact (#86).
+    local back = API.Plain(region:GetAlpha())
+    if type(back) ~= "number" or math.abs(back - to) > 0.01 then
         faded[region] = nil
-        API.Fail("fade:" .. self.key .. ":" .. describe(region), "ignores SetAlpha (a gradient?): Blank it instead")
+        API.Fail("fade:" .. kit.key .. ":" .. describe(region), "ignores SetAlpha (a gradient?): Blank it instead")
         return false
     end
     tell(region, faded[region])
     return true
 end
 
+function K:Fade(region, onAlpha) return holdAt(self, region, 0, onAlpha) end
+
 function K:IsFaded(region) return faded[region] ~= nil and faded[region].kit == self end
 
 local function unfade(region, s)
     faded[region] = nil
     pcall(region.SetAlpha, region, s.alpha or 1)
+end
+
+-- A Blizzard region held at `alpha` (#86: a disabled page button's label), as
+-- Fade holds at 0; nil gives it back Blizzard's latest alpha.
+function K:Dim(region, alpha)
+    if alpha == nil then
+        local s = faded[region]
+        if s and s.kit == self then unfade(region, s) end
+        return true
+    end
+    return holdAt(self, region, alpha)
 end
 
 --------------------------------------------------------------------------------

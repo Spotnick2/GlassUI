@@ -26,15 +26,17 @@
 --                      SharedUIPanelTemplates.xml:574-596): only a ring shows,
 --                      as round GlassMiniMap's map
 --
--- The layout (#84, docs/MERCHANT.md section 4): Blizzard's structure the
--- fades took away, given back as recessed sections of ours on the window
--- glass ("sections", the default: the item inset, the bottom band's two
--- boxes, the money and currency boxes), or the owner's mockup ("bar": one
--- footer bar, the buyback slot in a square with a label while empty, an empty
--- state on the Buyback tab, less red). The probe switches them live
--- (SetLayout) until the owner picks. Either way the active tab is marked,
--- the tabs hang from under the window (TAB_TUCK), and the header above the
--- item inset is clear Pearl (SetHeader; ML run 1's ideas).
+-- The layout (#84, #86; docs/MERCHANT.md sections 4-5): Blizzard's structure
+-- the fades took away, given back as recessed sections of ours on the window
+-- glass, each shown while Blizzard shows what it holds: the item inset, the
+-- money box, the currency box (while Blizzard shows it), the bottom band's
+-- right box (the buyback slot, Merchant tab) and its left box (while a repair
+-- or sell-junk button shows). Nothing of Blizzard's moves. The tabs hang from
+-- under the window (TAB_TUCK), the selected one lighter with an accent edge;
+-- the header above the item inset is smoky glass joined to the item area's
+-- floor; the close button is a glass disc with a gold X over Blizzard's faded
+-- red art; the page and repair buttons sit on small glass, a disabled page
+-- button's label dimmed (#86).
 --
 -- Fades, hooks on instances and our own frames only, so the skin is live:
 -- off and on without a /reload. None of this window's 405 textures ignores
@@ -66,28 +68,46 @@ local ROWS = 12
 local ROW_INSETS = { -3, -3, -3, -3 }
 -- The disc: ring width around the portrait's mask, and the mask's XML width.
 local DISC_RING, MASK_WIDTH = 6, 58
--- The layouts (#84), and each one's red at full red: Blizzard's plate in
--- sections, much less in the bar, where the icon's own red tint carries it.
-local LAYOUTS = { sections = true, bar = true }
-local RED = { sections = 0.35, bar = 0.12 }
-local layoutName = "sections"
--- The header (the owner, ML run 1): the window's backing starts at the item
--- inset's top, so above it (the portrait, the title) is clear Pearl glass,
--- like the portrait's disc; off, the backing covers the whole window.
-local headerPearl = true
+-- The red mirror at full red (#86): a charcoal card with a burgundy
+-- undertone. Run 2 showed 0.35 as solid red cards; the icon's own red tint
+-- carries the warning.
+local RED = 0.12
+-- The header (#86): the window's backing starts at the item inset's top, and
+-- above it a gradient of ours in the same colour, from the backing's own
+-- alpha at the inset line up to HEADER_TOP: smoky glass joined to the item
+-- area. Off (the probe), the backing covers the whole window.
+local headerOn = true
+local HEADER_TOP = 0.45
 -- The bottom band's two boxes, inside MerchantFrameBottomLeftBorder (334 x 61),
 -- { left, top, right, bottom } inward. Read off MS run 1's skin-off
 -- screenshot (70450); to be tuned.
 local BOX_LEFT, BOX_RIGHT = { 5, 12, 139, 1 }, { 199, 12, 5, 1 }
--- The bar's top-left inside the band, on the Merchant tab.
-local BAR_TOPLEFT = { 5, 12 }
--- The buyback square round its ItemButton, and the empty state's icon (the
--- Buyback tab's own portrait, MerchantFrame.lua:533).
-local SQUARE_OUTSET, ICON_OUTSET = 3, 4
+-- The empty state's icon (the Buyback tab's own portrait, MerchantFrame.lua:533)
+-- in a section this far round it.
+local ICON_OUTSET = 4
 local BUYBACK_ICON = "Interface\\MerchantFrame\\UI-BuyBack-Icon"
 local EMPTY_TITLE, EMPTY_TEXT = "No items to buy back", "Items you sell will appear here."
--- The active tab's light, over its glass (0.10 didn't show, ML run 1).
-local TAB_ACTIVE = 0.2
+-- The selected tab (#86, the owner: "retains a recognizable Warcraft
+-- selection accent while making the surface fit Pearl"): a lighter neutral
+-- glass, TAB_LIGHT white, and a 1 px accent edge along its bottom at
+-- TAB_EDGE, TAB_EDGE_INSET in from each side (clear of the rounded corners);
+-- the other darker.
+local TAB_LIGHT, TAB_EDGE, TAB_EDGE_INSET, TAB_DIM = 0.12, 0.8, 6, 0.25
+-- The close button's X: two bars, its strength at rest (1 on hover).
+local CLOSE_X, CLOSE_REST = { 2, 12 }, 0.85
+-- Its four state textures, the X baked into each (SharedUIPanelTemplates.xml:134-140).
+local CLOSE_ART = { "GetNormalTexture", "GetPushedTexture", "GetDisabledTexture", "GetHighlightTexture" }
+-- The page buttons (MerchantFrame.xml:527-560): their gold-rimmed background
+-- faded, our glass under them; a disabled one's label at PAGE_DIM.
+local PAGES = { "MerchantPrevPageButton", "MerchantNextPageButton" }
+local PAGE_DIM = 0.4
+-- What sits in the band's left box (MerchantFrame.lua:482, 987-1020); the
+-- repair buttons' slot faded, our glass behind them, as the rows'.
+local REPAIRS = { "MerchantRepairAllButton", "MerchantRepairItemButton", "MerchantGuildBankRepairButton" }
+local JUNK = "MerchantSellAllJunkButton"
+-- Both on small glass round their own size (32 and 36 px: LibGlass's small
+-- mask holds at 32, GLASS-MATERIAL.md).
+local BUTTON_INSETS = { 0, 0, 0, 0 }
 
 local rows = setmetatable({}, { __mode = "k" })     -- row -> { glass, g, red, plate, button, icon }
 local discs = setmetatable({}, { __mode = "k" })    -- window -> the portrait's disc
@@ -95,18 +115,18 @@ local ui = setmetatable({}, { __mode = "k" })       -- window -> our layout's pi
 
 local function tbl(v) return type(v) == "table" and v or nil end
 
--- Blizzard's red on a plate, as our mirror's alpha: `peak` (0.35 by
+-- Blizzard's red on a plate, as our mirror's alpha: `peak` (RED by
 -- default) at full red (1, 0, 0), half that at its dark red (0.5, 0, 0);
 -- nil for its greys.
 local function redAlpha(r, g, b, peak)
     r, g, b = API.Plain(r), API.Plain(g), API.Plain(b)
     if type(r) ~= "number" or type(g) ~= "number" or type(b) ~= "number" then return nil end
-    if r > 0.4 and g < 0.1 and b < 0.1 then return (peak or RED.sections) * math.min(1, r) end
+    if r > 0.4 and g < 0.1 and b < 0.1 then return (peak or RED) * math.min(1, r) end
     return nil
 end
 
 local function paintRed(s, r, g, b)
-    local a = redAlpha(r, g, b, RED[layoutName])
+    local a = redAlpha(r, g, b)
     if a then s.red:SetColorTexture(1, 0, 0, a) end
     s.red:SetShown(a ~= nil)
 end
@@ -152,19 +172,55 @@ end
 
 -- What the layout shows now, from what Blizzard shows: MerchantBuyBackItem is
 -- shown exactly while the Merchant tab is (MerchantFrame.lua:479, 590).
--- The window's backing (ours): from the item inset's top down, or all of it.
+local function accent() return GUI.Suite.Accent() or { 1, 0.82, 0 } end
+
+-- The window's backing (ours): from the item inset's top down, the header's
+-- gradient above it joined at the backing's own RGBA (Theme.Backing: smoked's
+-- 0.92 too); or the backing all of it. A gradient ignores SetAlpha here
+-- (LibGlass #47): painted through its colours only.
 local function header(u)
     local b = u.backing
     if not b then return end
     b:ClearAllPoints()
-    if headerPearl and u.insetFrame then
+    local on = headerOn and u.insetFrame ~= nil and u.header ~= nil
+    if on then
         b:SetPoint("TOP", u.insetFrame, "TOP", 0, 0)
         b:SetPoint("LEFT", u.win, "LEFT", 0, 0)
         b:SetPoint("RIGHT", u.win, "RIGHT", 0, 0)
         b:SetPoint("BOTTOM", u.win, "BOTTOM", 0, 0)
+        local r, g, bl, a = GUI.Theme.Backing("window")
+        u.header:SetGradient("VERTICAL", CreateColor(r, g, bl, a), CreateColor(r, g, bl, HEADER_TOP))
     else
         b:SetAllPoints(u.win)
     end
+    if u.header then u.header:SetShown(on) end
+end
+
+-- The accent's pieces: the selected tab's edge, the close button's X (at
+-- its current strength).
+local function paintAccent(u)
+    local c = accent()
+    for _, edge in pairs(u.edges) do edge:SetColorTexture(c[1], c[2], c[3], TAB_EDGE) end
+    for _, t in ipairs(u.closeX or {}) do t:SetColorTexture(c[1], c[2], c[3], u.closeAlpha) end
+end
+
+-- The close button's feedback, on our X only: full on hover, 1 px down while
+-- pressed.
+local function closeFeedback(u, hover, pushed)
+    if not u.closeFrame then return end
+    u.hover, u.pushed = hover, pushed
+    u.closeAlpha = hover and 1 or CLOSE_REST
+    u.closeFrame:ClearAllPoints()
+    u.closeFrame:SetPoint("CENTER", u.close, "CENTER", 0, pushed and -1 or 0)
+    paintAccent(u)
+end
+
+-- From the button's getters: a hover or press that ended while we were off.
+local function closeSync(u)
+    if not u.close then return end
+    local okM, over = pcall(u.close.IsMouseOver, u.close)
+    local okS, state = pcall(u.close.GetButtonState, u.close)
+    closeFeedback(u, okM and API.Plain(over) == true, okS and API.Plain(state) == "PUSHED")
 end
 
 -- Each tab's glass in the strata below the window's (TAB_TUCK). A window in
@@ -183,38 +239,41 @@ local function tuck(u)
     end
 end
 
+-- The band's left box holds something: a repair or sell-junk button shown.
+local function bandLeftUsed(u)
+    for _, b in ipairs(u.bandButtons) do
+        if shown(b) then return true end
+    end
+    return false
+end
+
+-- A disabled page button's label dimmed (on page 1, "Prev" no longer bright
+-- gold beside a grey arrow); given back when enabled.
+local function pages(u)
+    for b, label in pairs(u.pageLabels) do
+        local ok, on = pcall(b.IsEnabled, b)
+        u.kit:Dim(label, not (ok and API.Plain(on) == true) and PAGE_DIM or nil)
+    end
+end
+
 local function layout(u)
-    local bar = layoutName == "bar"
     header(u)
     local merchantTab = shown(u.bb)
-    Kit.ShowSection(u.inset, not bar)
-    Kit.ShowSection(u.money, not bar)
-    Kit.ShowSection(u.currency, not bar)
-    Kit.ShowSection(u.boxLeft, not bar and merchantTab)
-    Kit.ShowSection(u.boxRight, not bar and merchantTab)
-    local canBar = u.band ~= nil and u.moneyInset ~= nil and u.currencyInset ~= nil
-    if bar and canBar then
-        if merchantTab then
-            u.bar.fill:ClearAllPoints()
-            u.bar.fill:SetPoint("TOPLEFT", u.band, "TOPLEFT", BAR_TOPLEFT[1], -BAR_TOPLEFT[2])
-            u.bar.fill:SetPoint("BOTTOMRIGHT", u.moneyInset, "BOTTOMRIGHT", 0, 0)
-        else
-            -- Clear of rows 11-12, which sit where the band was.
-            place(u.bar, u.currencyInset, u.moneyInset)
-        end
-    end
-    Kit.ShowSection(u.bar, bar and canBar)
-    if u.line then u.line:SetShown(bar) end
-    if u.square then
-        u.square.host:SetShown(bar)
-        Kit.ShowSection(u.square, bar)
-        local s = rows[u.bb]
-        u.label:SetShown(bar and not (s ~= nil and filled(s)))
-    end
+    Kit.ShowSection(u.inset, true)
+    Kit.ShowSection(u.money, true)
+    Kit.ShowSection(u.currency, shown(u.currencyInset))
+    Kit.ShowSection(u.boxLeft, merchantTab and bandLeftUsed(u))
+    Kit.ShowSection(u.boxRight, merchantTab)
     if u.empty then
-        u.empty:SetShown(bar and shown(u.frame) and not merchantTab and buybackCount() == 0)
+        u.empty:SetShown(shown(u.frame) and not merchantTab and buybackCount() == 0)
     end
-    for tab, hl in pairs(u.tabs) do hl:SetShown(shown(tbl(tab.MiddleActive))) end
+    for tab, light in pairs(u.tabs) do
+        local active = shown(tbl(tab.MiddleActive))
+        light:SetShown(active)
+        u.edges[tab]:SetShown(active)
+        u.dims[tab]:SetShown(not active)
+    end
+    pages(u)
 end
 
 local function layoutAll()
@@ -238,8 +297,8 @@ local function installRow(kit, row, buyback)
         if GUI.Engine.Active("merchant") then
             GUI.Engine.Run(kit.skin, "row", function()
                 glass:SetShown(filled(s))
-                -- The buyback label, and the empty state (the Buyback tab's
-                -- first row shows or hides as its count leaves or reaches 0).
+                -- The empty state (the Buyback tab's first row shows or
+                -- hides as its count leaves or reaches 0).
                 layoutAll()
             end)
         end
@@ -287,17 +346,47 @@ local function eachRow(fn)
     if bb then fn(bb, true) end
 end
 
--- Our layout's pieces (#84): sections on the window glass's host, the
--- buyback square and label on a frame of ours in MerchantBuyBackItem, the
--- empty state on one in the window, each tab's light; hooks gated.
-local function buildLayout(kit, frame, win, backing, tabGlass)
-    local u = { frame = frame, tabs = {}, win = win, backing = backing, tabGlass = tabGlass }
+-- A button's own region of a type, on its BACKGROUND layer for a texture (a
+-- page button's gold-rimmed background, a repair button's slot), any for a
+-- FontString (a page button's label): never the state textures.
+local function regionOf(b, kind)
+    local ok, regions = pcall(function() return { b:GetRegions() } end)
+    if not ok then return nil end
+    for _, r in ipairs(regions) do
+        local okT, t = pcall(r.GetObjectType, r)
+        if okT and API.Plain(t) == kind then
+            if kind ~= "Texture" then return r end
+            local okL, layer = pcall(r.GetDrawLayer, r)
+            if okL and API.Plain(layer) == "BACKGROUND" then return r end
+        end
+    end
+    return nil
+end
+
+-- Our layout's pieces (#84, #86): sections on the window glass's host, the
+-- empty state on a frame in the window, each tab's light, edge and dim, the
+-- close button's disc and X, the page and repair buttons' glass; hooks gated.
+local function buildLayout(kit, frame, win, wg, backing, tabGlass)
+    local u = { kit = kit, frame = frame, tabs = {}, edges = {}, dims = {}, win = win, backing = backing,
+                tabGlass = tabGlass, closeAlpha = CLOSE_REST, bandButtons = {}, pageLabels = {} }
     ui[frame] = u
     u.bb = kit:Global("MerchantBuyBackItem")
     u.band = kit:Global("MerchantFrameBottomLeftBorder")
     u.moneyInset, u.currencyInset = kit:Global("MerchantMoneyInset"), kit:Global("MerchantExtraCurrencyInset")
     local inset = tbl(frame.Inset)
     u.insetFrame = inset
+    -- The header: on the backing's layer, under the tint and wash, clipped by
+    -- the window glass's mask, adjoining the backing at the inset's top.
+    if backing and inset then
+        local h = win:CreateTexture(nil, "BACKGROUND", nil, -7)
+        h:SetPoint("TOPLEFT", win, "TOPLEFT", 0, 0)
+        h:SetPoint("RIGHT", win, "RIGHT", 0, 0)
+        h:SetPoint("BOTTOM", inset, "TOP", 0, 0)
+        h:SetColorTexture(1, 1, 1, 1)
+        if wg and wg.mask then h:AddMaskTexture(wg.mask) end
+        h:Hide()
+        u.header = h
+    end
     local function section(a, b, ins)
         if not a then return nil end
         local sec = kit:Section(win)
@@ -309,32 +398,6 @@ local function buildLayout(kit, frame, win, backing, tabGlass)
     u.currency = section(u.currencyInset)
     u.boxLeft = section(u.band, nil, BOX_LEFT)
     u.boxRight = section(u.band, nil, BOX_RIGHT)
-    u.bar = kit:Section(win)
-    if inset then
-        u.line = win:CreateTexture(nil, "ARTWORK", nil, 1)
-        u.line:SetColorTexture(1, 1, 1, Kit.SECTION_EDGE)
-        u.line:SetPoint("TOPLEFT", inset, "TOPLEFT", 0, 0)
-        u.line:SetPoint("TOPRIGHT", inset, "TOPRIGHT", 0, 0)
-        u.line:SetHeight(1)
-        u.line:Hide()
-    end
-    local button = u.bb and tbl(u.bb.ItemButton)
-    if button then
-        -- At the slot's level: under its ItemButton (one up), hidden with it on the Buyback tab.
-        local host = kit:Adopt(CreateFrame("Frame", nil, u.bb))
-        host:SetAllPoints(u.bb)
-        host:SetFrameLevel(u.bb:GetFrameLevel())
-        u.square = kit:Section(host)
-        u.square.host = host
-        u.square.fill:SetPoint("TOPLEFT", button, "TOPLEFT", -SQUARE_OUTSET, SQUARE_OUTSET)
-        u.square.fill:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", SQUARE_OUTSET, -SQUARE_OUTSET)
-        u.label = host:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        u.label:SetPoint("LEFT", button, "RIGHT", 8, 0)
-        local text = rawget(_G, "BUYBACK")
-        u.label:SetText(type(text) == "string" and text or "Buyback")
-        u.label:Hide()
-        host:Hide()
-    end
     -- Over the window's glass (one up), centred in the item inset; the rows
     -- it would cover are all hidden while it shows (no buyback item).
     local e = kit:Adopt(CreateFrame("Frame", nil, frame))
@@ -365,19 +428,112 @@ local function buildLayout(kit, frame, win, backing, tabGlass)
         u.bb:HookScript("OnShow", relay)
         u.bb:HookScript("OnHide", relay)
     end
+    -- The currency box: Blizzard shows its inset only with extra currencies
+    -- (MerchantFrame_UpdateCurrencies, :1029-1039).
+    if u.currencyInset then
+        hooksecurefunc(u.currencyInset, "Show", relay)
+        hooksecurefunc(u.currencyInset, "Hide", relay)
+    end
+    -- The band's left box: the repair buttons Show/Hide (:987-1020, the
+    -- Buyback tab's :588-596), the junk button SetShown (:482), which never
+    -- calls the Lua Show or Hide: hooked on its own.
+    local names = {}
+    for i, n in ipairs(REPAIRS) do names[i] = n end
+    names[#names + 1] = JUNK
+    for _, n in ipairs(names) do
+        local b = kit:Global(n)
+        if b then
+            u.bandButtons[#u.bandButtons + 1] = b
+            hooksecurefunc(b, "Show", relay)
+            hooksecurefunc(b, "Hide", relay)
+            hooksecurefunc(b, "SetShown", relay)
+        end
+    end
+    -- The repair buttons on small glass, its rim at its own level (under the
+    -- icon and state textures), as the rows'.
+    u.repairs = {}
+    for _, n in ipairs(REPAIRS) do
+        local b = tbl(rawget(_G, n))
+        if b then
+            local glass, g = kit:Panel(b, "small", BUTTON_INSETS, nil, { backing = false })
+            if g and g.top then g.top:SetFrameLevel(glass:GetFrameLevel()) end
+            u.repairs[b] = glass
+        end
+    end
+    -- The page buttons: glass the same way; the label dimmed while disabled
+    -- (Blizzard's Enable/Disable, MerchantFrame.lua:441-458).
+    for _, n in ipairs(PAGES) do
+        local b = kit:Global(n)
+        if b then
+            local glass, g = kit:Panel(b, "small", BUTTON_INSETS, nil, { backing = false })
+            if g and g.top then g.top:SetFrameLevel(glass:GetFrameLevel()) end
+            local label = regionOf(b, "FontString")
+            if label then u.pageLabels[b] = label end
+            hooksecurefunc(b, "Enable", relay)
+            hooksecurefunc(b, "Disable", relay)
+        end
+    end
     for tab, t in pairs(tabGlass) do
-        local hl = t.glass:CreateTexture(nil, "ARTWORK")
-        hl:SetAllPoints(t.glass)
-        hl:SetColorTexture(1, 1, 1, TAB_ACTIVE)
-        if t.g and t.g.mask then hl:AddMaskTexture(t.g.mask) end
-        hl:Hide()
-        u.tabs[tab] = hl
+        local light = t.glass:CreateTexture(nil, "ARTWORK")
+        light:SetAllPoints(t.glass)
+        light:SetColorTexture(1, 1, 1, TAB_LIGHT)
+        local edge = t.glass:CreateTexture(nil, "ARTWORK", nil, 1)
+        edge:SetPoint("BOTTOMLEFT", t.glass, "BOTTOMLEFT", TAB_EDGE_INSET, 1)
+        edge:SetPoint("BOTTOMRIGHT", t.glass, "BOTTOMRIGHT", -TAB_EDGE_INSET, 1)
+        edge:SetHeight(1)
+        local dim = t.glass:CreateTexture(nil, "ARTWORK")
+        dim:SetAllPoints(t.glass)
+        dim:SetColorTexture(0, 0, 0, TAB_DIM)
+        if t.g and t.g.mask then
+            light:AddMaskTexture(t.g.mask)
+            edge:AddMaskTexture(t.g.mask)
+            dim:AddMaskTexture(t.g.mask)
+        end
+        light:Hide()
+        edge:Hide()
+        dim:Hide()
+        u.tabs[tab], u.edges[tab], u.dims[tab] = light, edge, dim
         -- PanelTemplates_SelectTab / DeselectTab show and hide it (SharedUIPanelTemplates.lua:611-651).
         local active = tbl(tab.MiddleActive)
         if active then
             hooksecurefunc(active, "Show", relay)
             hooksecurefunc(active, "Hide", relay)
         end
+    end
+    -- The close button: a glass disc of ours under it (unsliced, clean at
+    -- 24 px), our X over it on a frame of ours one up (a plain frame takes no
+    -- mouse: the click stays Blizzard's), feedback by gated HookScript on the
+    -- instance.
+    local close = tbl(frame.CloseButton)
+    if close then
+        u.close = close
+        local level = close:GetFrameLevel()
+        local okW, w = pcall(close.GetWidth, close)
+        w = okW and API.Plain(w) or nil
+        if type(w) ~= "number" or w <= 0 then w = 24 end
+        u.closeDisc = kit:Disc(close, close, { ring = 0, width = w, level = level - 1 })
+        local x = kit:Adopt(CreateFrame("Frame", nil, close))
+        x:SetSize(w, w)
+        x:SetFrameLevel(level + 1)
+        u.closeX = {}
+        for i, rot in ipairs({ math.pi / 4, -math.pi / 4 }) do
+            local t = x:CreateTexture(nil, "OVERLAY")
+            t:SetSize(CLOSE_X[1], CLOSE_X[2])
+            t:SetPoint("CENTER", x, "CENTER", 0, 0)
+            t:SetRotation(rot)
+            u.closeX[i] = t
+        end
+        u.closeFrame = x
+        local function feedback(hover, pushed)
+            if GUI.Engine.Active("merchant") then
+                GUI.Engine.Run(kit.skin, "close", closeFeedback, u, hover, pushed)
+            end
+        end
+        close:HookScript("OnEnter", function() feedback(true, u.pushed) end)
+        close:HookScript("OnLeave", function() feedback(false, false) end)
+        close:HookScript("OnMouseDown", function() feedback(u.hover, true) end)
+        close:HookScript("OnMouseUp", function() feedback(u.hover, false) end)
+        closeFeedback(u, false, false)
     end
     return u
 end
@@ -397,7 +553,7 @@ GUI.Engine.Register({
     backing = "window",
     frames = function() return rawget(_G, "MerchantFrame") end,
     install = function(kit, frame)
-        local win, _, backing = kit:Panel(frame)
+        local win, wg, backing = kit:Panel(frame)
         local tabGlass = {}
         for _, name in ipairs(TABS) do
             local tab = kit:Global(name)
@@ -419,56 +575,64 @@ GUI.Engine.Register({
             local level = (pc and pc:GetFrameLevel() or frame:GetFrameLevel()) - 1
             discs[frame] = kit:Disc(frame, around, { ring = DISC_RING, width = MASK_WIDTH, level = level })
         end
-        buildLayout(kit, frame, win, backing, tabGlass)
+        buildLayout(kit, frame, win, wg, backing, tabGlass)
     end,
     style = function(kit, frame)
         kit:Shell(frame)
         for _, name in ipairs(INSETS) do kit:Inset(kit:Global(name)) end
         for _, name in ipairs(ART) do kit:Fade(kit:Global(name)) end
         for _, name in ipairs(TABS) do kit:Tab(kit:Global(name)) end
+        local close = tbl(frame.CloseButton)
+        if close then
+            for _, get in ipairs(CLOSE_ART) do
+                local ok, tex = pcall(close[get], close)
+                if ok then kit:Fade(tex) end
+            end
+        end
+        for _, n in ipairs(PAGES) do
+            local b = tbl(rawget(_G, n))
+            if b then kit:Fade(regionOf(b, "Texture")) end
+        end
+        for _, n in ipairs(REPAIRS) do
+            local b = tbl(rawget(_G, n))
+            if b then kit:Fade(regionOf(b, "Texture")) end
+        end
         eachRow(function(row) styleRow(kit, row) end)
-        if ui[frame] then
-            tuck(ui[frame])
-            layout(ui[frame])
+        local u = ui[frame]
+        if u then
+            tuck(u)
+            closeSync(u)
+            layout(u)
         end
     end,
 })
 
 GUI.Merchant = {}
 
-function GUI.Merchant.Layout() return layoutName end
+function GUI.Merchant.Header() return headerOn end
 
--- The probe's live switch (#84): a known layout, its sections and red
--- repainted now when the skin is on. Not saved.
-function GUI.Merchant.SetLayout(name)
-    if not LAYOUTS[name] then return false end
-    layoutName = name
-    if GUI.Engine.Active("merchant") then
-        API.Try("merchant:layout", function()
-            for _, s in pairs(rows) do
-                if s.plate then
-                    local ok, r, g, b = pcall(s.plate.GetVertexColor, s.plate)
-                    if ok then paintRed(s, r, g, b) end
-                end
-            end
-            layoutAll()
-        end)
-    end
-    return true
-end
-
-function GUI.Merchant.Header() return headerPearl end
-
--- The probe's live switch: the header clear Pearl, or the backing whole. Not saved.
+-- The probe's live switch: the smoky header, or the backing whole. Not saved.
 function GUI.Merchant.SetHeader(on)
-    headerPearl = on and true or false
+    headerOn = on and true or false
     if GUI.Engine.Active("merchant") then API.Try("merchant:header", layoutAll) end
     return true
 end
 
+-- A tint, an accent or a floor changed (Theme.Refresh): the header and the
+-- accent's pieces follow; while off, the style pass repaints them.
+GUI.Theme.OnRefresh(function()
+    if not GUI.Engine.Active("merchant") then return end
+    for _, u in pairs(ui) do
+        header(u)
+        paintAccent(u)
+    end
+end)
+
 GUI.Merchant._test = { rows = rows, discs = discs, ui = ui, redAlpha = redAlpha, ROW_INSETS = ROW_INSETS,
                        DISC_RING = DISC_RING, MASK_WIDTH = MASK_WIDTH, RED = RED, BOX_LEFT = BOX_LEFT,
-                       BOX_RIGHT = BOX_RIGHT, BAR_TOPLEFT = BAR_TOPLEFT, SQUARE_OUTSET = SQUARE_OUTSET,
-                       ICON_OUTSET = ICON_OUTSET, TAB_ACTIVE = TAB_ACTIVE, EMPTY_TITLE = EMPTY_TITLE,
+                       BOX_RIGHT = BOX_RIGHT,
+                       ICON_OUTSET = ICON_OUTSET, TAB_LIGHT = TAB_LIGHT, TAB_EDGE = TAB_EDGE,
+                       TAB_EDGE_INSET = TAB_EDGE_INSET, TAB_DIM = TAB_DIM, EMPTY_TITLE = EMPTY_TITLE,
                        EMPTY_TEXT = EMPTY_TEXT, BUYBACK_ICON = BUYBACK_ICON,
-                       TAB_TUCK = TAB_TUCK }
+                       TAB_TUCK = TAB_TUCK, HEADER_TOP = HEADER_TOP, CLOSE_X = CLOSE_X,
+                       CLOSE_REST = CLOSE_REST, PAGE_DIM = PAGE_DIM, BUTTON_INSETS = BUTTON_INSETS }
