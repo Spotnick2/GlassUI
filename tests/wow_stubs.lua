@@ -105,6 +105,19 @@ function CreateFrame(ftype, name, parent, template)
     if template == "UICheckButtonTemplate" or template == "UIPanelButtonTemplate" then
         w.Text = newWidget("FontString", w)
     end
+    -- RightSideTabTemplate (Blizzard_SharedXML/Shared/Tabs/RightSideTab.xml):
+    -- its BORDER frame texture, the Icon, the checked and highlight textures.
+    if template == "RightSideTabTemplate" then
+        w._width, w._height = 32, 32
+        local border = newWidget("Texture", w)
+        border._layer = "BORDER"
+        table.insert(w._regions, border)
+        w.Icon = newWidget("Texture", w)
+        w.Icon._layer = "ARTWORK"
+        table.insert(w._regions, w.Icon)
+        w._checkedTex = newWidget("Texture", w)
+        w._highlight = newWidget("Texture", w)
+    end
     if template == "UIRadioButtonTemplate" then w.text = newWidget("FontString", w) end
     -- UIPanelScrollFrameTemplate's bar, as its ScrollBar key.
     if template == "UIPanelScrollFrameTemplate" then w.ScrollBar = newWidget("Slider", w) end
@@ -1288,6 +1301,154 @@ function WoW.showGameMenu() WoW.asBlizzard(function() GameMenuFrame:Show() end) 
 function WoW.hideGameMenu() WoW.asBlizzard(function() GameMenuFrame:Hide() end) end
 -- A store or trial event while it's open (GameMenuFrame.lua:96-102).
 function WoW.gameMenuRefresh() WoW.asBlizzard(function() GameMenuFrame:InitButtons() end) end
+
+-- Guild & Communities (#92, Blizzard_Communities on Forever, origin/forever
+-- 70450): ButtonFrameTemplateMinimizable's shell, PortraitOverlay (level 300)
+-- with its Portrait and CircleMask, the community list, the chat, the edit
+-- box (level 1200), the roster with its ColumnDisplay (every hook on it is
+-- recorded in WoW.rosterHooks), the five RightSideTabTemplate tabs, the
+-- maximize/minimize buttons, the Invite, log and control buttons. Display
+-- modes show and hide the sections as SetDisplayMode does (lua:585-704), and
+-- UpdateCommunitiesTabs unchecks the five then checks one (lua:1119-1133).
+-- Hidden.
+local function sideTab(cf, name)
+    local t = blizz("CheckButton", cf, nil)
+    t._width, t._height, t._level = 32, 32, 510
+    local border = blizz("Texture", t, nil, "BORDER")
+    table.insert(t._regions, border)
+    t.Icon = blizz("Texture", t, nil, "ARTWORK")
+    table.insert(t._regions, t.Icon)
+    t._checkedTex = blizz("Texture", t, nil, "OVERLAY")
+    t._highlight = blizz("Texture", t, nil, "HIGHLIGHT")
+    t._checked = false
+    cf[name] = t
+    return t
+end
+
+local function panelButton(parent)
+    local b = blizz("Button", parent)
+    for _, k in ipairs({ "Left", "Middle", "Right" }) do b[k] = blizz("Texture", b, nil, "BACKGROUND") end
+    return b
+end
+
+WoW.guildModes = {
+    CHAT = { "CommunitiesList", "Chat", "ChatEditBox", "MemberList" },
+    ROSTER = { "CommunitiesList", "MemberList" },
+    GUILD_BENEFITS = { "CommunitiesList" },
+    GUILD_INFO = { "CommunitiesList" },
+    MINIMIZED = { "Chat", "ChatEditBox" },
+}
+WoW.guildModeTab = { CHAT = "ChatTab", ROSTER = "RosterTab", GUILD_BENEFITS = "GuildBenefitsTab",
+                     GUILD_INFO = "GuildInfoTab" }
+
+function WoW.makeCommunities()
+    WoW.asBlizzard(function()
+        local cf = blizz("Frame", UIParent, "CommunitiesFrame")
+        cf._shown, cf._level = false, 1
+        cf._width, cf._height = 814, 426
+        cf.NineSlice = nineSlice(cf)
+        cf.Bg = blizz("Texture", cf, nil, "BACKGROUND")
+        cf.TopTileStreaks = blizz("Texture", cf, nil, "BORDER")
+        cf.Inset = inset(cf)
+        cf.TitleContainer = blizz("Frame", cf)
+        cf.TitleContainer.TitleText = blizz("FontString", cf.TitleContainer, nil, "OVERLAY")
+        local cb = blizz("Button", cf)
+        cb._level, cb._width, cb._height = 510, 24, 24
+        for key, atlas in pairs({ _normal = "RedButton-Exit", _pushed = "RedButton-exit-pressed",
+                                  _disabled = "RedButton-Exit-Disabled", _highlight = "RedButton-Highlight" }) do
+            cb[key] = blizz("Texture", cb)
+            cb[key]._atlas = atlas
+        end
+        cf.CloseButton = cb
+        local po = blizz("Frame", cf)
+        po._level = 300
+        po.Portrait = blizz("Texture", po, nil, "OVERLAY")
+        po.Portrait._width, po.Portrait._height = 60, 60
+        po.CircleMask = blizz("MaskTexture", po)
+        po.CircleMask._width, po.CircleMask._height = 58, 58
+        po.TabardEmblem = blizz("Texture", po, nil, "ARTWORK")
+        cf.PortraitOverlay = po
+        local mm = blizz("Frame", cf)
+        mm._level = 510
+        for _, k in ipairs({ "MaximizeButton", "MinimizeButton" }) do
+            local b = blizz("Button", mm)
+            b._normal = blizz("Texture", b)
+            b._pushed = blizz("Texture", b)
+            b._disabled = blizz("Texture", b)
+            mm[k] = b
+        end
+        cf.MaximizeMinimizeFrame = mm
+        local list = blizz("Frame", cf)
+        list._level = 3
+        for _, k in ipairs({ "Bg", "TopFiligree", "BottomFiligree", "FilligreeOverlay" }) do
+            list[k] = blizz("Texture", list, nil, "BACKGROUND")
+        end
+        list.InsetFrame = inset(list)
+        list.ScrollBox = blizz("Frame", list)
+        cf.CommunitiesList = list
+        local chat = blizz("Frame", cf)
+        chat._level = 3
+        chat.InsetFrame = inset(chat)
+        chat.MessageFrame = blizz("Frame", chat)
+        cf.Chat = chat
+        local eb = blizz("EditBox", cf)
+        eb._level = 1200
+        for _, k in ipairs({ "Left", "Right", "Mid" }) do eb[k] = blizz("Texture", eb, nil, "BACKGROUND") end
+        cf.ChatEditBox = eb
+        local roster = blizz("Frame", cf)
+        roster._level = 3
+        roster.InsetFrame = inset(roster)
+        roster.ColumnDisplay = blizz("Frame", roster)
+        roster.ScrollBox = blizz("Frame", roster)
+        cf.MemberList = roster
+        for _, n in ipairs({ "ChatTab", "RosterTab", "GuildBenefitsTab", "GuildInfoTab",
+                             "GuildPreferredPlaySettingsTab" }) do
+            sideTab(cf, n)
+        end
+        cf.InviteButton = panelButton(cf)
+        cf.GuildLogButton = panelButton(cf)
+        cf.CommunitiesControlFrame = blizz("Frame", cf)
+        cf.CommunitiesControlFrame.GuildControlButton = panelButton(cf.CommunitiesControlFrame)
+        cf.CommunitiesControlFrame.GuildRecruitmentButton = panelButton(cf.CommunitiesControlFrame)
+        -- Any hook on the roster, its ColumnDisplay, InsetFrame or ScrollBox is
+        -- recorded (before the snapshot: the stub's own fields).
+        WoW.rosterHooks = {}
+        for _, f in ipairs({ roster, roster.ColumnDisplay, roster.InsetFrame, roster.ScrollBox }) do
+            local real = f.HookScript
+            rawset(f, "HookScript", function(self, ...)
+                if not WoW.inBlizzard then table.insert(WoW.rosterHooks, (...)) end
+                return real(self, ...)
+            end)
+        end
+        WoW.snapshot()
+    end)
+end
+
+function WoW.guildMode(mode)
+    WoW.asBlizzard(function()
+        local cf = CommunitiesFrame
+        local shown = {}
+        for _, n in ipairs(WoW.guildModes[mode]) do shown[n] = true end
+        for _, n in ipairs({ "CommunitiesList", "Chat", "ChatEditBox", "MemberList" }) do cf[n]:SetShown(shown[n] == true) end
+        if mode == "MINIMIZED" then cf.PortraitOverlay:Hide() else cf.PortraitOverlay:Show() end
+        -- UpdateCommunitiesTabs (lua:1119-1133).
+        for _, n in ipairs({ "ChatTab", "RosterTab", "GuildBenefitsTab", "GuildInfoTab", "GuildPreferredPlaySettingsTab" }) do
+            cf[n]:SetChecked(false)
+        end
+        local tab = WoW.guildModeTab[mode]
+        if tab then cf[tab]:SetChecked(true) end
+    end)
+end
+-- A click on a side tab: the native toggle (no SetChecked), then its OnClick.
+function WoW.clickTab(tab)
+    WoW.asBlizzard(function()
+        rawset(tab, "_checked", not tab._checked)
+        local fn = tab._scripts.OnClick
+        if fn then fn(tab, "LeftButton") end
+    end)
+end
+function WoW.showGuild() WoW.asBlizzard(function() CommunitiesFrame:Show() end) end
+function WoW.hideGuild() WoW.asBlizzard(function() CommunitiesFrame:Hide() end) end
 function WoW.hideMerchant() WoW.asBlizzard(function() MerchantFrame:Hide() end) end
 
 --------------------------------------------------------------------------------

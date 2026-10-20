@@ -91,6 +91,23 @@ GUI._test.slash("skin gamemenu off")
 WoW.showGameMenu()
 GUI._test.slash("skin gamemenu on")
 WoW.hideGameMenu()
+-- The guild window (#92): opened in combat, every mode, tabs clicked, a
+-- tenant's tab and panel handed over, off and on.
+local gsTab = CreateFrame("CheckButton", nil, CommunitiesFrame, "RightSideTabTemplate")
+local gsHost = CreateFrame("Frame", nil, CommunitiesFrame)
+GUI.Suite.SkinTab("GuildSpy", gsTab)
+GUI.Suite.SkinPanel("GuildSpy", gsHost, function() end)
+WoW.combat = true
+WoW.showGuild()
+WoW.flushTimers(0)
+WoW.combat = false
+for _, mode in ipairs({ "CHAT", "ROSTER", "GUILD_BENEFITS", "GUILD_INFO", "MINIMIZED", "CHAT" }) do WoW.guildMode(mode) end
+WoW.clickTab(CommunitiesFrame.RosterTab)
+GUI._test.slash("skin guild off")
+WoW.guildMode("ROSTER")
+GUI._test.slash("skin guild on")
+WoW.hideGuild()
+eq(#WoW.rosterHooks, 0, "no script hook on any roster frame (#92)")
 -- The damage meter (#49): shown, its Background changed, a window added,
 -- minimized, its breakdown, and one made while the skin is off.
 WoW.showMeter()

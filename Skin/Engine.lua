@@ -70,6 +70,15 @@ local function loadedOwner(def)
     return nil
 end
 
+-- A skin's own def.restored(kit), after its treatment ends (#92: the guild
+-- skin tells its tenants). Not gated: Active is already false here. A throw
+-- is recorded, never fatal.
+local function restored(s)
+    if type(s.def.restored) ~= "function" then return end
+    local ok, err = pcall(s.def.restored, s.kit)
+    if not ok then API.Fail("skin:" .. s.def.key .. ":restored", err) end
+end
+
 -- An owner turned up while we run: our callbacks stop and our panels hide.
 -- Nothing is restored over the new owner's changes (plan: the handover).
 local function handover(s, owner)
@@ -77,6 +86,7 @@ local function handover(s, owner)
     s.late = next(s.installed) ~= nil
     s.gen = s.gen + 1
     s.kit:HidePanels()
+    restored(s)
 end
 
 function Engine.Active(key)
@@ -218,6 +228,7 @@ local function changed(s)
     if s.failed or s.owner or s.yieldTo then return nil end
     if not s.def.live then return next(s.installed) and "reload" or nil end
     s.kit:Restore()
+    restored(s)
     return nil
 end
 

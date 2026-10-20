@@ -1077,6 +1077,63 @@ rawset(_G, "GameMenuFrame", nil)
 rawset(_G, "GlassUI", savedGUI5)
 SkinProbeDB.gmSize = nil
 
+-- #92: the guild window as the procedure reads it.
+local savedGUI6 = rawget(_G, "GlassUI")
+local gcf = CreateFrame("Frame", "CommunitiesFrame", UIParent)
+gcf.NineSlice = CreateFrame("Frame", nil, gcf)
+gcf.NineSlice:SetAlpha(0)
+gcf.Chat = CreateFrame("Frame", nil, gcf)
+gcf.MemberList = CreateFrame("Frame", nil, gcf)
+local function gpane(section)
+    local host = CreateFrame("Frame", nil, section)
+    return { fill = host:CreateTexture() }
+end
+-- The roster's fake pane is on the window, so it can show without its section (the case to catch).
+local gh = { chat = gpane(gcf.Chat), roster = gpane(gcf) }
+local gtab = CreateFrame("CheckButton", nil, gcf)
+local gtabs = { [gtab] = { light = gtab:CreateTexture() } }
+gtabs[gtab].light:Hide()
+local tenantsT = { tabs = {}, panels = {} }
+rawset(_G, "GlassUI", { Guild = { _test = { wins = { [gcf] = gh }, tabs = gtabs } }, Tenants = tenantsT })
+SkinProbeDB.suiteBlocked = 0
+local okD, whyD = T.gdOn("t")()
+check(okD, "the panes with their sections, the tab mirrored: pass: " .. tostring(whyD))
+gcf.MemberList:Hide()
+okD, whyD = T.gdOn("t")()
+check(not okD and whyD:find("panes right 1 of 2", 1, true), "a pane shown without its section fails")
+gcf.MemberList:Show()
+gtab:SetChecked(true)
+okD, whyD = T.gdOn("t")()
+check(not okD and whyD:find("tabs mirrored 0 of 1", 1, true), "a checked tab without its light fails")
+gtabs[gtab].light:Show()
+check(T.gdOn("t")(), "its light shown: pass")
+gcf.NineSlice:SetAlpha(1)
+okD, whyD = T.gdOn("t")()
+check(not okD and whyD:find("shell 1", 1, true), "the shell left fails")
+gcf.NineSlice:SetAlpha(0)
+tenantsT.panels[CreateFrame("Frame")] = { applied = false }
+okD, whyD = T.gdOn("t")()
+check(not okD and whyD:find("tenant panels applied 0 of 1", 1, true), "a tenant panel not applied fails")
+for k in pairs(tenantsT.panels) do tenantsT.panels[k].applied = true end
+check(T.gdOn("t")(), "applied: pass")
+SkinProbeDB.suiteBlocked = 1
+okD, whyD = T.gdOn("t")()
+check(not okD and whyD:find("1 blocked", 1, true), "a blocked action fails")
+SkinProbeDB.suiteBlocked = 0
+okD, whyD = T.gdOn("t", { combat = true })()
+check(not okD and whyD:find("combat false", 1, true), "combat wanted, not in combat: fails")
+-- Minimized: no tab shown, none to mirror; outside minimized, no tab fails.
+gtab:Hide()
+check(T.gdOn("t", { minimized = true })(), "minimized: no tab shown passes")
+okD, whyD = T.gdOn("t")()
+check(not okD and whyD:find("tabs mirrored 0 of 0", 1, true), "no tab shown, not minimized: fails")
+gtab:Show()
+gcf:Hide()
+okD, whyD = T.gdOn("t")()
+check(not okD and whyD:find("not shown", 1, true), "the window hidden fails")
+rawset(_G, "CommunitiesFrame", nil)
+rawset(_G, "GlassUI", savedGUI6)
+
 -- #56 discovery: Questie's tracker and RestedXP's window and arrow.
 -- When each frame first exists: the first place it was seen is kept.
 local qbase = CreateFrame("Frame", "Questie_BaseFrame", UIParent)

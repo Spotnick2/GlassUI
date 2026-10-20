@@ -45,6 +45,20 @@ The look is judged from the procedure's screenshots; `Logs\taint.log` is read af
 |---|---|---|
 | Merchant (#4) | `/fp steps skin merchant`: the looks side by side (clear at 0.85, 0.6 and 0.35 backing, smoked, class); buy, sell, buyback, repair; skin off and on live; after /reload; in combat (optional) | **70425: passes.** Buy, sell and buyback work; repair not tested (nothing to repair). The screenshots show the gold shell gone, glass under the window and tabs, and the item rows keeping Blizzard's red. Off live: exactly stock (owner: yes); on live: faded again; after /reload: on, faded at the first show. No `ADDON_ACTION_BLOCKED`/`FORBIDDEN` in the three sessions. Combat skipped (a plain, unprotected window). **Looks:** all five read well, and 0.35 looks the most like glass (owner): clear and class now use backing 0.35, smoked keeps 0.92. **Taint pass on 70450 (typed `/console taintLog 1`, buy/sell/buyback, full exit):** the log was on (BugGrabber: the bag-bar error 84 times that session, see the facts below), and `Logs\taint.log` was not rewritten. At level 1 the client writes only when something is blocked, so nothing was. A level-2 pass over every wave-1 skin goes into the v0.1.0 release check (#9). |
 
+### Guild & Communities (#92, docs/GUILD.md)
+
+`/fp steps skin guild`. Each check reads each pane against its section, each tab's selection art against
+its own checked state, the tenants' panels applied, the shell, and blocked actions (taint log on), with
+`IsProtected`/`IsForbidden` on the frames we parent to. Saved as `SkinProbeDB.results["GD.<label>"]`.
+
+| # | Question | Result |
+|---|---|---|
+| GD.1 | The first opening of the session in combat; the chat mode; the look against the mockup | **Run 1 (70450, 2026-10-20): passes.** The first opening of the session in combat, then the chat mode: the shell faded, the panes with their sections, the tabs mirrored, nothing blocked. The owner: yes, "all but the minimize/maximize button which is yellow on the mockup, but we can follow blizzard". |
+| GD.2 | The roster: a sort, a member's details, a note or a rank edited: nothing blocked | **Run 1: passes.** A sort, a member's details, a note or rank: nothing blocked (taint log on; owner: no message). |
+| GD.3 | The other modes, minimized; a Shift-click on the chat tab: the selection mirrored | **Run 1: passes, one procedure FAIL.** Minimized, Blizzard hides every side tab, and the check wanted at least one ("tabs mirrored 0 of 0"); rev 2 allows none when minimized. The other modes and the Shift-click pass. |
+| GD.4 | With GuildSpy: its tabs and panel handed over and applied | **Run 1: passes** for the tabs and panel as GuildSpy shows them today (not handed over yet: its side waits for the owner's go-ahead). Owner: yes. |
+| GD.5 | Off (tenants told), a tab changed, on | **Run 1: passes.** Off: Blizzard's look, tenants told; on again: as before. |
+
 ### The game menu (#90, docs/GAME-MENU.md)
 
 `/fp steps skin gamemenu`. Each check reads the menu and its shown buttons against what Blizzard shows
