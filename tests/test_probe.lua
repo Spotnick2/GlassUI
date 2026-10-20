@@ -907,6 +907,73 @@ for _, n in ipairs({ "MerchantBuyBackItem", "MerchantFrameTab1", "MerchantFrameT
 end
 rawset(_G, "GlassUI", savedGUI3)
 
+-- #88: the bags as the procedure reads them.
+local savedGUI4 = rawget(_G, "GlassUI")
+local bw = CreateFrame("Frame", "ContainerFrame1", UIParent)
+bw.NineSlice = CreateFrame("Frame", nil, bw)
+bw.NineSlice:SetAlpha(0)
+local bslots, bwins = {}, {}
+local hdrTex = bw:CreateTexture()
+bwins[bw] = { header = hdrTex }
+local function bagButton(empty)
+    local b = CreateFrame("Button", nil, bw)
+    b.icon = b:CreateTexture()
+    b.IconBorder = b:CreateTexture()
+    b._normal = b:CreateTexture()
+    b._normal:SetAlpha(0)
+    b.emptyBackgroundAtlas = "bags-item-slot64"
+    if empty then b.icon:SetAtlas("bags-item-slot64"); b.icon:SetAlpha(0) else b.icon:SetTexture(1) end
+    bslots[b] = { glass = CreateFrame("Frame", nil, b) }
+    return b
+end
+local be, bf = bagButton(true), bagButton(false)
+local bandH = 26
+rawset(_G, "GlassUI", { Bags = { _test = { wins = bwins, slots = bslots }, HeaderHeight = function() return bandH end } })
+SkinProbeDB.suiteBlocked = 0
+local okB, whyB = T.bagsOn("t", { windows = 1, combined = false })()
+check(okB, "an open backpack, an empty slot dimmed, a filled one shown: pass: " .. tostring(whyB))
+local br = SkinProbeDB.results["BG.t"]
+eq(br.slots, 2, "two slots counted")
+eq(br.empty, 1, "one empty")
+eq(br.header, 26, "the band recorded")
+okB, whyB = T.bagsOn("t", { windows = 2 })()
+check(not okB and whyB:find("1 windows open", 1, true), "too few windows fails")
+okB, whyB = T.bagsOn("t", { windows = 1, combined = true })()
+check(not okB and whyB:find("combined false", 1, true), "not combined when wanted fails")
+be.icon:SetAlpha(1)
+okB, whyB = T.bagsOn("t", { windows = 1 })()
+check(not okB and whyB:find("empty dimmed 0 of 1", 1, true), "an empty slot not dimmed fails")
+be.icon:SetAlpha(0)
+bf.icon:SetAlpha(0)
+okB, whyB = T.bagsOn("t", { windows = 1 })()
+check(not okB and whyB:find("filled shown 0 of 1", 1, true), "a hidden item fails")
+bf.icon:SetAlpha(1)
+bf._normal:SetAlpha(1)
+okB, whyB = T.bagsOn("t", { windows = 1 })()
+check(not okB and whyB:find("rims faded on 1 of 2", 1, true), "a rim left fails")
+bf._normal:SetAlpha(0)
+bslots[bf].glass:Hide()
+okB, whyB = T.bagsOn("t", { windows = 1 })()
+check(not okB and whyB:find("glass on 1 of 2", 1, true), "a slot without glass fails")
+bslots[bf].glass:Show()
+bw.NineSlice:SetAlpha(1)
+okB, whyB = T.bagsOn("t", { windows = 1 })()
+check(not okB and whyB:find("shell faded on 0 of 1", 1, true), "the shell left fails")
+bw.NineSlice:SetAlpha(0)
+hdrTex:Hide()
+okB, whyB = T.bagsOn("t", { windows = 1 })()
+check(not okB and whyB:find("header on 0 of 1", 1, true), "no header fails")
+hdrTex:Show()
+bf.icon:SetAtlas("some-item-atlas")
+check(T.bagsOn("t", { windows = 1 })(), "an item given as an atlas is counted filled, not empty")
+bf.icon:SetTexture(1)
+SkinProbeDB.suiteBlocked = 1
+okB, whyB = T.bagsOn("t", { windows = 1 })()
+check(not okB and whyB:find("1 blocked", 1, true), "a blocked action fails")
+SkinProbeDB.suiteBlocked = 0
+rawset(_G, "ContainerFrame1", nil)
+rawset(_G, "GlassUI", savedGUI4)
+
 -- #56 discovery: Questie's tracker and RestedXP's window and arrow.
 -- When each frame first exists: the first place it was seen is kept.
 local qbase = CreateFrame("Frame", "Questie_BaseFrame", UIParent)

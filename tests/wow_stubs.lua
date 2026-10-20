@@ -1104,6 +1104,132 @@ function WoW.showTracker() WoW.asBlizzard(function() ObjectiveTrackerFrame:Show(
 function WoW.hideTracker() WoW.asBlizzard(function() ObjectiveTrackerFrame:Hide() end) end
 
 function WoW.showMerchant() WoW.asBlizzard(function() MerchantFrame:Show() end) end
+
+-- The bag windows (#88, Mainline ContainerFrame on Forever, origin/forever
+-- 70450): ContainerFrame1..7 and ContainerFrameCombinedBags on
+-- PortraitFrameFlatTemplate (NineSlice; Bg, a frame of four textures; the
+-- portrait and its mask; the close button), the backpack's and the combined
+-- window's money frames with their coin box, the shared search box and sort
+-- button. Each window's UpdateItems fills its pooled item buttons from
+-- WoW.bagContents[frame] ("empty" or an icon file), as Blizzard does
+-- (ContainerFrame.lua:1048-1080, 1191-1239). Hidden.
+local function flatWindow(name, parent)
+    local f = blizz("Frame", parent, name)
+    f._shown, f._level, f._strata = false, 2, "MEDIUM"
+    f._width, f._height = 178, 200
+    f.NineSlice = nineSlice(f)
+    f.Bg = blizz("Frame", f)
+    for _, k in ipairs({ "BottomLeft", "BottomRight", "BottomEdge", "TopSection" }) do
+        f.Bg[k] = blizz("Texture", f.Bg, nil, "BACKGROUND")
+    end
+    f.PortraitContainer = blizz("Frame", f)
+    f.PortraitContainer._level = 400
+    f.PortraitContainer.portrait = blizz("Texture", f.PortraitContainer, nil, "OVERLAY")
+    f.PortraitContainer.portrait._width, f.PortraitContainer.portrait._height = 62, 62
+    f.PortraitContainer.CircleMask = blizz("MaskTexture", f.PortraitContainer)
+    f.PortraitContainer.CircleMask._width, f.PortraitContainer.CircleMask._height = 62, 62
+    f.TitleContainer = blizz("Frame", f)
+    f.TitleContainer.TitleText = blizz("FontString", f.TitleContainer, nil, "OVERLAY")
+    local cb = blizz("Button", f)
+    cb._level, cb._width, cb._height = 510, 24, 24
+    for key, atlas in pairs({ _normal = "RedButton-Exit", _pushed = "RedButton-exit-pressed",
+                              _disabled = "RedButton-Exit-Disabled", _highlight = "RedButton-Highlight" }) do
+        cb[key] = blizz("Texture", cb)
+        cb[key]._atlas = atlas
+    end
+    f.CloseButton = cb
+    f.PortraitButton = blizz("DropdownButton", f)
+    return f
+end
+
+local function moneyFrame(parent, name)
+    local m = blizz("Frame", parent, name)
+    m.Border = blizz("Frame", m)
+    for _, k in ipairs({ "Left", "Middle", "Right" }) do m.Border[k] = blizz("Texture", m.Border, nil, "BACKGROUND") end
+    return m
+end
+
+-- An item button of ContainerFrameItemButtonTemplate (ContainerFrame.xml:81):
+-- its regions, the empty atlas key; in combined mode a slot background made
+-- on demand (ContainerFrame.lua:1846).
+local function itemButton(frame)
+    local b = blizz("Button", frame)
+    b._width, b._height = 37, 37
+    b._level = frame._level + 1
+    b.icon = blizz("Texture", b, nil, "BORDER")
+    b.IconBorder = blizz("Texture", b, nil, "OVERLAY")
+    b.Count = blizz("FontString", b, nil, "ARTWORK")
+    b.NewItemTexture = blizz("Texture", b, nil, "OVERLAY")
+    b._normal = blizz("Texture", b, nil, "ARTWORK")
+    b._normal._file = "Interface\\Buttons\\UI-Quickslot2"
+    rawset(b, "emptyBackgroundAtlas", "bags-item-slot64")
+    return b
+end
+
+WoW.bagContents = setmetatable({}, { __mode = "k" })
+WoW.bagButtons = setmetatable({}, { __mode = "k" })
+
+local function updateItems(frame)
+    local list = WoW.bagContents[frame] or {}
+    local pool = WoW.bagButtons[frame]
+    for _, b in ipairs(pool) do b:Hide() end                -- ReleaseAll
+    local combined = frame == rawget(_G, "ContainerFrameCombinedBags")
+    for i, item in ipairs(list) do
+        local b = pool[i]
+        if not b then b = itemButton(frame); pool[i] = b end   -- Acquire
+        b:Show()
+        if combined and not rawget(b, "ItemSlotBackground") then
+            rawset(b, "ItemSlotBackground", blizz("Texture", b, nil, "BACKGROUND"))
+        end
+        if rawget(b, "ItemSlotBackground") then b.ItemSlotBackground:SetShown(combined) end
+        if item == "empty" then
+            b.icon:SetAtlas(b.emptyBackgroundAtlas)          -- SetItemButtonTexture(nil)
+            b.IconBorder:Hide()
+        else
+            b.icon:SetTexture(item)
+            b.IconBorder:Show()
+            b.IconBorder:SetVertexColor(0.1, 0.4, 1)
+        end
+    end
+end
+
+function WoW.makeBags()
+    WoW.asBlizzard(function()
+        local holder = blizz("Frame", UIParent, "ContainerFrameContainer")
+        for i = 1, 7 do
+            local f = flatWindow("ContainerFrame" .. i, holder)
+            WoW.bagButtons[f] = {}
+            luaMethod(f, "UpdateItems", updateItems)
+        end
+        moneyFrame(ContainerFrame1, "ContainerFrame1MoneyFrame")
+        local c = flatWindow("ContainerFrameCombinedBags", UIParent)
+        c._width = 430
+        c.MoneyFrame = moneyFrame(c)
+        WoW.bagButtons[c] = {}
+        luaMethod(c, "UpdateItems", updateItems)
+        local box = blizz("EditBox", ContainerFrame1, "BagItemSearchBox")
+        box._shown, box._level = false, 5
+        for _, k in ipairs({ "Left", "Middle", "Right" }) do box[k] = blizz("Texture", box, nil, "BACKGROUND") end
+        local sort = blizz("Button", ContainerFrame1, "BagItemAutoSortButton")
+        sort._shown, sort._width, sort._height = false, 28, 26
+        WoW.snapshot()
+    end)
+end
+
+-- Blizzard opening a bag window with these contents (ContainerFrame_GenerateFrame,
+-- :1292: Show, then the items), or updating it (BAG_UPDATE -> UpdateItems).
+function WoW.openBag(frame, contents)
+    WoW.bagContents[frame] = contents
+    WoW.asBlizzard(function()
+        frame:Show()
+        frame:UpdateItems()
+    end)
+end
+function WoW.bagUpdate(frame, contents)
+    WoW.bagContents[frame] = contents
+    WoW.asBlizzard(function() frame:UpdateItems() end)
+end
+function WoW.closeBag(frame) WoW.asBlizzard(function() frame:Hide() end) end
 function WoW.hideMerchant() WoW.asBlizzard(function() MerchantFrame:Hide() end) end
 
 --------------------------------------------------------------------------------
