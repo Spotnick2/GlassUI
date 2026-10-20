@@ -19,6 +19,13 @@
 -- 70425) the owner compared 0.85, 0.6 and 0.35: all read well, and 0.35 looks
 -- the most like glass. Smoked stays dense for bright scenery.
 --
+-- A window that opens over other UI is another case (#80, docs/MERCHANT.md):
+-- over RestedXP's guide window, clear's 0.35 let its bright text read through
+-- the merchant (the owner, 2026-10-20). Such a skin (Engine.Register's
+-- backing = "window") gets at least WINDOW_BACKING; its tint, wash and the
+-- backing's colour stay the body's, and smoked's denser 0.92 stays. The
+-- tracker and the meter, over the world, keep the body's.
+--
 -- Only body regions are repainted (tint, wash, backing); rims are the
 -- material's. The wash is a gradient, which ignores SetAlpha on this client
 -- (SkinProbe W1.6, 70374): it is painted with LibGlass r7's SetWash, as a
@@ -33,7 +40,10 @@ GUI.Theme = Theme
 Theme.NAMES = { "clear", "smoked", "class" }
 Theme.LABELS = { clear = "Clear glass", smoked = "Smoked glass", class = "Class colour glass" }
 
-local surfaces = {}   -- { g = LibGlass regions, backing = our texture }
+-- The window floor: the owner picks it in game (docs/MERCHANT.md, MS.1).
+Theme.WINDOW_BACKING = 0.75
+
+local surfaces = {}   -- { g = LibGlass regions, backing = our texture, kind = "window" | nil }
 Theme.pending = false
 
 function Theme.IsValid(name) return GUI.Suite.LookValid("tint", name) end
@@ -67,14 +77,17 @@ local function paint(s, name, tint)
     Glass.SetWash(s.g, Glass.STYLE.wash * p.wash)
     if s.backing then
         local c = p.backing
-        s.backing:SetColorTexture(c[1], c[2], c[3], c[4])
+        local a = c[4]
+        if s.kind == "window" then a = math.max(a, Theme.WINDOW_BACKING) end
+        s.backing:SetColorTexture(c[1], c[2], c[3], a)
     end
 end
 
--- Add a surface (and the backing under it) and paint it with the current theme.
-function Theme.Register(g, backing)
+-- Add a surface (and the backing under it, if any) and paint it with the
+-- current theme. kind: "window" for the window floor.
+function Theme.Register(g, backing, kind)
     if type(g) ~= "table" or not g.tint then return end
-    local s = { g = g, backing = backing }
+    local s = { g = g, backing = backing, kind = kind }
     surfaces[#surfaces + 1] = s
     local name = Theme.Name()
     API.Try("theme:paint", paint, s, name, (tintFor(name)))

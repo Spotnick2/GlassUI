@@ -896,6 +896,101 @@ local function taintOff()
              run = function() return setCVar("taintLog", "0") end }
 end
 
+-- The merchant revisited (#80, #48, docs/MERCHANT.md): the window floor
+-- tried live, the rows' glass against Blizzard's rows, and the disc against
+-- the portrait's mask. Saved as MS.<label>.
+local floorWas
+
+local function floorTry(value)
+    local G = glassUI()
+    if not (G and G.Theme and G.Theme.Refresh) then return false, "Glass UI not loaded" end
+    if floorWas == nil then floorWas = G.Theme.WINDOW_BACKING end
+    G.Theme.WINDOW_BACKING = value
+    G.Theme.Refresh()
+    say("MS floor " .. num(value))
+    record("MS.floor tried", value)
+    return true, value
+end
+
+local function floorRestore()
+    local G = glassUI()
+    if floorWas ~= nil and G and G.Theme then
+        G.Theme.WINDOW_BACKING = floorWas
+        G.Theme.Refresh()
+    end
+    floorWas = nil
+    return true
+end
+
+local function seen(f)
+    local ok, v = call(f, "IsVisible")
+    return ok and plain(v) == true
+end
+
+local function centre(f)
+    local ok, x, y = call(f, "GetCenter")
+    x, y = ok and plain(x) or nil, ok and plain(y) or nil
+    if type(x) == "number" and type(y) == "number" then return x, y end
+end
+
+-- Each shown row: our glass seen exactly when Blizzard's button is, and its
+-- red mirror; the buyback slot's glass; the disc and its offset from the mask.
+local function merchantRows(label)
+    local G = glassUI()
+    local R = G and G.Merchant and G.Merchant._test
+    local rec = { rows = 0, glass = 0, red = 0, mismatch = 0 }
+    if R then
+        for i = 1, 12 do
+            local row = frameByName("MerchantItem" .. i)
+            local st = row and R.rows[row]
+            if st and seen(row) then
+                rec.rows = rec.rows + 1
+                local glass, filled = seen(st.glass), seen(st.button)
+                if glass then rec.glass = rec.glass + 1 end
+                if glass ~= filled then rec.mismatch = rec.mismatch + 1 end
+                if seen(st.red) then rec.red = rec.red + 1 end
+            end
+        end
+        local bb = frameByName("MerchantBuyBackItem")
+        local sb = bb and R.rows[bb]
+        rec.buyback = sb ~= nil and seen(sb.glass)
+        local m = frameByName("MerchantFrame")
+        local disc = m and R.discs[m]
+        local pc = m and rawget(m, "PortraitContainer")
+        local mask = pc and (rawget(pc, "CircleMask") or rawget(pc, "portrait"))
+        rec.disc = seen(disc)
+        local dx, dy = centre(disc)
+        local mx, my = centre(mask)
+        if dx and mx then rec.offset = math.max(math.abs(dx - mx), math.abs(dy - my)) end
+        local okW, w = call(disc, "GetWidth")
+        rec.discWidth = okW and plain(w) or nil
+    end
+    say("MS " .. label .. ": rows " .. rec.rows .. ", glass " .. rec.glass .. ", red " .. rec.red .. ", mismatch "
+        .. rec.mismatch .. "; buyback glass " .. tostring(rec.buyback) .. "; disc " .. tostring(rec.disc)
+        .. " width " .. num(rec.discWidth) .. " off-centre " .. num(rec.offset))
+    record("MS." .. label, rec)
+    return rec
+end
+
+-- A check: every shown row's glass as Blizzard's button, the disc seen and
+-- centred on the mask; `want` adds the buyback slot's glass and a red row.
+local function rowsOn(label, want)
+    return function()
+        local rec = merchantRows(label)
+        local bad = {}
+        if rec.rows == 0 then bad[#bad + 1] = "no row read (Glass UI not loaded?)" end
+        if rec.mismatch > 0 then bad[#bad + 1] = rec.mismatch .. " row(s) whose glass doesn't match the item" end
+        if not rec.disc then bad[#bad + 1] = "no disc seen" end
+        if not (rec.offset and rec.offset < 0.5) then bad[#bad + 1] = "the disc off the mask's centre" end
+        want = want or {}
+        if want.buyback ~= nil and rec.buyback ~= want.buyback then
+            bad[#bad + 1] = "buyback glass " .. tostring(rec.buyback) .. ", wanted " .. tostring(want.buyback)
+        end
+        if want.red and rec.red == 0 then bad[#bad + 1] = "no red row seen" end
+        return #bad == 0, #bad == 0 and (rec.glass .. " rows on glass, " .. rec.red .. " red") or table.concat(bad, "; ")
+    end
+end
+
 Probe:Steps("merchant", {
     title = "Glass UI: the merchant skin",
     { text = "Turns on script errors and the taint log (Logs\\taint.log), and reads the skin's switch. "
@@ -908,30 +1003,47 @@ Probe:Steps("merchant", {
     { text = "The merchant window in glass. Press Next for a screenshot.", screenshot = "merchant, skinned",
       check = function() return nineAlpha() == 0, merchantState("shown") end },
     { text = "Can you read every item name and price clearly?", ask = true },
-    { text = "Now the looks, one screenshot each. First: clear with the dense backing it had before #4 (0.85).",
-      button = "Clear 0.85", run = function() return themeTry("clear", 0.85) end, screenshot = "merchant, clear 0.85" },
-    { text = "Clear with a lighter backing (0.6).", button = "Clear 0.6",
-      run = function() return themeTry("clear", 0.6) end, screenshot = "merchant, clear 0.6" },
-    { text = "Clear with a much lighter backing (0.35).", button = "Clear 0.35",
-      run = function() return themeTry("clear", 0.35) end, screenshot = "merchant, clear 0.35" },
-    { text = "Smoked.", button = "Smoked", run = function() return themeTry("smoked") end,
-      screenshot = "merchant, smoked" },
-    { text = "Class colour.", button = "Class", run = function() return themeTry("class") end,
-      screenshot = "merchant, class" },
-    { text = "Did one of the lighter clears (0.6 or 0.35) read well AND look more like glass than 0.85? "
-          .. "Say which you liked best in the Note box.", ask = true },
-    { text = "Puts your theme back.", button = "Restore", run = themeRestore },
+    -- MS.1: the window floor (#80), over other UI.
+    { text = "MS.1: have the merchant window over RestedXP's guide window or your quest log (open it beside the "
+          .. "vendor), on the clear tint. Then the window floor, one screenshot each. First 0.6.",
+      button = "Floor 0.6", run = function() return floorTry(0.6) end, screenshot = "merchant, floor 0.6" },
+    { text = "0.75 (the default for now).", button = "Floor 0.75", run = function() return floorTry(0.75) end,
+      screenshot = "merchant, floor 0.75" },
+    { text = "0.85.", button = "Floor 0.85", run = function() return floorTry(0.85) end,
+      screenshot = "merchant, floor 0.85" },
+    { text = "Which floor hides what's behind and still looks like glass? Say the number in the Note.", ask = true },
+    { text = "Puts the floor back to the default.", button = "Restore", run = floorRestore },
+    -- MS.2: the rows (#80).
+    { text = "MS.2: the rows. Our glass under each item, none on an empty slot, and an item you can't use or afford "
+          .. "tinted red on its glass (find a vendor with one, or Skip). Press Next for a screenshot.",
+      screenshot = "merchant, rows", check = rowsOn("rows", { red = true }) },
+    { text = "Do the rows read well: icon, name and price on the glass, the red clear?", ask = true },
+    -- MS.3: the disc (#48).
+    { text = "MS.3: the portrait's disc. It should sit round the NPC's face as a ring, centred.",
+      check = rowsOn("disc"), screenshot = "merchant, disc" },
+    { text = "Is the ring centred and the right width? Say what you'd change in the Note.", ask = true },
     { text = "Buy one cheap item. Did it land in your bags, and the money go?", ask = true },
     { text = "Sell an item from your bags (right-click it). Did it sell?", ask = true },
-    { text = "Open the Buyback tab, then press Next for a screenshot.", screenshot = "merchant, buyback tab",
-      check = function() return nineAlpha() == 0, merchantState("buyback") end },
+    { text = "The sold item in the buyback slot under the rows, on its glass.", screenshot = "merchant, buyback slot",
+      check = rowsOn("buyback slot", { buyback = true }) },
+    { text = "Open the Buyback tab, then press Next for a screenshot (its 12 rows, and the portrait's disc).",
+      screenshot = "merchant, buyback tab",
+      check = function()
+          local ok, why = rowsOn("buyback tab")()
+          return ok and nineAlpha() == 0, why .. "; " .. tostring(merchantState("buyback"))
+      end },
     { text = "Buy back the item you sold. Did it come back?", ask = true },
     { text = "Go back to the Merchant tab. If this vendor repairs and something of yours is damaged, "
           .. "repair it. Did it work? (No if you couldn't test it, and say why in the Note.)", ask = true },
     { text = "Switches the skin off, live.", button = "Skin off", screenshot = "merchant, skin off",
       run = function() return switch(false), merchantState("off") end,
-      check = function() return nineAlpha() == 1, "the border is back" end },
-    { text = "Does the window look exactly like Blizzard's own again?", ask = true },
+      check = function()
+          local rec = merchantRows("off")
+          return nineAlpha() == 1 and rec.glass == 0 and not rec.disc, "the border is back, "
+              .. rec.glass .. " rows on glass, disc " .. tostring(rec.disc)
+      end },
+    { text = "Does the window look exactly like Blizzard's own again: the grey and red plates, the slots, the "
+          .. "gold portrait ring?", ask = true },
     { text = "Switches the skin on again, live.", button = "Skin on", screenshot = "merchant, skin on again",
       run = function() return switch(true), merchantState("on again") end,
       check = function() return nineAlpha() == 0, "faded again" end },
@@ -2839,4 +2951,5 @@ NS._test = { Probe = Probe, state = state, tree = tree, fade = fade, slashOwners
              trackerState = trackerState, trackerOn = trackerOn, questingEnable = questingEnable,
              questingRestore = questingRestore, holdOn = holdOn, holdCheck = holdCheck, holdOff = holdOff,
              coexist = coexist, arrowState = arrowState, seen = seen, lookFor = lookFor, accentState = accentState,
-             timerState = timerState, timerOn = timerOn, fakeOn = fakeOn, fakeOff = fakeOff, fakeTimers = fakeTimers }
+             timerState = timerState, timerOn = timerOn, fakeOn = fakeOn, fakeOff = fakeOff, fakeTimers = fakeTimers,
+             merchantRows = merchantRows, rowsOn = rowsOn, floorTry = floorTry, floorRestore = floorRestore }

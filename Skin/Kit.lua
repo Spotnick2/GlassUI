@@ -29,6 +29,7 @@
 --           docs/PLAN.md "The accent on Blizzard's titles"): held like a
 --           fade, Blizzard's latest colour kept and given back by Restore.
 --   Panel   our glass: an unnamed, mouse-off frame of our own under the window.
+--   Disc    a LibGlass disc of ours behind a round region (a portrait, #48).
 --
 -- Widget kinds, each written when the first skin needed it: Shell
 -- (ButtonFrameTemplate / PortraitFrameTemplate), Inset (InsetFrameTemplate),
@@ -44,7 +45,8 @@ local K = {}
 K.__index = K
 
 function Kit.New(skin)
-    return setmetatable({ skin = skin, key = skin.def.key, live = skin.def.live == true, panels = {} }, K)
+    return setmetatable({ skin = skin, key = skin.def.key, live = skin.def.live == true, backing = skin.def.backing,
+                          panels = {} }, K)
 end
 
 -- A short name for a region, for the failure record.
@@ -231,7 +233,9 @@ end
 -- regions and children draw over it (GlassMail's panel). insets: { left, top,
 -- right, bottom } in px, inward. size: LibGlass's, default "large". anchor:
 -- the region it covers, when not the whole window (still the window's child).
-function K:Panel(window, size, insets, anchor)
+-- opts.backing = false: no backing, for glass that sits on another panel's
+-- (two would stack into a darker plate than the window, #80).
+function K:Panel(window, size, insets, anchor, opts)
     local panel = CreateFrame("Frame", nil, window)
     anchor = anchor or window
     if insets then
@@ -245,14 +249,41 @@ function K:Panel(window, size, insets, anchor)
     -- earlier would be a bug of ours: recorded, and the glass built for it.
     if not GUI.Glass then API.Fail("kit:" .. self.key .. ":early", "a panel before the glass was built") end
     local g = GUI.BuildGlass().Apply(panel, size or "large")
-    -- The opaque backing (Glass Quest Tracker's): above the shadow (-8),
-    -- under the tint (-6), clipped by the glass's own mask.
-    local backing = panel:CreateTexture(nil, "BACKGROUND", nil, -7)
-    backing:SetAllPoints(panel)
-    backing:AddMaskTexture(g.mask)
-    GUI.Theme.Register(g, backing)
+    local backing = (not opts or opts.backing ~= false) and self:Backing(panel, g) or nil
+    GUI.Theme.Register(g, backing, self.backing)
     self.panels[#self.panels + 1] = panel
     return panel, g
+end
+
+-- The opaque backing (Glass Quest Tracker's): above the shadow (-8), under
+-- the tint (-6), clipped by the glass's own mask.
+function K:Backing(host, g)
+    local backing = host:CreateTexture(nil, "BACKGROUND", nil, -7)
+    backing:SetAllPoints(host)
+    backing:AddMaskTexture(g.mask)
+    return backing
+end
+
+-- A glass disc of ours behind a round region (a portrait, #48): a square
+-- host centred on `around`, its width + 2 x opts.ring (opts.width when the
+-- width can't be read), at opts.level, its rim there too: LibGlass makes the
+-- rim 10 up, which would draw over what the disc sits behind. A child of
+-- `parent`, so it shows and hides with it.
+function K:Disc(parent, around, opts)
+    local w = API.Plain(around:GetWidth())
+    if type(w) ~= "number" or w <= 0 then w = opts.width end
+    local side = w + 2 * opts.ring
+    local host = CreateFrame("Frame", nil, parent)
+    host:SetSize(side, side)
+    host:SetPoint("CENTER", around, "CENTER", 0, 0)
+    host:SetFrameLevel(math.max(0, opts.level))
+    if not GUI.Glass then API.Fail("kit:" .. self.key .. ":early", "a disc before the glass was built") end
+    -- LibGlass: "disc" from ~96 px up, "disc_small" below (GLASS-MATERIAL.md).
+    local g = GUI.BuildGlass().Disc(host, side >= 96 and "disc" or "disc_small")
+    if g.top then g.top:SetFrameLevel(host:GetFrameLevel()) end
+    GUI.Theme.Register(g, self:Backing(host, g), self.backing)
+    self.panels[#self.panels + 1] = host
+    return host, g
 end
 
 -- Our own frames: Show and Hide are ours to call.

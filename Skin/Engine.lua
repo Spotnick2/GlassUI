@@ -13,6 +13,8 @@
 --   install  function(kit, frame), once per frame: our panels and hooks
 --   style    function(kit, frame), repeatable: the touches
 --   live     true when it only fades and adds panels: off and on without a /reload
+--   backing  "window" for a window that opens over other UI: its panels' backing
+--            at least Theme.WINDOW_BACKING (#80); nil keeps the body's
 --
 -- Everything runs at a window's OnShow (and at once when it's already shown),
 -- never before: a ScrollBox window's first layout is Blizzard's to make
