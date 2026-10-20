@@ -882,11 +882,24 @@ local function setCVar(name, value)
     return ok and r
 end
 
+-- The taint log on makes Blizzard's own code throw 'attempt to call a nil
+-- value' at methods addons hooked (the micro menu every second, the bag bar,
+-- tooltips) for as long as it's on (GlassActionBars, 70450; the porting guide,
+-- "The taint log makes Blizzard's code call nil methods"). Each step that
+-- turns it on says so, and each procedure turns it off at its end.
+local TAINT_NOISE = "With the taint log on, Blizzard's own code throws 'attempt to call a nil value' errors (the "
+    .. "micro menu every second, the bag bar, tooltips): that's the log itself, not an addon, so ignore them. "
+    .. "They stop when it's off: at a /reload, or /console taintLog 0 if you stop early."
+
+local function taintOff()
+    return { text = "Turns the taint log off: Blizzard's 'nil value' errors stop with it.", auto = true,
+             run = function() return setCVar("taintLog", "0") end }
+end
+
 Probe:Steps("merchant", {
     title = "Glass UI: the merchant skin",
     { text = "Turns on script errors and the taint log (Logs\\taint.log), and reads the skin's switch. "
-          .. "With the taint log on, Blizzard's own code throws 'attempt to call a nil value' errors "
-          .. "(tooltips, the bag bar): ignore those. A /reload turns the log off again.",
+          .. TAINT_NOISE,
       auto = true, run = function()
           return setCVar("scriptErrors", "1"), setCVar("taintLog", "1"), merchantState("start")
       end,
@@ -929,6 +942,7 @@ Probe:Steps("merchant", {
     { text = "Optional, Skip if it isn't easy: close the window, get into combat next to a vendor (pull "
           .. "something), and talk to the vendor while fighting.", event = "MERCHANT_SHOW",
       check = function() return InCombatLockdown() and nineAlpha() == 0, merchantState("combat") end },
+    taintOff(),
     { text = "Type /reload to save the results.", reload = true },
 })
 
@@ -1275,8 +1289,7 @@ local more = {
     { text = "Optional, Skip if it isn't easy: get your own health below 30% (a fight, a fall), then press Next "
           .. "for a screenshot.", screenshot = "suite, low health" },
     -- S.7: a toggle in combat waits for the reload; a reload in combat.
-    { text = "S.7: turns the taint log on (Logs\\taint.log). With it on, Blizzard's own code throws 'attempt to "
-          .. "call a nil value' errors: ignore those. The next /reload turns it off.",
+    { text = "S.7: turns the taint log on (Logs\\taint.log). " .. TAINT_NOISE,
       auto = true, run = function() return setCVar("taintLog", "1") end },
     { text = "Get into combat (pull something weak) and stay in it.", wait = function() return InCombatLockdown() end,
       timeout = 600 },
@@ -1332,8 +1345,7 @@ end
 Probe:Steps("suitecombat", {
     title = "Glass UI: the suite theme in combat (S.7)",
     { text = "Needs Glass UI, Glass Unit Frames and Glass Raid Frames loaded, both following Glass UI. Turns on "
-          .. "script errors and the taint log (Blizzard's own 'attempt to call a nil value' errors then are "
-          .. "noise: ignore them).",
+          .. "script errors and the taint log (Logs\\taint.log). " .. TAINT_NOISE,
       auto = true, run = function()
           if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
           return setCVar("scriptErrors", "1"), setCVar("taintLog", "1"), suiteState("combat start").glassUI
@@ -1379,7 +1391,8 @@ Probe:Steps("suitecombat", {
           if not (S and S.SetFollow) then return false, "Glass UI isn't loaded" end
           return S.SetFollow("GlassRaidFrames", true)
       end },
-    { text = "Type /reload to save the results (and turn the taint log off).", reload = true },
+    taintOff(),
+    { text = "Type /reload to save the results.", reload = true },
 })
 
 Probe:Command("suite", function(args)
@@ -1721,9 +1734,8 @@ end
 
 Probe:Steps("tracker", {
     title = "Glass UI: the quest tracker skin (#55)",
-    { text = "Turns on script errors and the taint log (Logs\\taint.log), and reads the skin. With the taint log "
-          .. "on, Blizzard's own code throws 'attempt to call a nil value' errors (tooltips, the bag bar): ignore "
-          .. "those. A /reload turns the log off. Have a few quests tracked and the tracker expanded.",
+    { text = "Turns on script errors and the taint log (Logs\\taint.log), and reads the skin. Have a few quests "
+          .. "tracked and the tracker expanded. " .. TAINT_NOISE,
       auto = true, run = function()
           if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
           return setCVar("scriptErrors", "1"), setCVar("taintLog", "1"), trackerState("start").status
@@ -1780,7 +1792,8 @@ Probe:Steps("tracker", {
     { text = "Reload.", reload = true },
     { text = "After the reload. Press Next for a screenshot.", screenshot = "tracker, after reload",
       check = trackerOn("after reload", { panel = "populated" }) },
-    { text = "Turns the taint log on again for the quest routine (the reload turned it off).", auto = true,
+    { text = "Turns the taint log on again for the quest routine (the reload turned it off). " .. TAINT_NOISE,
+      auto = true,
       run = function() return setCVar("taintLog", "1") end },
     { text = "The quest routine, as it comes: accept a quest, make progress on one (kill or loot), and turn one "
           .. "in. A dungeon too if you're near one; Skip what you can't do now. Press Next when done.",
@@ -1799,7 +1812,8 @@ Probe:Steps("tracker", {
       end },
     { text = "Did you see any error, or a 'blocked' or 'interface action failed' message (Blizzard's 'nil "
           .. "value' errors aside)?", ask = true },
-    { text = "Type /reload to save the results (and turn the taint log off).", reload = true },
+    taintOff(),
+    { text = "Type /reload to save the results.", reload = true },
 })
 
 Probe:Command("tracker", function() trackerState("now") end, "the quest tracker skin: its switch, panel and regions")
@@ -2005,7 +2019,7 @@ end
 Probe:Steps("timer", {
     title = "Glass UI: the quest timers on a pill (#73)",
     { text = "Turns on script errors and the taint log (Logs\\taint.log), and reads the timers. Have the tracker "
-          .. "expanded and the tracker skin on.", auto = true,
+          .. "expanded and the tracker skin on. " .. TAINT_NOISE, auto = true,
       run = function()
           if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
           return setCVar("scriptErrors", "1"), setCVar("taintLog", "1"), timerState("start").status
@@ -2052,7 +2066,8 @@ Probe:Steps("timer", {
           return n == 0, n .. " blocked"
       end },
     { text = "Did you see any error, or a 'blocked' or 'interface action failed' message?", ask = true },
-    { text = "Type /reload to save the results (and turn the taint log off).", reload = true },
+    taintOff(),
+    { text = "Type /reload to save the results.", reload = true },
 })
 
 Probe:Command("timer", function() timerState("now") end, "#73: the quest timers, their pill and the band")
@@ -2296,8 +2311,7 @@ local skinWindowsWere
 Probe:Steps("meterskin", {
     title = "Glass UI: the damage meter skin (#49)",
     { text = "Turns on script errors and the taint log (Logs\\taint.log), and reads the skin's switch. "
-          .. "With the taint log on, Blizzard's own code throws 'attempt to call a nil value' errors "
-          .. "(tooltips, the bag bar): ignore those. A /reload turns the log off again.",
+          .. TAINT_NOISE,
       auto = true, run = function()
           skinWindowsWere = meterShownWindows()
           return setCVar("scriptErrors", "1"), setCVar("taintLog", "1"), skinState("start")
@@ -2368,6 +2382,7 @@ Probe:Steps("meterskin", {
     { text = "Optional, Skip if it isn't easy: fight something and press Measure while in combat.",
       button = "Measure", run = function() return skinState("combat") end,
       check = function() return InCombatLockdown() and headersFaded(true) end },
+    taintOff(),
     { text = "Put the meter back the way you like it (the gear menu hides the extra window). "
           .. "Then reload to save the results.", reload = true },
 })
