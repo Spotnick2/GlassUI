@@ -216,6 +216,7 @@ local function memberCard(m)
             for _, k in ipairs(Suite.LOOK_KEYS) do
                 if r.own[k] then own[#own + 1] = Suite.LOOK_LABELS[k]:lower() end
             end
+            if r.own.backing then own[#own + 1] = "backing" end
             if #own > 0 then s = s .. "; its own " .. table.concat(own, ", ") end
         end
         local tenants = Suite.Tenants(m.name)
@@ -488,14 +489,16 @@ local function buildLook()
     local Suite = GUI.Suite
     local title = label(lookPanel, "Suite look", "GameFontHighlightHuge")
     title:SetPoint("TOPLEFT", lookPanel, "TOPLEFT", PAD + 4, -PAD)
-    local note = label(lookPanel, "The tint and the button feedback of every Glass addon that uses the Glass UI "
-        .. "appearance. An addon can keep its own value for any of them in its settings. Changes apply at once.",
+    local note = label(lookPanel, "The tint, the accent colour and the button feedback of every Glass addon that "
+        .. "uses the Glass UI appearance, and of Glass UI's own skins. An addon can keep its own value for any of "
+        .. "them in its settings. Changes apply at once.",
         "GameFontDisable")
     note:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -6)
     note:SetWidth(560)
     local function lookOf(k) return function() return (Suite.Look() or Suite.LOOK_DEFAULTS)[k] end end
     local function setter(k) return function(v) Suite.SetLook(k, v) end end
     local prev = choiceRow(note, "Tint", Suite.LOOK_VALUES.tint, lookOf("tint"), setter("tint"))
+    prev = choiceRow(prev, "Accent", Suite.LOOK_VALUES.accent, lookOf("accent"), setter("accent"))
     local presets = {}
     for i, n in ipairs(Suite.LOOK_PRESET_NAMES) do presets[i] = n end
     prev = choiceRow(prev, "Button feedback", presets, function() return Suite.LookPreset() end,

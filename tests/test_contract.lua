@@ -54,6 +54,13 @@ WoW.editMode(true)
 WoW.editMode(false)
 WoW.asBlizzard(function() ObjectiveTrackerFrame.NineSlice:SetAlpha(0.6) end)
 for _, cmd in ipairs({ "skin tracker off", "skin tracker on" }) do GUI._test.slash(cmd) end
+-- The accent and the tint changed live, in combat too (#52, #67).
+WoW.combat = true
+GUI._test.slash("look accent ice")
+GUI._test.slash("look tint smoked")
+WoW.combat = false
+GUI._test.slash("look accent gold")
+GUI._test.slash("look tint clear")
 WoW.layout("QuestObjectiveTracker", { blocks = 1, items = 2 })
 for _, cmd in ipairs({ "skin merchant off", "skin merchant on", "skin meter off", "off", "on", "theme smoked",
                        "theme class", "theme clear", "skins", "skin held off" }) do

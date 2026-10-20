@@ -823,12 +823,12 @@ local function themeTry(name, backing)
     if type(SkinProbeDB) ~= "table" then return false, "no saved table" end
     local was = SkinProbeDB.themeWas
     if type(was) ~= "table" then
-        was = { name = T.Name(), backing = T.PRESETS.clear.backing }
+        was = { name = T.Name(), backing = G.Suite.BODY.clear.backing }
         SkinProbeDB.themeWas = was
     end
-    T.PRESETS.clear.backing = backing or was.backing
+    G.Suite.BODY.clear.backing = backing or was.backing
     T.Set(name)
-    local used = T.PRESETS[name].backing
+    local used = G.Suite.BODY[name].backing
     say("THEME " .. name .. " backing " .. num(used))
     return name, used
 end
@@ -837,7 +837,7 @@ local function themeRestore()
     local G = glassUI()
     local was = type(SkinProbeDB) == "table" and SkinProbeDB.themeWas or nil
     if not (type(was) == "table" and G and G.Theme) then return true end
-    G.Theme.PRESETS.clear.backing = was.backing
+    G.Suite.BODY.clear.backing = was.backing
     G.Theme.Set(was.name)
     say("THEME restored: " .. tostring(was.name))
     SkinProbeDB.themeWas = nil
@@ -1820,7 +1820,7 @@ local function cardAtlas()
 end
 
 -- A: Blizzard's card. B and C: Glass UI's glass at the same size, painted
--- like its clear and smoked themes (Theme.PRESETS: tint, wash, backing).
+-- like its clear and smoked bodies (Suite.BODY: tint, wash, backing).
 local function cardOn()
     if card then return card.result end
     local _, w, h = cardAtlas()
@@ -1849,13 +1849,13 @@ local function cardOn()
             f:SetPoint("LEFT", host, "LEFT", 20 + i * (w + 20), 0)
             local ok, g = pcall(G.Glass.Apply, f, "large")
             if ok and g then
-                local p, c = G.Theme.PRESETS[name], G.Theme.BACKING
+                local p, c = G.Suite.BODY[name], G.Suite.BACKING
                 local backing = f:CreateTexture(nil, "BACKGROUND", nil, -7)
                 backing:SetAllPoints(f)
                 backing:AddMaskTexture(g.mask)
                 backing:SetColorTexture(c[1], c[2], c[3], p.backing)
                 pcall(G.Glass.SetSurfaceTint, g, p.tint[1], p.tint[2], p.tint[3], p.tint[4])
-                pcall(G.Glass.SetWash, g, p.wash)
+                pcall(G.Glass.SetWash, g, G.Glass.STYLE.wash * p.wash)
                 painted = painted + 1
             end
             label(f, (i == 1 and "B  " or "C  ") .. name)

@@ -436,7 +436,7 @@ GUI._test.slash("look preset minimal")
 eq(Suite.LookPreset(), "minimal", "/glassui look preset minimal")
 chat()
 GUI._test.slash("look tint gold")
-check(chat():find("/glassui look tint|hover|press|empty|preset <value>", 1, true), "a bad value prints the usage")
+check(chat():find("/glassui look tint|accent|hover|press|empty|preset <value>", 1, true), "a bad value prints the usage")
 GUI._test.slash("look")
 out = chat()
 check(out:find("suite look (Minimal): tint Smoked, hover Off, press Flash, empty slots Hidden", 1, true),
@@ -496,6 +496,120 @@ O.lookPanel:Show()
 eq(O.lookFollowers:GetText(), "Glass Action Bars: its own look; set to follow - /reload to apply",
    "the subpage shows the pending join")
 O.lookPanel:Hide()
+
+-- The body (#67): one recipe for Glass UI's skins and the followers.
+setup()
+local b = Suite.Body("clear")
+eq(b.tint[4], 0.24, "clear's tint")
+eq(b.backing[4], 0.35, "its backing's opacity")
+eq(b.backing[1], Suite.BACKING[1], "the backing's colour")
+eq(b.wash, 1, "the wash, a factor of the material's")
+eq(b.classShade, nil, "no class shade")
+local cl = Suite.Body("class")
+eq(cl.tint, nil, "class: no tint of its own")
+eq(cl.classShade, 0.6, "the follower's class colour times this")
+near(Suite.Body("smoked").wash, 0.14 / 0.18, "smoked's wash factor")
+eq(Suite.Body("sparkly"), nil, "an unknown tint: nil")
+b.tint[4], b.backing[4] = 9, 9
+eq(Suite.Body("clear").tint[4], 0.24, "fresh down to the tint: a follower's change stays its own")
+eq(Suite.Body("clear").backing[4], 0.35, "and the backing")
+eq(Suite.Body().tint[4], 0.24, "nil: the suite look's current tint (clear)")
+Suite.SetLook("tint", "smoked")
+eq(Suite.Body().backing[4], 0.92, "follows the suite look's tint")
+-- One tint for Glass UI's own skins: the suite look's, repainted live.
+eq(GUI.Theme.Name(), "smoked", "the skins' tint is the suite look's")
+local f = CreateFrame("Frame")
+local g = GUI.Glass.Apply(f, "small")
+local bk = f:CreateTexture()
+GUI.Theme.Register(g, bk)
+eq(bk._color[4], 0.92, "a registered surface paints smoked's backing")
+Suite.SetLook("tint", "clear")
+eq(bk._color[4], 0.35, "a tint change on the subpage repaints it at once")
+WoW.combat = true
+Suite.SetLook("tint", "smoked")
+WoW.combat = false
+eq(bk._color[4], 0.92, "in combat too (our own textures)")
+GUI._test.slash("theme clear")
+eq(Suite.Look().tint, "clear", "/glassui theme is the suite look's tint")
+eq(rawget(GlassUIDB, "theme"), nil, "nothing saved under the old name")
+-- The class body with the class colour unreadable (early in a login): the
+-- surface's built tint is kept, and painted at the retry.
+WoW.class = nil
+eq(GUI.Theme.Set("class"), true, "class chosen while the colour can't be read")
+eq(GUI.Theme.pending, true, "the paint waits")
+local built = g.tint._color
+WoW.class = "MAGE"
+GUI.Theme.Retry()
+eq(GUI.Theme.pending, false, "painted at the retry")
+local mage = g.tint._color
+near(mage[1], 0.25 * 0.6, "the mage's colour times the class shade")
+eq(mage[4], g.tint.glassColor[4], "keeping the surface's built alpha (three values)")
+check(built ~= mage, "a new paint, not the kept one")
+Suite.SetLook("tint", "clear")
+-- Before Glass UI is ready: nothing to read.
+local beforeReady
+loadAddon({ before = function()
+    beforeReady = { body = GlassUI.Suite.Body(), accent = GlassUI.Suite.Accent(),
+                    clear = GlassUI.Suite.Body("clear") }
+end })
+eq(beforeReady.body, nil, "Body() before ready: nil")
+eq(beforeReady.accent, nil, "Accent() before ready: nil")
+check(beforeReady.clear ~= nil, "a named body is static: there before ready")
+
+-- The migration of the old saved theme.
+setup({ theme = "smoked" })
+eq(Suite.Look().tint, "smoked", "a saved theme moves into the suite look's tint")
+eq(rawget(GlassUIDB, "theme"), nil, "and is dropped")
+setup({ theme = "class", suite = { look = { tint = "smoked" }, follow = { GlassUnitFrames = true } } })
+eq(Suite.Look().tint, "smoked", "a saved look tint wins")
+eq(rawget(GlassUIDB, "theme"), nil, "the old theme dropped either way")
+eq(Suite.Following("GlassUnitFrames"), true, "the rest of the suite is kept")
+setup({ theme = "clear" })
+eq(rawget(GlassUIDB, "suite"), nil, "the default moves nowhere: nothing saved")
+setup({ theme = "sparkly" })
+eq(Suite.Look().tint, "clear", "an invalid saved theme is dropped, not moved")
+eq(rawget(GlassUIDB, "suite"), nil, "nothing saved for it")
+
+-- The accent (#52).
+setup()
+eq(Suite.Look().accent, "gold", "gold by default")
+local a = Suite.Accent()
+check(a[1] == 1 and a[2] == 0.82 and a[3] == 0, "Blizzard's gold")
+eq(Suite.Accent("ice")[3], 0.905, "a named accent: ice")
+eq(Suite.Accent("teal"), nil, "an unknown name: nil")
+a[1] = 0
+eq(Suite.Accent()[1], 1, "fresh")
+eq(rawget(GlassUIDB, "suite"), nil, "the default isn't saved")
+GUI._test.slash("look accent ice")
+eq(Suite.Look().accent, "ice", "/glassui look accent ice")
+eq(GlassUIDB.suite.look.accent, "ice", "saved, sparse")
+local heard
+EventRegistry:RegisterCallback(Suite.LOOK_EVENT, function(_, look) heard = look.accent end, {})
+Suite.SetLook("accent", "gold")
+eq(heard, "gold", "announced live through LookChanged")
+eq(rawget(GlassUIDB, "suite"), nil, "back to the default: nothing saved")
+O = GUI.Options._test
+O.lookPanel:Show()
+local accentRow = O.lookRows["Accent"]
+eq(#accentRow, 2, "the subpage's Accent radios: gold and ice")
+eq(accentRow[1]:GetChecked(), true, "gold checked")
+accentRow[2]:Click()
+eq(Suite.Look().accent, "ice", "a radio sets it")
+O.lookPanel:Hide()
+Suite.SetLook("accent", "gold")
+
+-- A follower's own backing (GlassChat's /gchat alpha) on the card and in /glassui suite.
+setup({ suite = { follow = { GlassChat = true } } })
+ask("GlassChat")
+Suite.Report("GlassChat", { api = 1, built = "pearl", own = { backing = true, sparkle = true } })
+eq(Suite.ReportOf("GlassChat").own.backing, true, "own.backing is copied")
+eq(Suite.ReportOf("GlassChat").own.sparkle, nil, "an unknown key isn't")
+eq(Suite.LookLine("GlassChat"), "suite look, its own backing", "the look line names it, with no look keys reported")
+GUI._test.slash("suite")
+check(chat():find("its own backing", 1, true), "/glassui suite names it")
+GUI.Options._test.panel:Show()
+check(GUI.Options._test.rows.GlassChat.line:GetText():find("its own backing", 1, true), "and the card")
+GUI.Options._test.panel:Hide()
 
 -- Never another addon's SavedVariables: the strict globals would throw on a
 -- read, and nothing was written.

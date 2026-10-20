@@ -162,8 +162,8 @@ unchanged.
 - **The main page's GAB card** says which keys GAB overrides, and the tenants line.
 - `/glassui look tint|hover|press|empty <value>` does the same from chat.
 
-Glass UI's own window skins (parked) keep their own clear/smoked/class for now. Following the suite
-tint is a later step when they resume.
+Glass UI's own window skins kept their own clear/smoked/class until #67: they now wear the suite
+look's tint ("One tint for Glass UI's skins", below).
 
 ## Validation
 
@@ -198,6 +198,8 @@ tint is a later step when they resume.
   more followers (GUF's and GRF's body/tint) or back to GAB-owned.
 
 ## The body (#67) and the accent (#52): addendum, 2026-10-19
+
+**Status:** built (branch `suite-body-build`). GlassChat (GlassChat#121) builds against it once it's merged.
 
 **Why.** GlassChat (its session, for the owner: "try the pearl skin glassui used for the damage meter
 and quest tracker ... synced as the glassui sync setting. Same would go for the text colors going

@@ -130,6 +130,8 @@ local function copyReport(addon, state)
     if type(own) == "table" then
         r.own = {}
         for _, k in ipairs(Suite.LOOK_KEYS) do r.own[k] = own[k] == true or nil end
+        -- Its own backing over the body's (#67): not a look key, a marker.
+        r.own.backing = own.backing == true or nil
     end
     local tenants = state.tenants
     if type(tenants) == "table" then
@@ -176,14 +178,17 @@ end
 --------------------------------------------------------------------------------
 
 Suite.LOOK_EVENT = "GlassUI.Suite.LookChanged"
-Suite.LOOK_KEYS = { "tint", "hover", "press", "emptySlots" }
+Suite.LOOK_KEYS = { "tint", "hover", "press", "emptySlots", "accent" }
 Suite.LOOK_VALUES = {
     tint = { "clear", "smoked", "class" },
     hover = { "off", "glow", "halo" },
     press = { "off", "flash", "ripple" },
     emptySlots = { "hidden", "faint", "half", "full", "frosted" },
+    -- #52: the headers' colour. Gold is Blizzard's, the default (the owner is
+    -- unsure of GlassChat's ice blue).
+    accent = { "gold", "ice" },
 }
-Suite.LOOK_DEFAULTS = { tint = "clear", hover = "glow", press = "flash", emptySlots = "frosted" }
+Suite.LOOK_DEFAULTS = { tint = "clear", hover = "glow", press = "flash", emptySlots = "frosted", accent = "gold" }
 Suite.LOOK_PRESETS = {
     glass = { hover = "glow", press = "flash", emptySlots = "frosted" },
     soft = { hover = "halo", press = "ripple", emptySlots = "frosted" },
@@ -191,8 +196,8 @@ Suite.LOOK_PRESETS = {
 }
 Suite.LOOK_PRESET_NAMES = { "glass", "soft", "minimal" }
 Suite.LOOK_LABELS = {
-    tint = "Tint", hover = "Hover", press = "Press", emptySlots = "Empty slots",
-    clear = "Clear", smoked = "Smoked", class = "Class colour",
+    tint = "Tint", hover = "Hover", press = "Press", emptySlots = "Empty slots", accent = "Accent",
+    clear = "Clear", smoked = "Smoked", class = "Class colour", gold = "Gold", ice = "Ice",
     off = "Off", glow = "Glow", halo = "Halo", flash = "Flash", ripple = "Ripple",
     hidden = "Hidden", faint = "Faint", half = "Half", full = "Full", frosted = "Frosted",
     glass = "Glass", soft = "Soft", minimal = "Minimal", custom = "Custom",
@@ -225,6 +230,60 @@ function Suite.Look()
     return out
 end
 
+--------------------------------------------------------------------------------
+-- The body (#67, docs/SUITE-LOOK.md "The body"): the tint, the opaque backing
+-- and the wash of each tint, for Glass UI's skins (Theme) and every follower,
+-- so the tuning lives here only. The wash is a factor of the material's own
+-- STYLE.wash (#54: Pearl's 0.10, clean's 0.18), so on clean the factors give
+-- the 0.18 and 0.14 the merchant was judged with. Clear's backing is 0.35, the
+-- owner's pick on the merchant (#4) and readable over a bright sky on the
+-- tracker (QT.3); smoked stays dense for bright scenery.
+--------------------------------------------------------------------------------
+
+Suite.BODY = {
+    clear  = { tint = { 0.13, 0.16, 0.22, 0.24 }, wash = 1, backing = 0.35 },
+    smoked = { tint = { 0.05, 0.06, 0.08, 0.62 }, wash = 0.14 / 0.18, backing = 0.92 },
+    class  = { classShade = 0.6, wash = 1, backing = 0.35 },
+}
+Suite.BACKING = { 0.04, 0.05, 0.07 }
+
+local function copy(t)
+    if type(t) ~= "table" then return nil end
+    local out = {}
+    for i, v in ipairs(t) do out[i] = v end
+    return out
+end
+
+-- The body for a tint name, nil meaning the suite look's current one (nil
+-- before we are ready), nil for a name we don't know. Fresh all the way down.
+-- A follower passes its effective tint (its own when it overrides the key).
+function Suite.Body(tint)
+    if tint == nil then
+        local look = Suite.Look()
+        if not look then return nil end
+        tint = look.tint
+    end
+    local b = Suite.BODY[tint]
+    if not b then return nil end
+    local c = Suite.BACKING
+    return { tint = copy(b.tint), classShade = b.classShade, wash = b.wash,
+             backing = { c[1], c[2], c[3], b.backing } }
+end
+
+-- The accent's colours (#52), here only: followers map nothing themselves.
+Suite.ACCENTS = { gold = { 1, 0.82, 0 }, ice = { 0.65, 0.835, 0.905 } }
+
+-- { r, g, b } for an accent name, nil meaning the current one (nil before we
+-- are ready), nil for a name we don't know. Fresh.
+function Suite.Accent(name)
+    if name == nil then
+        local look = Suite.Look()
+        if not look then return nil end
+        name = look.accent
+    end
+    return copy(Suite.ACCENTS[name])
+end
+
 -- The preset the feedback keys match, or "custom".
 function Suite.LookPreset()
     local look = Suite.Look() or Suite.LOOK_DEFAULTS
@@ -238,6 +297,9 @@ end
 
 local function announceLook()
     local look = Suite.Look()
+    -- Our own skins wear the suite's tint (#67): repainted first, our own
+    -- textures only, so in combat too.
+    if GUI.Theme then API.Try("theme:look", GUI.Theme.Refresh) end
     if look then API.TriggerEvent(Suite.LOOK_EVENT, look) end
     changed()
 end
@@ -274,13 +336,14 @@ end
 -- /reload. The second value is true when the switch says otherwise.
 function Suite.LookLine(addon)
     local r = reports[addon]
-    if not (r and r.look) then return nil end
+    if not (r and (r.look or (r.own and r.own.backing))) then return nil end
     local own = {}
     for _, k in ipairs(Suite.LOOK_KEYS) do
-        if r.own and r.own[k] and r.look[k] then
+        if r.own and r.own[k] and r.look and r.look[k] then
             own[#own + 1] = Suite.LOOK_LABELS[k]:lower() .. " " .. (Suite.LOOK_LABELS[r.look[k]] or r.look[k])
         end
     end
+    if r.own and r.own.backing then own[#own + 1] = "backing" end
     local a = answers[addon]
     local follows = a ~= nil and a.preset ~= nil
     local text = follows and "suite look" or "its own look"
