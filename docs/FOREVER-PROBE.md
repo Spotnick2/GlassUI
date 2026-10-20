@@ -196,6 +196,15 @@ so Next alone can't pass them.
 
 These are saved as `SkinProbeDB.results["TM.<label>"]`, and `/fp skin timer` prints the same.
 
+Timed quests are too rare to wait for (the owner, 2026-10-20), so **`/fp steps skin timerfake`** runs
+the same checks on fake timers:
+- **How:** it swaps `C_QuestLog.GetQuestTimers` for an answer of its own (one 5-minute timer, then two),
+  lending a quest of the log its ID so a row's tooltip and click still work. Blizzard's own code
+  builds the box, the rows and the tracker's padding from that answer.
+- **What it covers:** TM.1, TM.2, TM.4 and TM.5, and the hover and click out of combat.
+- **What it doesn't:** the swap taints that path, so it says nothing on taint. TM.3 still needs a real
+  timed quest. It runs without the taint log, out of combat, and ends on a /reload.
+
 | # | Question | Result |
 |---|---|---|
 | TM.1 | A timer up: its dialog art faded, its title in the accent, on a pill of its own, the band below it, readable | not run yet |

@@ -24,6 +24,7 @@
 --   #55 the quest tracker                                      /fp steps skin tracker
 --   #71 the accent on the yellow titles                        /fp steps skin accent
 --   #73 the quest timers on a pill                             /fp steps skin timer
+--       on fake timers, for want of timed quests                /fp steps skin timerfake
 --
 -- Discovery for #56, Questie and RestedXP:                    /fp steps skin questing
 -- And Blizzard's own glass, the login ruleset card beside ours (#17): /fp steps skin card
@@ -36,6 +37,8 @@
 --
 -- The only writes to Blizzard objects are SetAlpha, always put back at once
 -- (`fade`) or by `border restore`, and our own frames parented to the map.
+-- And one swap: `timerfake` lends C_QuestLog.GetQuestTimers an answer of its
+-- own, put back when it ends, and its procedure ends on a /reload.
 -- Every client call that may be missing or throw goes through Probe:Try or a
 -- pcall, so one refusal can't stop the rest.
 
@@ -2054,6 +2057,106 @@ Probe:Steps("timer", {
 
 Probe:Command("timer", function() timerState("now") end, "#73: the quest timers, their pill and the band")
 
+-- The same on fake timers, for want of timed quests (the owner, 2026-10-20:
+-- "there is just not enough timer quests"). C_QuestLog.GetQuestTimers is
+-- swapped for ours, lending a quest of the log its ID (so a row's tooltip and
+-- click still work), until the procedure ends or a /reload. Everything else is
+-- Blizzard's own path: QuestTimerMixin builds the rows and pads the tracker
+-- from that answer, as for a real one. The swap taints that path, so this run
+-- says nothing on taint (TM.3 needs a real timed quest): no taint log, out of
+-- combat only, and a /reload at the end.
+local fake = { count = 0, ends = 0, quests = {} }
+
+local function fakeTimers()
+    local out, left = {}, math.max(0, math.floor(fake.ends - GetTime()))
+    for i = 1, fake.count do
+        out[i] = { questID = fake.quests[i] or fake.quests[1], questTimer = left + (i - 1) * 60 }
+    end
+    return out
+end
+
+-- Blizzard picks the answer up at once: the timers redrawn and the tracker
+-- laid out again (its Header moves on its next Update).
+local function nudge()
+    local q, t = frameByName("QuestTimerFrame"), frameByName("ObjectiveTrackerFrame")
+    call(q, "UpdateIfNeeded")
+    call(t, "MarkDirty")
+end
+
+local function fakeOn(n)
+    local log = rawget(_G, "C_QuestLog")
+    if type(log) ~= "table" or type(log.GetQuestTimers) ~= "function" then return false, "no C_QuestLog.GetQuestTimers" end
+    if not fake.real then
+        fake.quests = {}
+        local ok, shown = pcall(log.GetNumQuestLogEntries)
+        for i = 1, (ok and plain(shown)) or 0 do
+            local okI, info = pcall(log.GetInfo, i)
+            local id = okI and type(info) == "table" and plain(info.questID)
+            if id and type(id) == "number" and id > 0 and not plain(info.isHeader) then fake.quests[#fake.quests + 1] = id end
+            if #fake.quests >= 2 then break end
+        end
+        if #fake.quests == 0 then return false, "no quest in the log to lend its ID: accept one first" end
+        fake.real = log.GetQuestTimers
+        fake.ends = GetTime() + 300
+        log.GetQuestTimers = fakeTimers
+    end
+    fake.count = n
+    nudge()
+    say("TM fake: " .. n .. " timer(s) on quest " .. tostring(fake.quests[1]))
+    return true, n .. " fake timer(s)"
+end
+
+local function fakeOff()
+    if fake.real then
+        C_QuestLog.GetQuestTimers = fake.real
+        fake.real = nil
+    end
+    fake.count = 0
+    nudge()
+    return true
+end
+
+Probe:Steps("timerfake", {
+    title = "Glass UI: the quest timers on a pill, on fake timers (#73)",
+    { text = "Swaps in one fake 5-minute timer, on a quest of your log. Have a quest in the log, the tracker "
+          .. "expanded, the tracker skin on, and stay out of combat. A /reload at the end puts Blizzard's back.",
+      button = "Fake timer", run = function() return fakeOn(1) end },
+    { text = "The 'Quest Timers' box shows above the tracker, the band under it.",
+      wait = timerOn("fake waiting"), timeout = 60, check = timerOn("fake shown"), screenshot = "timer fake, shown" },
+    { text = "Does the timer sit on a glass pill of its own, clear of the 'All Objectives' band, title and "
+          .. "countdown easy to read? Say what you'd change in the Note.", ask = true },
+    { text = "A second timer: the box and its pill grow, the band moves down.", button = "Two timers",
+      run = function() return fakeOn(2) end },
+    { text = "Two rows, the band below them.", wait = timerOn("fake two waiting"), timeout = 60,
+      check = timerOn("fake two"), screenshot = "timer fake, two" },
+    { text = "Collapse the whole tracker: click the '-' beside 'All Objectives'.",
+      wait = function() return timerState("waiting").collapsed, "not collapsed yet" end, timeout = 300,
+      check = timerOn("fake collapsed"), screenshot = "timer fake, collapsed" },
+    { text = "Expand the tracker.",
+      wait = function() return not timerState("waiting").collapsed, "still collapsed" end, timeout = 300,
+      check = timerOn("fake expanded") },
+    { text = "Hover a countdown: does its tooltip show the quest's title? Then click it: does the quest log open "
+          .. "on that quest? Close the log.", ask = true },
+    { text = "Switches the tracker skin off, live: Blizzard's dialog box back, in gold.", button = "Skin off",
+      screenshot = "timer fake, skin off",
+      run = function() return trackerSwitch(false), timerState("fake off").status end,
+      check = function()
+          local rec = timerState("fake off check")
+          local ok = rec.status == "off" and (rec.border or 0) > 0.99 and rec.pieces > 0.99 and not rec.pill
+              and near3(rec.title, GOLD)
+          return ok, ok and "Blizzard's own" or "status " .. rec.status .. ", border " .. num(rec.border)
+              .. ", header art " .. num(rec.pieces) .. ", pill " .. tostring(rec.pill)
+      end },
+    { text = "Switches it on again.", button = "Skin on", screenshot = "timer fake, on again",
+      run = function() return trackerSwitch(true), timerState("fake on again").status end,
+      check = timerOn("fake on again") },
+    { text = "Ends the fake timers: the box goes and the band goes back to the top.", button = "End timers",
+      run = function() return fakeOff() end },
+    { text = "The box gone, the band at the top.", wait = timerOn("fake gone waiting", true), timeout = 60,
+      check = timerOn("fake gone", true), screenshot = "timer fake, gone" },
+    { text = "Type /reload: Blizzard's code runs clean again, and the results are saved.", reload = true },
+})
+
 --------------------------------------------------------------------------------
 -- Blizzard's own glass (#17): the ruleset screen's card at login
 -- (Blizzard_GlueXML\Mainline\SuperDistrict.xml:8) beside our panels
@@ -2721,4 +2824,4 @@ NS._test = { Probe = Probe, state = state, tree = tree, fade = fade, slashOwners
              trackerState = trackerState, trackerOn = trackerOn, questingEnable = questingEnable,
              questingRestore = questingRestore, holdOn = holdOn, holdCheck = holdCheck, holdOff = holdOff,
              coexist = coexist, arrowState = arrowState, seen = seen, lookFor = lookFor, accentState = accentState,
-             timerState = timerState, timerOn = timerOn }
+             timerState = timerState, timerOn = timerOn, fakeOn = fakeOn, fakeOff = fakeOff, fakeTimers = fakeTimers }
