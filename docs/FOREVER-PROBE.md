@@ -133,8 +133,9 @@ Its Restore step puts them back, and so does `/fp skin questing restore`. Instal
 Questie 12.1.0 (`Questie_Camelot.toc`) and RestedXP v4.11.26, the versions the plan read.
 
 - **First seen** (`QS.firstSeen`): where each of `Questie_BaseFrame`, `RXPFrame` and `RXPG_ARROW`
-  first existed. SkinProbe loads after both addons, so "SkinProbe load" means at their own load or
-  earlier.
+  first existed, as the run's step read it. SkinProbe loads after both addons, so "SkinProbe load"
+  means at their own load or earlier. The watcher runs every session into `QS.seenSession`, so the
+  last reload, with the addons off again, keeps the run's result.
 - **The hold** (`QS.hold.<refresh>`): the probe holds every texture of the three at 0, its own
   touch. After each of their refreshes it reads which came back and which textures are new, then
   holds them all at 0 again, the new ones included, so each refresh reports only its own changes.

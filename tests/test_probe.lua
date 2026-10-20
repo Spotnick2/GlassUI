@@ -623,7 +623,7 @@ T.lookFor("PLAYER_LOGIN")
 eq(T.seen.Questie_BaseFrame, "PLAYER_LOGIN", "a frame is noted where it was first seen")
 T.lookFor("later")
 eq(T.seen.Questie_BaseFrame, "PLAYER_LOGIN", "and not overwritten after")
-eq(SkinProbeDB.results["QS.firstSeen"].Questie_BaseFrame, "PLAYER_LOGIN", "kept in the results")
+eq(SkinProbeDB.results["QS.seenSession"].Questie_BaseFrame, "PLAYER_LOGIN", "kept as this session's sightings")
 local rxp = CreateFrame("Frame", "RXPFrame", UIParent)
 local pinnedTime = GetTime
 rawset(_G, "GetTime", function() return WoW.now end)
@@ -635,6 +635,20 @@ WoW.tick()
 rawset(_G, "GetTime", pinnedTime)
 eq(T.seen.RXPFrame, "PLAYER_ENTERING_WORLD", "one there at PLAYER_ENTERING_WORLD")
 eq(T.seen.RXPG_ARROW, "PEW+3.5s", "one made later, noted with its delay")
+-- The run's result is the procedure's: a later session with the addons off
+-- again (Restore, then the last /reload) never overwrites it (Codex, PR #65).
+local firstStep
+for _, st in ipairs(FP.procedures["SkinProbe/questing"].steps) do
+    if st.text:find("first appeared", 1, true) then firstStep = st end
+end
+eq(firstStep.run(), 3, "the run reads all three")
+eq(SkinProbeDB.results["QS.firstSeen"].RXPG_ARROW, "PEW+3.5s", "and keeps them as the run's result")
+for k in pairs(T.seen) do T.seen[k] = nil end      -- the next session: nothing loaded
+WoW.fire("ADDON_LOADED", "SkinProbe")
+WoW.fire("PLAYER_LOGIN")
+T.lookFor("PLAYER_ENTERING_WORLD")
+eq(SkinProbeDB.results["QS.firstSeen"].RXPG_ARROW, "PEW+3.5s", "a session without them leaves the run's result")
+eq(SkinProbeDB.results["QS.firstSeen"].Questie_BaseFrame, "PLAYER_LOGIN", "all of it")
 -- Their enable states for this character: saved, switched on, put back.
 WoW.installed.Questie, WoW.installed.QuestieDB, WoW.installed.RXPGuides = 0, 0, 2
 SkinProbeDB.questingWas = nil

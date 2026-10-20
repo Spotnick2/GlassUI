@@ -2102,9 +2102,13 @@ end, "#49: meterbars on|off: the glass bars preview (off puts every touched bar 
 --------------------------------------------------------------------------------
 -- Discovery: Questie's tracker and RestedXP's guide window and arrow (#56,
 -- docs/QUEST-TRACKER.md part 3, "Discovery first"). Measured, never shipped:
---   QS.firstSeen  when each frame first exists. SkinProbe loads after both
---                 (alphabetical), so "SkinProbe load" means at their own load
---                 or earlier; the engine attaches at their ADDON_LOADED.
+--   QS.firstSeen  when each frame first exists, as the procedure's run read
+--                 it. SkinProbe loads after both (alphabetical), so "SkinProbe
+--                 load" means at their own load or earlier; the engine
+--                 attaches at their ADDON_LOADED. The watcher runs every
+--                 session and keeps its own QS.seenSession, so a later session
+--                 with the addons off again never overwrites the run's result
+--                 (Codex, PR #65).
 --   QS.hold.<x>   the probe holds every texture of the three at alpha 0 (its
 --                 own touch, all put back by Unfade), then after each of their
 --                 refreshes reads which came back and which regions are new.
@@ -2130,12 +2134,17 @@ local function seenCount()
     for _ in pairs(seen) do n = n + 1 end
     return n
 end
+local function seenCopy()
+    local out = {}
+    for k, v in pairs(seen) do out[k] = v end
+    return out
+end
 local function lookFor(where)
     local new = false
     for _, name in ipairs(TARGETS.questing) do
         if not seen[name] and frameByName(name) then seen[name] = where; new = true end
     end
-    if new then record("QS.firstSeen", seen) end
+    if new then record("QS.seenSession", seenCopy()) end
     return new
 end
 lookFor("SkinProbe load")
@@ -2144,7 +2153,8 @@ Probe:RegisterEvents(seenWatch, { "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERI
 seenWatch:SetScript("OnEvent", function(self, event, name)
     if event == "ADDON_LOADED" then
         lookFor("ADDON_LOADED " .. tostring(name))
-        if name == ADDON then record("QS.firstSeen", seen) end
+        -- Seen before the saved table loaded: kept now, this session's only.
+        if name == ADDON and next(seen) then record("QS.seenSession", seenCopy()) end
     elseif event == "PLAYER_LOGIN" then
         lookFor("PLAYER_LOGIN")
     else
@@ -2354,7 +2364,11 @@ Probe:Steps("questing", {
     { text = "Reload. If Questie or RestedXP open a welcome or setup window, close it or pick the defaults.",
       reload = true },
     { text = "Reads when each frame first appeared, and checks all three loaded.", auto = true,
-      run = function() record("QS.firstSeen", seen); return lookFor("now") or true end,
+      run = function()
+          lookFor("now")
+          record("QS.firstSeen", seenCopy())
+          return seenCount()
+      end,
       check = allLoaded },
     { text = "Track a quest so Questie's tracker shows (accept one if your log is empty).",
       wait = function() return shownName("Questie_BaseFrame"), "Questie's tracker isn't shown" end, timeout = 600 },
@@ -2409,8 +2423,7 @@ Probe:Command("questing", function(args)
     if args:match("restore") then questingRestore()
     elseif args:match("unfade") then holdOff()
     else
-        record("QS.firstSeen", seen)
-        say("QS first seen: " .. (next(seen) and "" or "nothing yet"))
+        say("QS first seen this session: " .. (next(seen) and "" or "nothing yet"))
         for name, where in pairs(seen) do say("  " .. name .. ": " .. where) end
         coexist()
         arrowState("now")
