@@ -18,8 +18,10 @@
 --            their alpha with setToFinalAlpha, which a fade can't hold. Their
 --            atlas is set once, in XML (Blizzard_ObjectiveTrackerModule.xml:22),
 --            so Restore can give it back.
---   tinted   the minimize and filter buttons, cool instead of gold and red. A
---            tint survives Blizzard's SetAtlas on collapse (GQT pass B, 70374).
+--   tinted   the minimize and filter buttons, in the suite's accent (#52,
+--            Suite.Accent: gold by default, or ice), recoloured live when it
+--            changes. A tint survives Blizzard's SetAtlas on collapse (GQT
+--            pass B, 70374).
 --
 -- Text keeps Blizzard's colours and fonts (difficulty colours carry
 -- information); the POI buttons and auto-quest popups stay stock.
@@ -47,8 +49,11 @@ local MODULES = { "ScenarioObjectiveTracker", "UIWidgetObjectiveTracker", "Campa
     "MonthlyActivitiesObjectiveTracker", "InitiativeTasksObjectiveTracker", "ProfessionsRecipeTracker",
     "BonusObjectiveTracker", "WorldQuestObjectiveTracker" }
 
--- GQT's cool tint, until the suite's accent colour exists (#52).
-local TINT = { 0.75, 0.9, 1 }
+-- The accent before Glass UI's suite is ready (never, once a skin runs: the
+-- engine starts at PLAYER_LOGIN): Blizzard's gold, the accent's default.
+local FALLBACK = { 1, 0.82, 0 }
+
+local function accent() return GUI.Suite.Accent() or FALLBACK end
 
 -- From the NineSlice, whose left runs 30 px past the tracker for the POI
 -- buttons and whose right runs 5 px past it. The right edge is the NineSlice's,
@@ -117,9 +122,24 @@ end
 -- A stock button's art in our colour, its red or yellow highlight too.
 local function tintButton(kit, b)
     if not tbl(b) then return end
+    local c = accent()
     for _, getter in ipairs({ "GetNormalTexture", "GetPushedTexture", "GetHighlightTexture" }) do
         local tex = call(b, getter)
-        if tex then kit:Tint(tex, TINT[1], TINT[2], TINT[3]) end
+        if tex then kit:Tint(tex, c[1], c[2], c[3]) end
+    end
+end
+
+-- Every button in the accent again (the kit keeps Blizzard's colour from the
+-- first tint, so Restore gives that back however many times this ran).
+local function recolour(kit, t)
+    local h = tbl(t.Header)
+    if h then
+        tintButton(kit, h.MinimizeButton)
+        tintButton(kit, h.FilterButton)
+    end
+    for _, m in ipairs(modules(t)) do
+        local mh = tbl(m.Header)
+        if mh then tintButton(kit, mh.MinimizeButton) end
     end
 end
 
@@ -216,6 +236,11 @@ GUI.Engine.Register({
                 place(t)
             end)
         end)
+        -- The accent changed on the "Suite look" subpage (#52): live, in combat
+        -- too (vertex colours on the tracker's own unprotected textures).
+        EventRegistry:RegisterCallback(GUI.Suite.LOOK_EVENT, function()
+            if GUI.Engine.Active("tracker") then GUI.Engine.Run(kit.skin, "accent", recolour, kit, t) end
+        end, {})
         -- Leaving Edit Mode with nothing tracked lays out nothing either.
         local em = rawget(_G, "EditModeManagerFrame")
         if tbl(em) and type(em.HookScript) == "function" then
@@ -237,4 +262,4 @@ GUI.Engine.Register({
 
 GUI.QuestTracker = QT
 QT._test = { panels = panels, bands = bands, glass = glass, bandGlass = bandGlass, offsets = { LEFT = LEFT, RIGHT = RIGHT, BOTTOM = BOTTOM,
-             HEADER_RIGHT = HEADER_RIGHT, HEADER_BOTTOM = HEADER_BOTTOM, GAP = GAP }, tint = TINT }
+             HEADER_RIGHT = HEADER_RIGHT, HEADER_BOTTOM = HEADER_BOTTOM, GAP = GAP }, accent = accent }

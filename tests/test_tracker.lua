@@ -26,7 +26,8 @@ eq(t.Header.Background:GetAlpha(), 0, "the container header's gold bar faded")
 check(t.Header.Background:GetAtlas() ~= nil, "a fade keeps the art (alpha only)")
 local mn = t.Header.MinimizeButton:GetNormalTexture()
 check(mn:IsDesaturated(), "the container's minimize desaturated")
-near(select(3, mn:GetVertexColor()), QT._test.tint[3], "and tinted")
+near(select(3, mn:GetVertexColor()), 0, "and tinted in the accent, gold by default (#52)")
+near(select(2, mn:GetVertexColor()), 0.82, "Blizzard's gold")
 check(t.Header.MinimizeButton:GetHighlightTexture():IsDesaturated(), "its red highlight too")
 check(t.Header.FilterButton:GetNormalTexture():IsDesaturated(), "the filter button too")
 
@@ -168,6 +169,36 @@ GUI._test.slash("skin tracker off")
 near(t.NineSlice:GetAlpha(), 0.3, "a second off gives back the alpha Blizzard set while off")
 eq(m.Header.Background:GetAtlas(), "UI-QuestTracker-Secondary-Objective-Header", "and the header's atlas, not the blank")
 GUI._test.slash("skin tracker on")
+
+-- The accent (#52): live through the suite look, in combat too; not while
+-- off; not after a handover; Restore gives Blizzard's colour back after any
+-- number of recolours, with the current atlas kept.
+local qm = QuestObjectiveTracker.Header.MinimizeButton:GetNormalTexture()
+GUI.Suite.SetLook("accent", "ice")
+near(select(3, mn:GetVertexColor()), 0.905, "the container's button recoloured to ice at once")
+near(select(3, qm:GetVertexColor()), 0.905, "a section's too")
+check(mn:IsDesaturated(), "still desaturated")
+WoW.combat = true
+GUI.Suite.SetLook("accent", "gold")
+WoW.combat = false
+near(select(3, mn:GetVertexColor()), 0, "in combat: recoloured at once, nothing deferred")
+eq(#E._test.waiting(), 0, "nothing held for combat's end")
+GUI._test.slash("skin tracker off")
+GUI.Suite.SetLook("accent", "ice")
+eq(select(1, mn:GetVertexColor()), 1, "off: a change of accent touches nothing")
+check(not mn:IsDesaturated(), "Blizzard's own again")
+GUI._test.slash("skin tracker on")
+near(select(3, mn:GetVertexColor()), 0.905, "on again: the current accent")
+GUI.Suite.SetLook("accent", "gold")
+GUI.Suite.SetLook("accent", "ice")
+WoW.collapseModule("QuestObjectiveTracker", true)
+GUI._test.slash("skin tracker off")
+eq(select(1, qm:GetVertexColor()), 1, "after several recolours, off gives Blizzard's colour back")
+check(not qm:IsDesaturated(), "and its desaturation")
+eq(qm:GetAtlas(), "ui-questtrackerbutton-secondary-expand", "the current atlas stays")
+WoW.collapseModule("QuestObjectiveTracker", false)
+GUI._test.slash("skin tracker on")
+GUI.Suite.SetLook("accent", "gold")
 
 -- A module without a header (another build): styled, no collapse hook asked for.
 GUI = loadAddon({ before = function() rawset(QuestObjectiveTracker, "Header", nil) end })

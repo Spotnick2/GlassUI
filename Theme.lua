@@ -1,5 +1,7 @@
 -- Theme.lua: the looks of the glass, repainted live (Glass Quest Tracker's and
--- Glass MiniMap's Theme.lua).
+-- Glass MiniMap's Theme.lua). The tint is the suite look's (#67): one choice
+-- for Glass UI's skins and every follower, on the "Suite look" subpage, and
+-- the numbers are Suite.BODY's, which followers read through Suite.Body.
 --
 -- clear   GlassMail's clear body: the material's cool tint, a faint wash
 -- smoked  AltStable's darker body (its numbers, as GlassPanel and GlassMail use them)
@@ -19,12 +21,8 @@
 --
 -- Only body regions are repainted (tint, wash, backing); rims are the
 -- material's. The wash is a gradient, which ignores SetAlpha on this client
--- (SkinProbe W1.6, 70374): it is painted with LibGlass r7's SetWash.
---
--- A body's wash is a factor of the material's own (STYLE.wash), never an
--- absolute: the suite's Pearl lowers it to 0.10 (#54), and an absolute would
--- paint over that on every panel. On the clean material (0.18) the factors
--- give the 0.18 and 0.14 the merchant was judged with.
+-- (SkinProbe W1.6, 70374): it is painted with LibGlass r7's SetWash, as a
+-- factor of the material's own (Suite.BODY).
 
 GlassUI = GlassUI or {}
 local GUI = GlassUI
@@ -34,29 +32,23 @@ GUI.Theme = Theme
 
 Theme.NAMES = { "clear", "smoked", "class" }
 Theme.LABELS = { clear = "Clear glass", smoked = "Smoked glass", class = "Class colour glass" }
-Theme.PRESETS = {
-    clear  = { tint = { 0.13, 0.16, 0.22, 0.24 }, wash = 1, backing = 0.35 },
-    smoked = { tint = { 0.05, 0.06, 0.08, 0.62 }, wash = 0.14 / 0.18, backing = 0.92 },
-    class  = { classShade = 0.6, wash = 1, backing = 0.35 },
-}
-Theme.BACKING = { 0.04, 0.05, 0.07 }
 
 local surfaces = {}   -- { g = LibGlass regions, backing = our texture }
 Theme.pending = false
 
-function Theme.IsValid(name) return Theme.PRESETS[name] ~= nil end
+function Theme.IsValid(name) return GUI.Suite.LookValid("tint", name) end
 
 function Theme.Name()
-    local name = GUI.db and GUI.db.theme
-    return Theme.PRESETS[name] and name or "clear"
+    local look = GUI.Suite.Look()
+    return look and look.tint or GUI.Suite.LOOK_DEFAULTS.tint
 end
 
 -- The tint for this theme as { r, g, b[, a] }, or nil for the surface's
 -- built tint. Second return: false while the class colour is wanted but
 -- unreadable.
 local function tintFor(name)
-    local p = Theme.PRESETS[name]
-    if name == "class" then
+    local p = GUI.Suite.Body(name)
+    if p.classShade then
         local r, g, b = API.ClassColor()
         if not r then return nil, false end
         return { r * p.classShade, g * p.classShade, b * p.classShade }, true
@@ -65,7 +57,7 @@ local function tintFor(name)
 end
 
 local function paint(s, name, tint)
-    local p = Theme.PRESETS[name]
+    local p = GUI.Suite.Body(name)
     local Glass = GUI.Glass
     if tint then
         Glass.SetSurfaceTint(s.g, tint[1], tint[2], tint[3], tint[4])
@@ -74,8 +66,8 @@ local function paint(s, name, tint)
     end
     Glass.SetWash(s.g, Glass.STYLE.wash * p.wash)
     if s.backing then
-        local c = Theme.BACKING
-        s.backing:SetColorTexture(c[1], c[2], c[3], p.backing)
+        local c = p.backing
+        s.backing:SetColorTexture(c[1], c[2], c[3], c[4])
     end
 end
 
@@ -97,11 +89,11 @@ function Theme.Refresh()
     return known
 end
 
+-- The suite look's tint: saved there, announced to the followers, and our
+-- skins repainted (Suite's announce calls Refresh).
 function Theme.Set(name)
     if not Theme.IsValid(name) then return false end
-    GUI.db.theme = name
-    Theme.Refresh()
-    return true
+    return GUI.Suite.SetLook("tint", name)
 end
 
 -- PLAYER_ENTERING_WORLD: the class colour can be read by now.

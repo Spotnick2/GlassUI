@@ -12,15 +12,32 @@ local say = API.Print
 -- (GlassMail's rule).
 --   enabled  the master switch (false: every skin off)
 --   skins    { [key] = false } for each skin switched off (Engine.SetEnabled)
---   theme    Theme.NAMES
---   suite    { theme = Suite.THEMES key, follow = { [addon] = true } }, or nil
---            when nobody follows (Suite.SetFollow keeps it sparse)
-local DEFAULTS = { enabled = true, theme = "clear" }
+--   suite    { theme = Suite.THEMES key, follow = { [addon] = true },
+--              look = { [key] = value } }, or nil when nothing differs
+--              (Suite keeps it sparse). The skins' tint is look.tint (#67).
+local DEFAULTS = { enabled = true }
 GUI.DEFAULTS = DEFAULTS
 
 local function ensureDefaults()
     if type(GlassUIDB) ~= "table" then GlassUIDB = {} end
     local db = setmetatable(GlassUIDB, nil)
+    -- #67: the skins' tint was GlassUIDB.theme; it is the suite look's now. A
+    -- valid one that isn't the default moves there once, unless a look tint is
+    -- saved already (that one wins); the rest of `suite` is kept.
+    local legacy = rawget(db, "theme")
+    if legacy ~= nil then
+        db.theme = nil
+        local S = GUI.Suite
+        if S.LookValid("tint", legacy) and legacy ~= S.LOOK_DEFAULTS.tint then
+            local suite = type(rawget(db, "suite")) == "table" and db.suite or {}
+            local look = type(suite.look) == "table" and suite.look or {}
+            if look.tint == nil then
+                look.tint = legacy
+                suite.look = look
+                db.suite = suite
+            end
+        end
+    end
     for k, v in pairs(DEFAULTS) do
         if db[k] == v then db[k] = nil end
     end
@@ -57,7 +74,7 @@ local function helpLines()
         "/glassui skins - every skin and whether it is on",
         "/glassui skin <name> on|off - one skin",
         "/glassui on|off - every skin (the master switch)",
-        "/glassui theme clear|smoked|class - the glass",
+        "/glassui theme clear|smoked|class - the glass (the suite look's tint)",
         "/glassui suite - the Glass addons and whether each follows the suite theme",
         "/glassui suite follow <addon> on|off - an addon follows Glass UI (after /reload)",
         "/glassui look - the suite look (tint and button feedback); look tint smoked, look preset soft",
@@ -111,8 +128,8 @@ local function suite(a, b, c)
     end
 end
 
--- /glassui look [tint|hover|press|empty|preset <value>]
-local LOOK_ALIAS = { tint = "tint", hover = "hover", press = "press", empty = "emptySlots" }
+-- /glassui look [tint|accent|hover|press|empty|preset <value>]
+local LOOK_ALIAS = { tint = "tint", accent = "accent", hover = "hover", press = "press", empty = "emptySlots" }
 local function look(a, b)
     local Suite = GUI.Suite
     if a == "preset" and Suite.SetLookPreset(b) then
@@ -125,7 +142,7 @@ local function look(a, b)
         return
     end
     if a ~= "" then
-        say("/glassui look tint|hover|press|empty|preset <value>")
+        say("/glassui look tint|accent|hover|press|empty|preset <value>")
     end
     local l = Suite.Look() or Suite.LOOK_DEFAULTS
     local parts = {}
@@ -157,9 +174,9 @@ local function slash(msg)
     elseif cmd == "on" or cmd == "off" then
         reloadNote(Engine.SetMaster(cmd == "on"))
         say("every skin " .. cmd)
+    -- The suite look's tint, under its old name (#67).
     elseif cmd == "theme" and GUI.Theme.IsValid(a) then
-        GUI.Theme.Set(a)
-        say("theme: " .. GUI.Theme.LABELS[a])
+        look("tint", a)
     elseif cmd == "theme" then
         say("/glassui theme " .. table.concat(GUI.Theme.NAMES, "|") .. " (now " .. GUI.Theme.Name() .. ")")
     elseif cmd == "options" then

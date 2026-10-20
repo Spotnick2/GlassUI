@@ -186,7 +186,7 @@ T.gradientOff()
 eq(T.themeTry("clear", 0.6), false, "without Glass UI, nothing to compare")
 local current = "class"
 local presets = { clear = { backing = 0.85 }, smoked = { backing = 0.92 }, class = { backing = 0.85 } }
-rawset(_G, "GlassUI", { Theme = { PRESETS = presets, Name = function() return current end,
+rawset(_G, "GlassUI", { Suite = { BODY = presets }, Theme = { Name = function() return current end,
                                   Set = function(n) current = n end } })
 local name, used = T.themeTry("clear", 0.6)
 check(name == "clear" and used == 0.6 and current == "clear", "a trial: clear at a lighter backing")

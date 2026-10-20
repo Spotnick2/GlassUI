@@ -113,15 +113,17 @@ local S = GUI.Theme._test.surfaces
 check(#S >= 3, "the window's and tabs' surfaces are registered with the theme (" .. #S .. ")")
 GUI._test.slash("theme smoked")
 local c = S[1].g.tint._color
-local want = GUI.Theme.PRESETS.smoked.tint
+local B = GUI.Suite.BODY
+local want = B.smoked.tint
 check(c and c[1] == want[1] and c[4] == want[4], "smoked repaints the tint")
-eq(S[1].backing._color[4], GUI.Theme.PRESETS.smoked.backing, "and the backing's opacity")
+eq(S[1].backing._color[4], B.smoked.backing, "and the backing's opacity")
 -- The looks the owner picked on the merchant (#4, 70425): clear and class light,
 -- smoked dense, so the two glass looks differ.
-eq(GUI.Theme.PRESETS.clear.backing, 0.35, "clear's backing is light (0.35)")
-eq(GUI.Theme.PRESETS.class.backing, GUI.Theme.PRESETS.clear.backing, "class is clear's body, tinted")
-check(GUI.Theme.PRESETS.smoked.backing - GUI.Theme.PRESETS.clear.backing >= 0.4, "smoked stays much denser")
-eq(GlassUIDB.theme, "smoked", "the theme is saved")
+eq(B.clear.backing, 0.35, "clear's backing is light (0.35)")
+eq(B.class.backing, B.clear.backing, "class is clear's body, tinted")
+check(B.smoked.backing - B.clear.backing >= 0.4, "smoked stays much denser")
+eq(GlassUIDB.suite.look.tint, "smoked", "the tint is saved as the suite look's (#67)")
+eq(rawget(GlassUIDB, "theme"), nil, "not as the old theme")
 GUI._test.slash("theme clear")
 eq(S[1].backing._color[4], 0.35, "clear repaints the backing light")
 
