@@ -1122,6 +1122,12 @@ check(not okD and whyD:find("1 blocked", 1, true), "a blocked action fails")
 SkinProbeDB.suiteBlocked = 0
 okD, whyD = T.gdOn("t", { combat = true })()
 check(not okD and whyD:find("combat false", 1, true), "combat wanted, not in combat: fails")
+-- Minimized: no tab shown, none to mirror; outside minimized, no tab fails.
+gtab:Hide()
+check(T.gdOn("t", { minimized = true })(), "minimized: no tab shown passes")
+okD, whyD = T.gdOn("t")()
+check(not okD and whyD:find("tabs mirrored 0 of 0", 1, true), "no tab shown, not minimized: fails")
+gtab:Show()
 gcf:Hide()
 okD, whyD = T.gdOn("t")()
 check(not okD and whyD:find("not shown", 1, true), "the window hidden fails")

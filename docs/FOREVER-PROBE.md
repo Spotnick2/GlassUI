@@ -53,11 +53,11 @@ its own checked state, the tenants' panels applied, the shell, and blocked actio
 
 | # | Question | Result |
 |---|---|---|
-| GD.1 | The first opening of the session in combat; the chat mode; the look against the mockup | not run yet |
-| GD.2 | The roster: a sort, a member's details, a note or a rank edited: nothing blocked | not run yet |
-| GD.3 | The other modes, minimized; a Shift-click on the chat tab: the selection mirrored | not run yet |
-| GD.4 | With GuildSpy: its tabs and panel handed over and applied | not run yet |
-| GD.5 | Off (tenants told), a tab changed, on | not run yet |
+| GD.1 | The first opening of the session in combat; the chat mode; the look against the mockup | **Run 1 (70450, 2026-10-20): passes.** The first opening of the session in combat, then the chat mode: the shell faded, the panes with their sections, the tabs mirrored, nothing blocked. The owner: yes, "all but the minimize/maximize button which is yellow on the mockup, but we can follow blizzard". |
+| GD.2 | The roster: a sort, a member's details, a note or a rank edited: nothing blocked | **Run 1: passes.** A sort, a member's details, a note or rank: nothing blocked (taint log on; owner: no message). |
+| GD.3 | The other modes, minimized; a Shift-click on the chat tab: the selection mirrored | **Run 1: passes, one procedure FAIL.** Minimized, Blizzard hides every side tab, and the check wanted at least one ("tabs mirrored 0 of 0"); rev 2 allows none when minimized. The other modes and the Shift-click pass. |
+| GD.4 | With GuildSpy: its tabs and panel handed over and applied | **Run 1: passes** for the tabs and panel as GuildSpy shows them today (not handed over yet: its side waits for the owner's go-ahead). Owner: yes. |
+| GD.5 | Off (tenants told), a tab changed, on | **Run 1: passes.** Off: Blizzard's look, tenants told; on again: as before. |
 
 ### The game menu (#90, docs/GAME-MENU.md)
 
