@@ -37,6 +37,17 @@
 --           1 px edge, no glass (#84).
 --   Adopt   a frame of ours outside our panels, hidden and shown with them.
 --
+-- A window's pieces (#88, from the merchant's #86, docs/BAGS.md section 1):
+-- each writes into the caller's own state table `h`, so a skin keeps one
+-- table per window.
+--   Header       a smoky gradient from the window's top to a boundary,
+--                joined to the backing at its RGBA; PlaceHeader re-anchors.
+--   CloseButton  Blizzard's red close art faded (CloseFades), a glass disc
+--                and an accent X of ours, feedback on our X only.
+--   PortraitDisc the disc behind a portrait's round mask.
+--   FlatShell    PortraitFrameFlatTemplate's NineSlice and Bg faded.
+-- Tracked handles are repainted on Theme.Refresh, gated by their skin.
+--
 -- Widget kinds, each written when the first skin needed it: Shell
 -- (ButtonFrameTemplate / PortraitFrameTemplate), Inset (InsetFrameTemplate),
 -- Tab (PanelTabButtonTemplate).
@@ -435,4 +446,180 @@ function K:Tab(tab)
     for _, key in ipairs(Kit.TAB_ART) do self:Fade(self:Child(tab, key)) end
 end
 
-Kit._test = { faded = faded }
+-- PortraitFrameFlatTemplate (SharedUIPanelTemplates.xml:566-674): the
+-- NineSlice and the flat background (a frame of four textures Blizzard
+-- recolours, never fades). Nothing else to miss on this template.
+function K:FlatShell(frame)
+    self:Fade(self:Child(frame, "NineSlice"))
+    self:Fade(self:Child(frame, "Bg"))
+end
+
+--------------------------------------------------------------------------------
+-- A window's pieces (#86, #88)
+--------------------------------------------------------------------------------
+
+Kit.HEADER_TOP = 0.45
+Kit.CLOSE_X, Kit.CLOSE_REST = { 2, 12 }, 0.85
+Kit.CLOSE_ART = { "GetNormalTexture", "GetPushedTexture", "GetDisabledTexture", "GetHighlightTexture" }
+
+local tracked = {}   -- { key =, h = } per window, repainted on Theme.Refresh
+
+local function accent() return GUI.Suite.Accent() or { 1, 0.82, 0 } end
+
+local function track(kit, h)
+    if h.tracked then return end
+    h.tracked = true
+    tracked[#tracked + 1] = { key = kit.key, h = h }
+end
+
+-- The header (#86): a texture of ours on the backing's layer (BACKGROUND -7,
+-- under the tint and wash), clipped by the window glass's mask, from the
+-- window's top down to `point` of `boundary` plus `y`, where the backing
+-- then starts. h.headerOn (default on) is the probe's switch.
+function K:Header(win, wg, backing, boundary, point, y, h)
+    h.win, h.backing, h.boundary, h.boundaryPoint, h.boundaryY = win, backing, boundary, point, y or 0
+    if h.headerOn == nil then h.headerOn = true end
+    if backing and boundary then
+        local t = win:CreateTexture(nil, "BACKGROUND", nil, -7)
+        t:SetPoint("TOPLEFT", win, "TOPLEFT", 0, 0)
+        t:SetPoint("RIGHT", win, "RIGHT", 0, 0)
+        t:SetPoint("BOTTOM", boundary, point, 0, h.boundaryY)
+        t:SetColorTexture(1, 1, 1, 1)
+        if wg and wg.mask then t:AddMaskTexture(wg.mask) end
+        t:Hide()
+        h.header = t
+    end
+    track(self, h)
+    return h
+end
+
+-- The backing from the boundary down, the header's gradient above it joined
+-- at the backing's own RGBA (Theme.Backing: smoked's 0.92 too); or the
+-- backing all of it. A gradient ignores SetAlpha here (LibGlass #47):
+-- painted through its colours only.
+function Kit.PlaceHeader(h)
+    local b = h.backing
+    if not b then return end
+    b:ClearAllPoints()
+    local on = h.headerOn and h.header ~= nil
+    if on then
+        -- The header's bottom too: the boundary can move (the bags' band, tuned live).
+        h.header:ClearAllPoints()
+        h.header:SetPoint("TOPLEFT", h.win, "TOPLEFT", 0, 0)
+        h.header:SetPoint("RIGHT", h.win, "RIGHT", 0, 0)
+        h.header:SetPoint("BOTTOM", h.boundary, h.boundaryPoint, 0, h.boundaryY)
+        b:SetPoint("TOP", h.boundary, h.boundaryPoint, 0, h.boundaryY)
+        b:SetPoint("LEFT", h.win, "LEFT", 0, 0)
+        b:SetPoint("RIGHT", h.win, "RIGHT", 0, 0)
+        b:SetPoint("BOTTOM", h.win, "BOTTOM", 0, 0)
+        local r, g, bl, a = GUI.Theme.Backing("window")
+        h.header:SetGradient("VERTICAL", CreateColor(r, g, bl, a), CreateColor(r, g, bl, Kit.HEADER_TOP))
+    else
+        b:SetAllPoints(h.win)
+    end
+    if h.header then h.header:SetShown(on) end
+end
+
+-- The close X's colour: the accent, at its current strength.
+function Kit.PaintClose(h)
+    local c = accent()
+    for _, t in ipairs(h.closeX or {}) do t:SetColorTexture(c[1], c[2], c[3], h.closeAlpha) end
+end
+
+-- The close button's feedback, on our X only: full on hover, 1 px down while
+-- pressed.
+function Kit.CloseFeedback(h, hover, pushed)
+    if not h.closeFrame then return end
+    h.hover, h.pushed = hover, pushed
+    h.closeAlpha = hover and 1 or Kit.CLOSE_REST
+    h.closeFrame:ClearAllPoints()
+    h.closeFrame:SetPoint("CENTER", h.close, "CENTER", 0, pushed and -1 or 0)
+    Kit.PaintClose(h)
+end
+
+-- From the button's getters: a hover or press that ended while we were off.
+function Kit.CloseSync(h)
+    if not h.close then return end
+    local okM, over = pcall(h.close.IsMouseOver, h.close)
+    local okS, state = pcall(h.close.GetButtonState, h.close)
+    Kit.CloseFeedback(h, okM and API.Plain(over) == true, okS and API.Plain(state) == "PUSHED")
+end
+
+-- The close button (#86; UIPanelCloseButton, its X baked into four atlases,
+-- SharedUIPanelTemplates.xml:134-140): a glass disc of ours under it
+-- (unsliced, clean at 24 px), our X over it on a frame of ours one up (a
+-- plain frame takes no mouse: the click stays Blizzard's), feedback by gated
+-- HookScript on the instance. The fades are CloseFades, in the style pass.
+function K:CloseButton(close, h)
+    if type(close) ~= "table" then return h end
+    h.close = close
+    h.closeAlpha = Kit.CLOSE_REST
+    local level = close:GetFrameLevel()
+    local okW, w = pcall(close.GetWidth, close)
+    w = okW and API.Plain(w) or nil
+    if type(w) ~= "number" or w <= 0 then w = 24 end
+    h.closeDisc = self:Disc(close, close, { ring = 0, width = w, level = level - 1 })
+    local x = self:Adopt(CreateFrame("Frame", nil, close))
+    x:SetSize(w, w)
+    x:SetFrameLevel(level + 1)
+    h.closeX = {}
+    for i, rot in ipairs({ math.pi / 4, -math.pi / 4 }) do
+        local t = x:CreateTexture(nil, "OVERLAY")
+        t:SetSize(Kit.CLOSE_X[1], Kit.CLOSE_X[2])
+        t:SetPoint("CENTER", x, "CENTER", 0, 0)
+        t:SetRotation(rot)
+        h.closeX[i] = t
+    end
+    h.closeFrame = x
+    local kit = self
+    local function feedback(hover, pushed)
+        if GUI.Engine.Active(kit.key) then GUI.Engine.Run(kit.skin, "close", Kit.CloseFeedback, h, hover, pushed) end
+    end
+    close:HookScript("OnEnter", function() feedback(true, h.pushed) end)
+    close:HookScript("OnLeave", function() feedback(false, false) end)
+    close:HookScript("OnMouseDown", function() feedback(h.hover, true) end)
+    close:HookScript("OnMouseUp", function() feedback(h.hover, false) end)
+    Kit.CloseFeedback(h, false, false)
+    track(self, h)
+    return h
+end
+
+-- The close button's four state textures faded (the style pass).
+function K:CloseFades(close)
+    if type(close) ~= "table" then return end
+    for _, get in ipairs(Kit.CLOSE_ART) do
+        local ok, tex = pcall(close[get], close)
+        if ok then self:Fade(tex) end
+    end
+end
+
+-- The disc behind a portrait (#48): round its mask (PortraitContainer's
+-- CircleMask), else the portrait, else the named global; under the portrait
+-- (its container's level - 1), over the window's glass. opts: ring, width
+-- (the width when it can't be read), global, and onPortrait: round the
+-- portrait texture itself, for a window that resizes it (the bags' 36 px,
+-- ContainerFrame.lua:789), where the mask read about four times too wide
+-- (BG.1, 70450: "gigantic circles").
+function K:PortraitDisc(frame, opts)
+    local pc = type(frame.PortraitContainer) == "table" and frame.PortraitContainer or nil
+    local portrait = pc and type(pc.portrait) == "table" and pc.portrait or nil
+    local mask = pc and type(pc.CircleMask) == "table" and pc.CircleMask or nil
+    local around = opts.onPortrait and portrait or (mask or portrait)
+    if not around and opts.global then around = self:Global(opts.global) end
+    if not around then return nil end
+    local level = (pc and pc:GetFrameLevel() or frame:GetFrameLevel()) - 1
+    return (self:Disc(frame, around, { ring = opts.ring, width = opts.width, level = level }))
+end
+
+-- A tint, an accent or a floor changed: each tracked window's header and
+-- close X follow, while its skin is on; the style pass repaints the rest.
+GUI.Theme.OnRefresh(function()
+    for _, t in ipairs(tracked) do
+        if GUI.Engine.Active(t.key) then
+            Kit.PlaceHeader(t.h)
+            Kit.PaintClose(t.h)
+        end
+    end
+end)
+
+Kit._test = { faded = faded, tracked = tracked }

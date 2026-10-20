@@ -68,6 +68,18 @@ WoW.merchantRow(1, "normal"); WoW.merchantRow(3, "normal")
 WoW.hideMerchant()
 WoW.showMerchant()
 WoW.flushTimers(0)
+-- The bags (#88): opened in combat, filled and emptied, combined, off and on
+-- with an update while off.
+WoW.combat = true
+WoW.openBag(ContainerFrame1, { "empty", 133784, "empty" })
+WoW.flushTimers(0)
+WoW.combat = false
+WoW.bagUpdate(ContainerFrame1, { 133784, 133784, "empty", "empty" })
+WoW.openBag(ContainerFrameCombinedBags, { "empty", 134400 })
+GUI._test.slash("skin bags off")
+WoW.bagUpdate(ContainerFrameCombinedBags, { 134400, "empty", "empty" })
+GUI._test.slash("skin bags on")
+WoW.closeBag(ContainerFrameCombinedBags)
 -- The damage meter (#49): shown, its Background changed, a window added,
 -- minimized, its breakdown, and one made while the skin is off.
 WoW.showMeter()

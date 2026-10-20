@@ -45,6 +45,23 @@ The look is judged from the procedure's screenshots; `Logs\taint.log` is read af
 |---|---|---|
 | Merchant (#4) | `/fp steps skin merchant`: the looks side by side (clear at 0.85, 0.6 and 0.35 backing, smoked, class); buy, sell, buyback, repair; skin off and on live; after /reload; in combat (optional) | **70425: passes.** Buy, sell and buyback work; repair not tested (nothing to repair). The screenshots show the gold shell gone, glass under the window and tabs, and the item rows keeping Blizzard's red. Off live: exactly stock (owner: yes); on live: faded again; after /reload: on, faded at the first show. No `ADDON_ACTION_BLOCKED`/`FORBIDDEN` in the three sessions. Combat skipped (a plain, unprotected window). **Looks:** all five read well, and 0.35 looks the most like glass (owner): clear and class now use backing 0.35, smoked keeps 0.92. **Taint pass on 70450 (typed `/console taintLog 1`, buy/sell/buyback, full exit):** the log was on (BugGrabber: the bag-bar error 84 times that session, see the facts below), and `Logs\taint.log` was not rewritten. At level 1 the client writes only when something is blocked, so nothing was. A level-2 pass over every wave-1 skin goes into the v0.1.0 release check (#9). |
 
+### The bags (#88, docs/BAGS.md)
+
+`/fp steps skin bags`. Each check reads every open bag window and its shown item buttons against what
+Blizzard shows: the shell faded, the header band, glass on every slot, the rims faded, an empty slot
+(its icon on the button's own empty atlas) dimmed, a filled one shown. It also records Glass UI's
+memory, the framerate and blocked actions. Saved as `SkinProbeDB.results["BG.<label>"]`.
+
+| # | Question | Result |
+|---|---|---|
+| BG.1 | Separate bags, all open: every window and slot as above; the look against the merchant's | **Run 1 (70450, 2026-10-20): every check passes** (4 windows, 34 slots: glass on all, 17 empty dimmed, 17 filled shown). The owner: "apart from the gigantic circles yes". The portrait discs were about four times too big: the bags shrink the portrait to 36 (`SetPortraitTextureSizeAndOffset`, ContainerFrame.lua:789), and the mask read far wider. The disc is now round the portrait itself (`onPortrait`), with a 4 px ring. |
+| BG.2 | The title band: 20, 26 or 34 | **Run 1: unsure.** The three bands barely differ to the eye: 26 kept. |
+| BG.3 | A search, an item moved, a sort: the dims follow | **Run 1: passes** (search, move, sort). |
+| BG.4 | The backpack opened and an item used in combat, the taint log on: nothing blocked | **Run 1: passes.** Opened and used an item in combat with the taint log on: the item worked (owner: yes), nothing blocked. |
+| BG.5 | The combined window | **Run 1: passes.** Owner: yes. |
+| BG.6 | Off: Blizzard's look; a change; on: re-synced; after a /reload | **Run 1: off and on pass.** The after-`/reload` check FAILed with no bag open: its wait step was moved past by hand before a bag was opened. Not a skin fault. |
+| BG.7 | The cost: Glass UI's memory before and after, the framerate with every bag open | **Run 1:** Glass UI 394 KB before, 757 KB with 4 windows and 34 slots open (combined, 30 slots: 646 KB); about 150 fps throughout. Acceptable: the Section fallback isn't needed. |
+
 ### The merchant's layout (#84, docs/MERCHANT.md section 4)
 
 `/fp steps skin merchantlayout`: sections (closer to Blizzard's) against the mockup's bar, switched

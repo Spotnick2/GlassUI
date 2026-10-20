@@ -72,12 +72,12 @@ local DISC_RING, MASK_WIDTH = 6, 58
 -- undertone. Run 2 showed 0.35 as solid red cards; the icon's own red tint
 -- carries the warning.
 local RED = 0.12
--- The header (#86): the window's backing starts at the item inset's top, and
--- above it a gradient of ours in the same colour, from the backing's own
--- alpha at the inset line up to HEADER_TOP: smoky glass joined to the item
--- area. Off (the probe), the backing covers the whole window.
+-- The header (#86, the kit's since #88): the window's backing starts at the
+-- item inset's top, and above it a gradient of ours in the same colour, from
+-- the backing's own alpha at the inset line up to Kit.HEADER_TOP: smoky
+-- glass joined to the item area. Off (the probe), the backing covers the
+-- whole window.
 local headerOn = true
-local HEADER_TOP = 0.45
 -- The bottom band's two boxes, inside MerchantFrameBottomLeftBorder (334 x 61),
 -- { left, top, right, bottom } inward. Read off MS run 1's skin-off
 -- screenshot (70450); to be tuned.
@@ -93,10 +93,6 @@ local EMPTY_TITLE, EMPTY_TEXT = "No items to buy back", "Items you sell will app
 -- TAB_EDGE, TAB_EDGE_INSET in from each side (clear of the rounded corners);
 -- the other darker.
 local TAB_LIGHT, TAB_EDGE, TAB_EDGE_INSET, TAB_DIM = 0.12, 0.8, 6, 0.25
--- The close button's X: two bars, its strength at rest (1 on hover).
-local CLOSE_X, CLOSE_REST = { 2, 12 }, 0.85
--- Its four state textures, the X baked into each (SharedUIPanelTemplates.xml:134-140).
-local CLOSE_ART = { "GetNormalTexture", "GetPushedTexture", "GetDisabledTexture", "GetHighlightTexture" }
 -- The page buttons (MerchantFrame.xml:527-560): their gold-rimmed background
 -- faded, our glass under them; a disabled one's label at PAGE_DIM.
 local PAGES = { "MerchantPrevPageButton", "MerchantNextPageButton" }
@@ -174,53 +170,17 @@ end
 -- shown exactly while the Merchant tab is (MerchantFrame.lua:479, 590).
 local function accent() return GUI.Suite.Accent() or { 1, 0.82, 0 } end
 
--- The window's backing (ours): from the item inset's top down, the header's
--- gradient above it joined at the backing's own RGBA (Theme.Backing: smoked's
--- 0.92 too); or the backing all of it. A gradient ignores SetAlpha here
--- (LibGlass #47): painted through its colours only.
+-- The header (the kit's), on or off by the probe's switch.
 local function header(u)
-    local b = u.backing
-    if not b then return end
-    b:ClearAllPoints()
-    local on = headerOn and u.insetFrame ~= nil and u.header ~= nil
-    if on then
-        b:SetPoint("TOP", u.insetFrame, "TOP", 0, 0)
-        b:SetPoint("LEFT", u.win, "LEFT", 0, 0)
-        b:SetPoint("RIGHT", u.win, "RIGHT", 0, 0)
-        b:SetPoint("BOTTOM", u.win, "BOTTOM", 0, 0)
-        local r, g, bl, a = GUI.Theme.Backing("window")
-        u.header:SetGradient("VERTICAL", CreateColor(r, g, bl, a), CreateColor(r, g, bl, HEADER_TOP))
-    else
-        b:SetAllPoints(u.win)
-    end
-    if u.header then u.header:SetShown(on) end
+    u.headerOn = headerOn and u.insetFrame ~= nil
+    Kit.PlaceHeader(u)
 end
 
--- The accent's pieces: the selected tab's edge, the close button's X (at
--- its current strength).
+-- The accent's pieces: the selected tab's edge; the close X is the kit's.
 local function paintAccent(u)
     local c = accent()
     for _, edge in pairs(u.edges) do edge:SetColorTexture(c[1], c[2], c[3], TAB_EDGE) end
-    for _, t in ipairs(u.closeX or {}) do t:SetColorTexture(c[1], c[2], c[3], u.closeAlpha) end
-end
-
--- The close button's feedback, on our X only: full on hover, 1 px down while
--- pressed.
-local function closeFeedback(u, hover, pushed)
-    if not u.closeFrame then return end
-    u.hover, u.pushed = hover, pushed
-    u.closeAlpha = hover and 1 or CLOSE_REST
-    u.closeFrame:ClearAllPoints()
-    u.closeFrame:SetPoint("CENTER", u.close, "CENTER", 0, pushed and -1 or 0)
-    paintAccent(u)
-end
-
--- From the button's getters: a hover or press that ended while we were off.
-local function closeSync(u)
-    if not u.close then return end
-    local okM, over = pcall(u.close.IsMouseOver, u.close)
-    local okS, state = pcall(u.close.GetButtonState, u.close)
-    closeFeedback(u, okM and API.Plain(over) == true, okS and API.Plain(state) == "PUSHED")
+    Kit.PaintClose(u)
 end
 
 -- Each tab's glass in the strata below the window's (TAB_TUCK). A window in
@@ -367,26 +327,16 @@ end
 -- empty state on a frame in the window, each tab's light, edge and dim, the
 -- close button's disc and X, the page and repair buttons' glass; hooks gated.
 local function buildLayout(kit, frame, win, wg, backing, tabGlass)
-    local u = { kit = kit, frame = frame, tabs = {}, edges = {}, dims = {}, win = win, backing = backing,
-                tabGlass = tabGlass, closeAlpha = CLOSE_REST, bandButtons = {}, pageLabels = {} }
+    local u = { kit = kit, frame = frame, tabs = {}, edges = {}, dims = {}, tabGlass = tabGlass, bandButtons = {},
+                pageLabels = {} }
     ui[frame] = u
     u.bb = kit:Global("MerchantBuyBackItem")
     u.band = kit:Global("MerchantFrameBottomLeftBorder")
     u.moneyInset, u.currencyInset = kit:Global("MerchantMoneyInset"), kit:Global("MerchantExtraCurrencyInset")
     local inset = tbl(frame.Inset)
     u.insetFrame = inset
-    -- The header: on the backing's layer, under the tint and wash, clipped by
-    -- the window glass's mask, adjoining the backing at the inset's top.
-    if backing and inset then
-        local h = win:CreateTexture(nil, "BACKGROUND", nil, -7)
-        h:SetPoint("TOPLEFT", win, "TOPLEFT", 0, 0)
-        h:SetPoint("RIGHT", win, "RIGHT", 0, 0)
-        h:SetPoint("BOTTOM", inset, "TOP", 0, 0)
-        h:SetColorTexture(1, 1, 1, 1)
-        if wg and wg.mask then h:AddMaskTexture(wg.mask) end
-        h:Hide()
-        u.header = h
-    end
+    -- The header, adjoining the backing at the inset's top.
+    kit:Header(win, wg, backing, inset, "TOP", 0, u)
     local function section(a, b, ins)
         if not a then return nil end
         local sec = kit:Section(win)
@@ -500,49 +450,8 @@ local function buildLayout(kit, frame, win, wg, backing, tabGlass)
             hooksecurefunc(active, "Hide", relay)
         end
     end
-    -- The close button: a glass disc of ours under it (unsliced, clean at
-    -- 24 px), our X over it on a frame of ours one up (a plain frame takes no
-    -- mouse: the click stays Blizzard's), feedback by gated HookScript on the
-    -- instance.
-    local close = tbl(frame.CloseButton)
-    if close then
-        u.close = close
-        local level = close:GetFrameLevel()
-        local okW, w = pcall(close.GetWidth, close)
-        w = okW and API.Plain(w) or nil
-        if type(w) ~= "number" or w <= 0 then w = 24 end
-        u.closeDisc = kit:Disc(close, close, { ring = 0, width = w, level = level - 1 })
-        local x = kit:Adopt(CreateFrame("Frame", nil, close))
-        x:SetSize(w, w)
-        x:SetFrameLevel(level + 1)
-        u.closeX = {}
-        for i, rot in ipairs({ math.pi / 4, -math.pi / 4 }) do
-            local t = x:CreateTexture(nil, "OVERLAY")
-            t:SetSize(CLOSE_X[1], CLOSE_X[2])
-            t:SetPoint("CENTER", x, "CENTER", 0, 0)
-            t:SetRotation(rot)
-            u.closeX[i] = t
-        end
-        u.closeFrame = x
-        local function feedback(hover, pushed)
-            if GUI.Engine.Active("merchant") then
-                GUI.Engine.Run(kit.skin, "close", closeFeedback, u, hover, pushed)
-            end
-        end
-        close:HookScript("OnEnter", function() feedback(true, u.pushed) end)
-        close:HookScript("OnLeave", function() feedback(false, false) end)
-        close:HookScript("OnMouseDown", function() feedback(u.hover, true) end)
-        close:HookScript("OnMouseUp", function() feedback(u.hover, false) end)
-        closeFeedback(u, false, false)
-    end
+    kit:CloseButton(tbl(frame.CloseButton), u)
     return u
-end
-
--- The portrait's round mask, else the portrait (by key, else its global).
-local function portrait(kit, frame)
-    local pc = tbl(frame.PortraitContainer)
-    local around = pc and (tbl(pc.CircleMask) or tbl(pc.portrait)) or kit:Global("MerchantFramePortrait")
-    return around, pc
 end
 
 GUI.Engine.Register({
@@ -568,13 +477,9 @@ GUI.Engine.Register({
         end
         local bb = kit:Global("MerchantBuyBackItem")
         if bb then installRow(kit, bb, true) end
-        -- Under the portrait (its container's level - 1): it covers the
-        -- disc's centre. Over the window's glass and the rows'.
-        local around, pc = portrait(kit, frame)
-        if around then
-            local level = (pc and pc:GetFrameLevel() or frame:GetFrameLevel()) - 1
-            discs[frame] = kit:Disc(frame, around, { ring = DISC_RING, width = MASK_WIDTH, level = level })
-        end
+        -- Under the portrait: it covers the disc's centre. Over the window's
+        -- glass and the rows'.
+        discs[frame] = kit:PortraitDisc(frame, { ring = DISC_RING, width = MASK_WIDTH, global = "MerchantFramePortrait" })
         buildLayout(kit, frame, win, wg, backing, tabGlass)
     end,
     style = function(kit, frame)
@@ -582,13 +487,7 @@ GUI.Engine.Register({
         for _, name in ipairs(INSETS) do kit:Inset(kit:Global(name)) end
         for _, name in ipairs(ART) do kit:Fade(kit:Global(name)) end
         for _, name in ipairs(TABS) do kit:Tab(kit:Global(name)) end
-        local close = tbl(frame.CloseButton)
-        if close then
-            for _, get in ipairs(CLOSE_ART) do
-                local ok, tex = pcall(close[get], close)
-                if ok then kit:Fade(tex) end
-            end
-        end
+        kit:CloseFades(tbl(frame.CloseButton))
         for _, n in ipairs(PAGES) do
             local b = tbl(rawget(_G, n))
             if b then kit:Fade(regionOf(b, "Texture")) end
@@ -601,7 +500,8 @@ GUI.Engine.Register({
         local u = ui[frame]
         if u then
             tuck(u)
-            closeSync(u)
+            Kit.CloseSync(u)
+            paintAccent(u)
             layout(u)
         end
     end,
@@ -618,14 +518,11 @@ function GUI.Merchant.SetHeader(on)
     return true
 end
 
--- A tint, an accent or a floor changed (Theme.Refresh): the header and the
--- accent's pieces follow; while off, the style pass repaints them.
+-- A tint or an accent changed (Theme.Refresh): the tabs' edges follow (the
+-- header and the close X are the kit's); while off, the style pass repaints.
 GUI.Theme.OnRefresh(function()
     if not GUI.Engine.Active("merchant") then return end
-    for _, u in pairs(ui) do
-        header(u)
-        paintAccent(u)
-    end
+    for _, u in pairs(ui) do paintAccent(u) end
 end)
 
 GUI.Merchant._test = { rows = rows, discs = discs, ui = ui, redAlpha = redAlpha, ROW_INSETS = ROW_INSETS,
@@ -634,5 +531,5 @@ GUI.Merchant._test = { rows = rows, discs = discs, ui = ui, redAlpha = redAlpha,
                        ICON_OUTSET = ICON_OUTSET, TAB_LIGHT = TAB_LIGHT, TAB_EDGE = TAB_EDGE,
                        TAB_EDGE_INSET = TAB_EDGE_INSET, TAB_DIM = TAB_DIM, EMPTY_TITLE = EMPTY_TITLE,
                        EMPTY_TEXT = EMPTY_TEXT, BUYBACK_ICON = BUYBACK_ICON,
-                       TAB_TUCK = TAB_TUCK, HEADER_TOP = HEADER_TOP, CLOSE_X = CLOSE_X,
-                       CLOSE_REST = CLOSE_REST, PAGE_DIM = PAGE_DIM, BUTTON_INSETS = BUTTON_INSETS }
+                       TAB_TUCK = TAB_TUCK, HEADER_TOP = Kit.HEADER_TOP, CLOSE_X = Kit.CLOSE_X,
+                       CLOSE_REST = Kit.CLOSE_REST, PAGE_DIM = PAGE_DIM, BUTTON_INSETS = BUTTON_INSETS }

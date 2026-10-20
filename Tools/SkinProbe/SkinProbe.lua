@@ -1318,6 +1318,192 @@ Probe:Steps("merchantlayout", {
 })
 
 --------------------------------------------------------------------------------
+-- The bags (#88, docs/BAGS.md): each open bag window and its slots against
+-- what Blizzard shows; the header band tried live; the item use path in
+-- combat under the taint log; separate and combined; off and on; the cost.
+-- Saved as BG.<label>.
+--------------------------------------------------------------------------------
+
+local BAG_WINDOWS = { "ContainerFrame1", "ContainerFrame2", "ContainerFrame3", "ContainerFrame4",
+                      "ContainerFrame5", "ContainerFrame6", "ContainerFrame7", "ContainerFrameCombinedBags" }
+
+local function bagsUI()
+    local G = glassUI()
+    return G and G.Bags and G.Bags._test or nil, G
+end
+
+-- Glass UI's memory, KB (UpdateAddOnMemoryUsage first).
+local function glassMemory()
+    local update, usage = rawget(_G, "UpdateAddOnMemoryUsage"), rawget(_G, "GetAddOnMemoryUsage")
+    if type(update) ~= "function" or type(usage) ~= "function" then return nil end
+    pcall(update)
+    local ok, kb = pcall(usage, "GlassUI")
+    return ok and plain(kb) or nil
+end
+
+-- Every open window: ours shown, Blizzard's shell faded; each shown item
+-- button: our glass seen, its rim faded, an empty slot (its icon on the
+-- button's own empty atlas) dimmed to 0, a filled one not.
+local function bagsState(label)
+    local B, G = bagsUI()
+    local rec = { windows = 0, slots = 0, glass = 0, rimsFaded = 0, empty = 0, emptyDimmed = 0, filled = 0,
+                  filledShown = 0, shellFaded = 0, headers = 0 }
+    for _, name in ipairs(BAG_WINDOWS) do
+        local f = frameByName(name)
+        if f and seen(f) then
+            rec.windows = rec.windows + 1
+            rec.open = (rec.open and (rec.open .. ",") or "") .. name
+            local okA, a = call(f.NineSlice, "GetAlpha")
+            if okA and plain(a) == 0 then rec.shellFaded = rec.shellFaded + 1 end
+            local h = B and B.wins[f]
+            if h and seen(h.header) then rec.headers = rec.headers + 1 end
+            for _, b in ipairs({ f:GetChildren() }) do
+                if type(b.icon) == "table" and type(b.IconBorder) == "table" and seen(b) then
+                    rec.slots = rec.slots + 1
+                    local s = B and B.slots[b]
+                    if s and seen(s.glass) then rec.glass = rec.glass + 1 end
+                    local okN, rim = call(b, "GetNormalTexture")
+                    local okR, ra = call(okN and rim or nil, "GetAlpha")
+                    if okR and plain(ra) == 0 then rec.rimsFaded = rec.rimsFaded + 1 end
+                    local okT, atlas = call(b.icon, "GetAtlas")
+                    local okI, ia = call(b.icon, "GetAlpha")
+                    ia = okI and plain(ia) or nil
+                    if okT and plain(atlas) ~= nil and plain(atlas) == plain(b.emptyBackgroundAtlas) then
+                        rec.empty = rec.empty + 1
+                        if ia == 0 then rec.emptyDimmed = rec.emptyDimmed + 1 end
+                    else
+                        rec.filled = rec.filled + 1
+                        if type(ia) == "number" and ia > 0 then rec.filledShown = rec.filledShown + 1 end
+                    end
+                end
+            end
+        end
+    end
+    rec.combined = frameByName("ContainerFrameCombinedBags") ~= nil and seen(frameByName("ContainerFrameCombinedBags"))
+    rec.header = G and G.Bags and G.Bags.HeaderHeight and G.Bags.HeaderHeight() or nil
+    rec.memoryKB = glassMemory()
+    local framerate = rawget(_G, "GetFramerate")
+    local okF, fps = pcall(framerate)
+    rec.fps = okF and plain(fps) or nil
+    rec.blocked = type(SkinProbeDB) == "table" and SkinProbeDB.suiteBlocked or 0
+    say("BG " .. label .. ": " .. rec.windows .. " windows (" .. tostring(rec.open) .. "), " .. rec.slots
+        .. " slots, glass " .. rec.glass .. ", rims faded " .. rec.rimsFaded .. ", empty " .. rec.empty
+        .. " (dimmed " .. rec.emptyDimmed .. "), filled " .. rec.filled .. " (shown " .. rec.filledShown
+        .. "), memory " .. tostring(rec.memoryKB) .. " KB, fps " .. tostring(rec.fps) .. ", blocked "
+        .. rec.blocked)
+    record("BG." .. label, rec)
+    return rec
+end
+
+-- A check: at least `want.windows` open; every open window and slot as above;
+-- `want.combined` if given; nothing blocked.
+local function bagsOn(label, want)
+    return function()
+        local r = bagsState(label)
+        local bad = {}
+        local function want_(cond, why) if not cond then bad[#bad + 1] = why end end
+        want_(r.windows >= (want.windows or 1), r.windows .. " windows open")
+        if want.combined ~= nil then want_(r.combined == want.combined, "combined " .. tostring(r.combined)) end
+        want_(r.shellFaded == r.windows, "shell faded on " .. r.shellFaded .. " of " .. r.windows)
+        want_(r.headers == r.windows, "header on " .. r.headers .. " of " .. r.windows)
+        want_(r.slots > 0 and r.glass == r.slots, "glass on " .. r.glass .. " of " .. r.slots .. " slots")
+        want_(r.rimsFaded == r.slots, "rims faded on " .. r.rimsFaded .. " of " .. r.slots)
+        want_(r.emptyDimmed == r.empty, "empty dimmed " .. r.emptyDimmed .. " of " .. r.empty)
+        want_(r.filledShown == r.filled, "filled shown " .. r.filledShown .. " of " .. r.filled)
+        want_(r.blocked == 0, r.blocked .. " blocked")
+        return #bad == 0, #bad == 0 and "as Blizzard shows them" or table.concat(bad, "; ")
+    end
+end
+
+local function bagsSwitch(on)
+    local G = glassUI()
+    if not (G and G.Engine) then return false, "Glass UI not loaded" end
+    return G.Engine.SetEnabled("bags", on)
+end
+
+local function headerTryBags(n)
+    local G = glassUI()
+    if not (G and G.Bags and G.Bags.SetHeaderHeight) then return false, "Glass UI not loaded" end
+    record("BG.header tried", n)
+    return G.Bags.SetHeaderHeight(n), n
+end
+
+local function openWindows()
+    local n = 0
+    for _, name in ipairs(BAG_WINDOWS) do
+        local f = frameByName(name)
+        if f and seen(f) then n = n + 1 end
+    end
+    return n
+end
+
+Probe:Steps("bags", {
+    title = "Glass UI: the bags in glass (#88)",
+    { text = "Turns on script errors and the taint log, and counts blocked actions from now.", auto = true,
+      run = function()
+          if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
+          record("BG.memory before", glassMemory())
+          return setCVar("scriptErrors", "1"), setCVar("taintLog", "1")
+      end },
+    -- Separate bags.
+    { text = "Close every bag. If your bags open as one 'Combined Backpack' window, click its portrait (top left) "
+          .. "and untick the combine option first. Then open ALL your bags (Shift+B): this step goes on by itself.",
+      timeout = 120, wait = function() return openWindows() >= 2, openWindows() .. " windows open" end },
+    { text = "Press Next for a screenshot of the open bags.", screenshot = "bags, separate",
+      check = bagsOn("separate", { windows = 2, combined = false }) },
+    { text = "Do they read as the merchant's window does: dark glass, a smoky title band, the gold X on a glass "
+          .. "disc, each slot a glass well, empty ones plain? Anything off: the Note.", ask = true },
+    -- The header band, tried live.
+    { text = "The title band, narrower.", button = "Band 20", run = function() return headerTryBags(20) end,
+      screenshot = "bags, band 20" },
+    { text = "Wider (down to the search row on the backpack).", button = "Band 34",
+      run = function() return headerTryBags(34) end, screenshot = "bags, band 34" },
+    { text = "The default.", button = "Band 26", run = function() return headerTryBags(26) end,
+      screenshot = "bags, band 26" },
+    { text = "Which band reads best: 20, 26 or 34? Press Yes and write the number in the Note.", ask = true },
+    -- Items moving.
+    { text = "Type something in the backpack's search box (Blizzard dims what doesn't match), then press Next.",
+      screenshot = "bags, search", check = bagsOn("search", { windows = 1 }) },
+    { text = "Clear the search. Drag an item into an empty slot (one slot empties, another fills), then press "
+          .. "Next.", check = bagsOn("moved", { windows = 1 }) },
+    { text = "Click the sort button (the broom, next to the search box), wait for the bags to settle, then press "
+          .. "Next.", check = bagsOn("sorted", { windows = 1 }) },
+    -- The use path in combat.
+    { text = "Close the bags. Get into combat (a mob or a training dummy), then open the backpack IN combat and "
+          .. "use an item from it (a potion, a bandage, a quest item). Press Next while still in combat if you can.",
+      screenshot = "bags, combat", check = bagsOn("combat", { windows = 1 }) },
+    { text = "Did the item work, with no 'blocked' or 'interface action failed' message?", ask = true },
+    -- Combined.
+    { text = "Out of combat: click the backpack's portrait and tick the combine option: one window. This step goes "
+          .. "on by itself.", timeout = 120,
+      wait = function()
+          local c = frameByName("ContainerFrameCombinedBags")
+          return c ~= nil and seen(c), "waiting for the combined window"
+      end },
+    { text = "Press Next for a screenshot.", screenshot = "bags, combined",
+      check = bagsOn("combined", { windows = 1, combined = true }) },
+    { text = "The combined window as glass too? Back to separate bags afterwards if you prefer them (the portrait's "
+          .. "menu).", ask = true },
+    -- Off and on.
+    { text = "Open your bags. Switches the bags skin off: Blizzard's look.", button = "Skin off",
+      run = function() return bagsSwitch(false) end, screenshot = "bags, skin off",
+      check = function()
+          local r = bagsState("off")
+          local ok = r.windows >= 1 and r.glass == 0 and r.shellFaded == 0 and r.rimsFaded == 0 and r.emptyDimmed == 0
+          return ok, ok and "Blizzard's look, nothing of ours" or "something of ours while off"
+      end },
+    { text = "Move an item (a slot empties), then switch the skin on.", button = "Skin on",
+      run = function() return bagsSwitch(true) end, screenshot = "bags, on again",
+      check = bagsOn("on again", { windows = 1 }) },
+    { text = "Type /reload.", reload = true },
+    { text = "Open your bags (this step goes on by itself).", timeout = 120,
+      wait = function() return openWindows() >= 1, openWindows() .. " windows open" end },
+    { text = "Press Next.", check = bagsOn("after reload", { windows = 1 }) },
+    taintOff(),
+    { text = "Type /reload to save the results.", reload = true },
+})
+
+--------------------------------------------------------------------------------
 -- The suite theme (#24, docs/SUITE.md "In-game validation", S.1-S.8): Glass
 -- UI coordinating Glass Unit Frames and Glass Raid Frames. It reads only
 -- public state: Glass UI's Suite record, each addon's glass instance (its
@@ -3197,7 +3383,7 @@ boot:SetScript("OnEvent", function(_, _, name)
     say("loaded (" .. SkinProbeDB.loads .. " loads). /fp skin for the commands, /fp steps skin wave1 to start")
 end)
 
-NS._test = { both = both, closeState = closeState, closeOn = closeOn, headerTry = headerTry, layoutState = layoutState, layoutOn = layoutOn, Probe = Probe, state = state, tree = tree, fade = fade, slashOwners = slashOwners,
+NS._test = { bagsState = bagsState, bagsOn = bagsOn, both = both, closeState = closeState, closeOn = closeOn, headerTry = headerTry, layoutState = layoutState, layoutOn = layoutOn, Probe = Probe, state = state, tree = tree, fade = fade, slashOwners = slashOwners,
              gamepad = gamepad, panelsOn = panelsOn, panelsOff = panelsOff, borderFade = borderFade,
              borderRestore = borderRestore, gradientOn = gradientOn, gradientOff = gradientOff,
              panels = panels, faded = faded, cardAtlas = cardAtlas, cardOn = cardOn, cardOff = cardOff,
