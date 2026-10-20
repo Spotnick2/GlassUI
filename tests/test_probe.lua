@@ -766,7 +766,8 @@ eq(refreshed, 3, "repainted again")
 rawset(_G, "MerchantItem1", nil); rawset(_G, "MerchantItem2", nil); rawset(_G, "MerchantBuyBackItem", nil)
 rawset(_G, "GlassUI", savedGUI3)
 
--- #84: the merchant's layout as the procedure reads it, and the switch.
+-- #84, #86: the merchant's layout as the procedure reads it, each pane
+-- against Blizzard's state.
 local function sec(host, shown)
     local s = { fill = host:CreateTexture(), edges = {} }
     s.fill:SetShown(shown)
@@ -776,105 +777,99 @@ local lwin = CreateFrame("Frame", nil, merchant)
 local lbb = CreateFrame("Frame", "MerchantBuyBackItem", merchant)
 local tab1 = CreateFrame("Button", "MerchantFrameTab1", merchant)
 local tab2 = CreateFrame("Button", "MerchantFrameTab2", merchant)
-local lrow11 = CreateFrame("Frame", "MerchantItem11", merchant)
-lrow11._bottom = 60
+local cur = CreateFrame("Frame", "MerchantExtraCurrencyInset", merchant)
+cur:Hide()
+local repairAll = CreateFrame("Button", "MerchantRepairAllButton", merchant)
+local junk = CreateFrame("Button", "MerchantSellAllJunkButton", merchant)
+repairAll:Hide(); junk:Hide()
+local prevB = CreateFrame("Button", "MerchantPrevPageButton", merchant)
+local prevLabel = prevB:CreateFontString()
 local hl1, hl2 = lwin:CreateTexture(), lwin:CreateTexture()
 hl2:Hide()
 local lu = { frame = merchant, bb = lbb, tabs = { [tab1] = hl1, [tab2] = hl2 },
-             inset = sec(lwin, true), money = sec(lwin, true), currency = sec(lwin, true),
-             boxLeft = sec(lwin, true), boxRight = sec(lwin, true), bar = sec(lwin, false),
-             line = lwin:CreateTexture(), square = sec(lbb, false), label = lbb:CreateFontString(),
-             empty = CreateFrame("Frame", nil, merchant) }
-lu.line:Hide(); lu.label:Hide(); lu.empty:Hide()
-local current, asked = "sections", {}
+             inset = sec(lwin, true), money = sec(lwin, true), currency = sec(lwin, false),
+             boxLeft = sec(lwin, false), boxRight = sec(lwin, true), empty = CreateFrame("Frame", nil, merchant) }
+lu.empty:Hide()
+local hdr = true
 rawset(_G, "GlassUI", { Merchant = {
-    Layout = function() return current end,
-    SetLayout = function(n) asked[#asked + 1] = n; if n == "sections" or n == "bar" then current = n; return true end
-        return false end,
+    Header = function() return hdr end,
+    SetHeader = function(on) hdr = on; return true end,
     _test = { ui = { [merchant] = lu } } } })
-local okL, whyL = T.layoutOn("t", { layout = "sections", tab = 1 })()
-check(okL, "sections on the Merchant tab: 5 panes, tab 1 lit: pass: " .. tostring(whyL))
-eq(SkinProbeDB.results["ML.t"].sections, 5, "the panes counted in the results")
+local okL, whyL = T.layoutOn("t", { tab = 1, header = true })()
+check(okL, "an ordinary vendor: inset, money, the right box: pass: " .. tostring(whyL))
+local rec = SkinProbeDB.results["ML.t"]
+check(rec.inset and rec.money and rec.boxRight and not rec.boxLeft and not rec.currency, "each pane recorded")
+eq(rec.blizzCurrency, false, "Blizzard's currency box recorded")
+eq(rec.bandUsed, false, "and the band unused")
+-- The currency box follows Blizzard's.
+cur:Show()
+okL, whyL = T.layoutOn("t", { tab = 1 })()
+check(not okL and whyL:find("currency box false, Blizzard's true", 1, true), "Blizzard's currency box without ours fails")
+lu.currency.fill:Show()
+check(T.layoutOn("t", { tab = 1 })(), "with ours: pass")
+cur:Hide()
+okL = T.layoutOn("t", { tab = 1 })()
+check(not okL, "ours without Blizzard's fails (the run 2 divider)")
+lu.currency.fill:Hide()
+-- The left box: while a band button shows.
+lu.boxLeft.fill:Show()
+okL, whyL = T.layoutOn("t", { tab = 1 })()
+check(not okL and whyL:find("left box true, band used false", 1, true), "an empty left box fails (the empty rectangle)")
+repairAll:Show()
+check(T.layoutOn("t", { tab = 1 })(), "a smith: the box with the repair buttons passes")
+eq(SkinProbeDB.results["ML.t"].band.MerchantRepairAllButton, true, "which button recorded")
+repairAll:Hide(); junk:Show()
+check(T.layoutOn("t", { tab = 1 })(), "the junk button alone: the box passes")
+junk:Hide()
+okL = T.layoutOn("t", { tab = 1 })()
+check(not okL, "none shown, the box still there: fails")
+lu.boxLeft.fill:Hide()
 lu.boxRight.fill:Hide()
-okL, whyL = T.layoutOn("t", { layout = "sections", tab = 1 })()
-check(not okL and whyL:find("4 sections", 1, true), "a missing pane fails")
+okL, whyL = T.layoutOn("t", { tab = 1 })()
+check(not okL and whyL:find("right box false", 1, true), "no right box on the Merchant tab fails")
 lu.boxRight.fill:Show()
-lu.line:Show()
-okL, whyL = T.layoutOn("t", { layout = "sections", tab = 1 })()
-check(not okL and whyL:find("bar piece", 1, true), "a bar piece in sections fails")
-lu.line:Hide()
+lu.inset.fill:Hide()
+okL, whyL = T.layoutOn("t", { tab = 1 })()
+check(not okL and whyL:find("inset or the money", 1, true), "no inset fails")
+lu.inset.fill:Show()
+-- The pages: a label dimmed exactly while its button is disabled.
+prevB:Disable(); prevLabel:SetAlpha(0.4)
+check(T.layoutOn("t", { tab = 1 })(), "Prev disabled and dimmed: pass")
+prevLabel:SetAlpha(1)
+okL, whyL = T.layoutOn("t", { tab = 1 })()
+check(not okL and whyL:find("prev label 1", 1, true), "disabled but bright fails")
+prevB:Enable(); prevLabel:SetAlpha(0.4)
+okL = T.layoutOn("t", { tab = 1 })()
+check(not okL, "enabled but dimmed fails")
+prevLabel:SetAlpha(1)
+-- The Buyback tab, the empty state, the tabs.
+lbb:Hide(); hl1:Hide(); hl2:Show(); lu.boxRight.fill:Hide(); lu.empty:Show()
+check(T.layoutOn("t", { tab = 2, empty = true })(), "the Buyback tab, empty: pass")
+okL, whyL = T.layoutOn("t", { tab = 2, empty = false })()
+check(not okL and whyL:find("empty state true", 1, true), "the message when items are listed fails")
+okL, whyL = T.layoutOn("t", { tab = 1 })()
+check(not okL and whyL:find("Merchant tab", 1, true), "the wrong tab fails")
+lbb:Show(); hl1:Show(); hl2:Hide(); lu.boxRight.fill:Show(); lu.empty:Hide()
 hl2:Show()
-okL, whyL = T.layoutOn("t", { layout = "sections", tab = 1 })()
+okL, whyL = T.layoutOn("t", { tab = 1 })()
 check(not okL and whyL:find("tabs lit", 1, true), "both tabs lit fails")
 hl2:Hide()
-okL, whyL = T.layoutOn("t", { layout = "bar", tab = 1 })()
-check(not okL and whyL:find("layout sections", 1, true), "the wrong layout fails")
--- The bar on the Buyback tab, empty.
-eq(select(1, T.layoutTry("bar")), true, "the switch asked through Glass UI")
-eq(asked[#asked], "bar", "bar")
-eq(select(1, T.layoutTry("glitter")), false, "an unknown layout refused")
-for _, k in ipairs({ "inset", "money", "currency", "boxLeft", "boxRight" }) do lu[k].fill:Hide() end
-lu.bar.fill:Show(); lu.line:Show(); lu.empty:Show()
-lbb:Hide(); hl1:Hide(); hl2:Show()
-lu.bar.fill._top = 30
-okL, whyL = T.layoutOn("t", { layout = "bar", tab = 2, empty = true })()
-check(okL, "bar, Buyback tab, empty: pass: " .. tostring(whyL))
-lu.empty:Hide()
-okL, whyL = T.layoutOn("t", { layout = "bar", tab = 2, empty = true })()
-check(not okL and whyL:find("empty state false", 1, true), "no empty state when wanted fails")
-lu.empty:Show()
-lu.bar.fill._top = 70
-okL, whyL = T.layoutOn("t", { layout = "bar", tab = 2 })()
-check(not okL and whyL:find("over row 11", 1, true), "the bar reaching row 11 fails")
-lu.bar.fill._top = 30
--- The Merchant tab: the square, the label while empty.
-lbb:Show(); hl1:Show(); hl2:Hide(); lu.empty:Hide()
-lu.square.fill:Show(); lu.label:Show()
-okL, whyL = T.layoutOn("t", { layout = "bar", tab = 1, label = true })()
-check(okL, "bar, Merchant tab, the square and label: pass: " .. tostring(whyL))
-lu.square.fill:Hide()
-okL, whyL = T.layoutOn("t", { layout = "bar", tab = 1, label = true })()
-check(not okL and whyL:find("square false", 1, true), "no square fails")
-lu.square.fill:Show()
-okL, whyL = T.layoutOn("t", { layout = "bar", tab = 1, label = false })()
-check(not okL and whyL:find("label true", 1, true), "a label beside a sold item fails")
-okL, whyL = T.layoutOn("t", { layout = "bar", tab = 2 })()
-check(not okL and whyL:find("Buyback tab", 1, true), "the wrong tab fails")
--- Run 2: the header and the tabs tucked under the window.
-local GM, hdr = rawget(_G, "GlassUI").Merchant, true
-GM.Header = function() return hdr end
-GM.SetHeader = function(on) hdr = on; return true end
+-- The header, and the tabs tucked.
 local tglass = CreateFrame("Frame", nil, tab1)
 tglass:SetFrameStrata("LOW")
 lu.tabGlass = { [tab1] = { glass = tglass } }
-okL, whyL = T.layoutOn("t", { layout = "bar", tab = 1, header = true })()
-check(okL, "the header Pearl, the tabs a strata under the window: pass: " .. tostring(whyL))
+check(T.layoutOn("t", { tab = 1, header = true })(), "the header on, the tabs a strata under: pass")
 eq(SkinProbeDB.results["ML.t"].tabStrata, "LOW", "the tabs' strata recorded")
-eq(SkinProbeDB.results["ML.t"].windowStrata, "MEDIUM", "and the window's")
 eq(select(1, T.headerTry(false)), true, "the header switched through Glass UI")
 eq(hdr, false, "off")
-okL, whyL = T.layoutOn("t", { layout = "bar", tab = 1, header = true })()
+okL, whyL = T.layoutOn("t", { tab = 1, header = true })()
 check(not okL and whyL:find("header false", 1, true), "the header off when wanted on fails")
 T.headerTry(true)
 tglass:SetFrameStrata("MEDIUM")
-okL, whyL = T.layoutOn("t", { layout = "bar", tab = 1, header = true })()
+okL, whyL = T.layoutOn("t", { tab = 1 })()
 check(not okL and whyL:find("not tucked", 1, true), "the tabs in the window's strata fail")
 tglass:SetFrameStrata("LOW")
--- Run 3 (#86): the empty message in sections too; the saved layout; the close button.
-for _, k in ipairs({ "inset", "money", "currency" }) do lu[k].fill:Show() end
-lu.boxLeft.fill:Hide(); lu.boxRight.fill:Hide()
-lu.bar.fill:Hide(); lu.line:Hide(); lu.square.fill:Hide(); lu.label:Hide()
-lu.empty:Show(); lbb:Hide(); hl1:Hide(); hl2:Show()
-current = "sections"
-okL, whyL = T.layoutOn("t", { layout = "sections", tab = 2, empty = true })()
-check(okL, "sections with the empty message: pass: " .. tostring(whyL))
-lu.empty:Hide()
-okL, whyL = T.layoutOn("t", { layout = "sections", tab = 2, empty = true })()
-check(not okL and whyL:find("empty state false", 1, true), "sections without it when wanted fails")
-lbb:Show(); hl1:Show(); hl2:Hide()
-local okT, named = T.layoutTry(nil)
-eq(named, "saved", "nil: back to the saved layout")
-eq(SkinProbeDB.results["ML.layout"], "saved", "recorded as saved")
+-- The close button.
 local cbtn = CreateFrame("Button", nil, merchant)
 for _, k in ipairs({ "_normal", "_pushed", "_disabled", "_highlight" }) do
     cbtn[k] = cbtn:CreateTexture()
@@ -901,8 +896,10 @@ lu.closeDisc:Hide()
 okC, whyC = T.closeOn("c", false)()
 check(not okC and whyC:find("disc false", 1, true), "no disc fails")
 lu.closeDisc:Show()
-rawset(_G, "MerchantBuyBackItem", nil); rawset(_G, "MerchantFrameTab1", nil); rawset(_G, "MerchantFrameTab2", nil)
-rawset(_G, "MerchantItem11", nil)
+for _, n in ipairs({ "MerchantBuyBackItem", "MerchantFrameTab1", "MerchantFrameTab2", "MerchantExtraCurrencyInset",
+                     "MerchantRepairAllButton", "MerchantSellAllJunkButton", "MerchantPrevPageButton" }) do
+    rawset(_G, n, nil)
+end
 rawset(_G, "GlassUI", savedGUI3)
 
 -- #56 discovery: Questie's tracker and RestedXP's window and arrow.

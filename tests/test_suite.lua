@@ -485,22 +485,6 @@ O.lookRows["Empty slots"][4]:Click()
 eq(Suite.LookPreset(), "custom", "a single key can make it custom")
 eq(O.lookCustom:GetText(), "(custom)", "and the page says so")
 for _, rb in ipairs(presetRow) do check(not rb:GetChecked(), "no preset checked while custom") end
--- The merchant's layout (#86): the saved setting, its own labels.
-local mRow = O.lookRows["Merchant window"]
-eq(#mRow, 2, "two merchant layouts")
-local function rbText(rb) return rb.text and rb.text:GetText() or nil end
-eq(rbText(mRow[1]), "One footer", "the bar, by its label")
-eq(rbText(mRow[2]), "Blizzard's boxes", "sections, by its label")
-eq(mRow[1]:GetChecked(), true, "the bar checked: the default")
-mRow[2]:Click()
-eq(rawget(GlassUIDB, "merchantLayout"), "sections", "a radio saves the layout")
-eq(mRow[2]:GetChecked(), true, "and the radios follow")
-eq(mRow[1]:GetChecked(), false, "only one checked")
-GUI.Merchant.SetLayout("bar")
-eq(mRow[2]:GetChecked(), true, "the probe's override isn't the saved choice: the page shows the saved one")
-GUI.Merchant.SetLayout(nil)
-mRow[1]:Click()
-eq(rawget(GlassUIDB, "merchantLayout"), nil, "the default saved as nothing")
 check(O.lookFollowers:GetText():find("Glass Action Bars: suite look, its own tint Smoked", 1, true),
       "the subpage lists the followers and their overrides")
 check(O.lookFollowers:GetText():find("Apotheca: follows Glass Action Bars", 1, true), "and the tenants")

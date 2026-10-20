@@ -446,6 +446,114 @@ item area denser.
 - **Built** (2026-10-20): as above. Tests: test_merchant 307, test_suite 320 (the page's row), test_probe
   519; 40 mutants of the skin, the settings row and the probe, all killed but one equivalent (above).
 
+### Amendment: sections only (2026-10-20, before merge)
+
+The owner, after #87 was built: the bar "does not work if you don't do it like the mockup with the
+icon on left and gold on right". Moving the buyback slot would take a new contract exception. And
+at a smith (screenshots, Wuark, 70450) the band's left holds Blizzard's repair buttons:
+- `MerchantRepairAllButton`, `MerchantRepairItemButton`, and `MerchantGuildBankRepairButton` when
+  a guild bank can repair (MerchantFrame.lua:987-1020);
+- and `MerchantSellAllJunkButton` where that's enabled (:482).
+
+So the mockup's footer would collide there. The owner: "i think we'll be fine with sections only
+because of that".
+- **Removed:**
+  - the bar layout: its footer section, the header line, the buyback square and label,
+    `BAR_TOPLEFT`, `SQUARE_OUTSET`;
+  - the setting: `GlassUIDB.merchantLayout`, `/glassui merchant`, the "Merchant window" row,
+    `SetSaved`/`Saved`;
+  - the probe's layout switch (`SetLayout`, `Layout`).
+  - No saved key ever shipped, since #87 was never merged, so nothing to migrate.
+  - `choiceRow`'s labels argument goes too, now unused.
+- **Kept from section 5:** the floor 0.93, the smoky header and `Theme.Backing`/`OnRefresh`, the red
+  at 0.12, the tabs' glow and dim, the close button, and the empty Buyback message (now just
+  sections').
+- **Sections follow what Blizzard shows** (the critique's "empty outlined rectangle" and "stray
+  vertical dividers"):
+  - **The currency box** only while `MerchantExtraCurrencyInset` is shown. Blizzard hides it at a
+    vendor with no extra currency (`MerchantFrame_UpdateCurrencies`, :1029-1039, the common case),
+    but our pane was drawn regardless: its edge was the stray line beside the money. Re-checked by
+    `hooksecurefunc` on the inset's `Show`/`Hide`, gated.
+  - **The band's left box** only while it holds something: on the Merchant tab, while any of
+    the repair buttons or the sell-junk button is shown. Hooks on each instance, gated: `Show`/`Hide`,
+    plus `SetShown` on the junk button, which is the call Blizzard uses for it.
+  - The right box (the buyback slot) and the money box as before.
+- **The probe and the tests** (Codex, amendment round 1):
+  - `merchantlayout` drops every bar, switch and setting step, and its revision bumps.
+  - Its checker asserts each pane on its own, against Blizzard's own state:
+    - the inset and the money always;
+    - the currency box with `MerchantExtraCurrencyInset:IsShown()`;
+    - the right box on the Merchant tab;
+    - the left box on the Merchant tab **and** while any of the four buttons is shown.
+  - The tests drop the removed APIs. They mirror Blizzard's call order: the repair `Show`/`Hide`,
+    then the junk button's `SetShown` (which never calls the Lua `Show`/`Hide`, hence its own hook),
+    then the Buyback tab's hides (:588-596).
+- **From a second outside opinion** (owner, 2026-10-20). Skin only: nothing of Blizzard's moves,
+  resizes or reparents (the stock screenshots are the geometry authority).
+  - **The selected tab** (owner: "retains a recognizable Warcraft selection accent while making the
+    surface fit Pearl"). A lighter neutral glass replaces the gold glow:
+    - a white texture of ours at `TAB_LIGHT` (0.12), masked by the tab's glass;
+    - plus a thin accent line, 1 px along the tab glass's bottom, inset `TAB_EDGE_INSET` (6) from
+      each side to clear the rounded corners, in `Suite.Accent()` at `TAB_EDGE` (0.8), repainted by
+      the listener.
+    - The inactive tab keeps its dim. The text stays Blizzard's (white selected, gold inactive).
+  - **Pagination** (`MerchantPrevPageButton`/`MerchantNextPageButton`, MerchantFrame.xml:527-560):
+    - Each button's gold-rimmed background (`UI-PageButton-Background`, a BACKGROUND texture
+      region) is faded, with our small glass under the button instead.
+    - The arrow (the button's own state textures) stays Blizzard's.
+    - **The label** ("Prev"/"Next", an unnamed FontString in the button's BACKGROUND layer, found
+      among `GetRegions()` by type) is dimmed to `PAGE_DIM` (0.4) while its button is disabled.
+      This follows `IsEnabled()`, through gated `hooksecurefunc` on the instance's
+      `Enable`/`Disable` (Blizzard calls those, MerchantFrame.lua:441-448), plus the style pass.
+    - So on page 1, "Prev" no longer stays bright gold beside a grey arrow. The page text stays.
+    - The background is found as the BACKGROUND-layer **Texture** among `GetRegions()`, never
+      "every BACKGROUND region", which would take the label too (Codex).
+    - The kit gains **`K:Dim(region, alpha)`**: a fade held at `alpha` instead of 0, with the same
+      read-back and restore; `Dim(region, nil)` gives the region back. `Fade(region, onAlpha)` becomes
+      `Dim` at 0 and keeps its `onAlpha` callback (DamageMeter.lua:76 follows Blizzard's alpha with
+      it).
+      - The read-back compares within 0.01 after `API.Plain`, since a fractional alpha may not
+        round-trip exactly; a region that reads back 1 is still refused (Codex).
+      - Tested: a fractional read-back; dimming again without recapturing Blizzard's alpha; a
+        Blizzard `SetAlpha` while dimmed (held, and remembered for the restore); release through
+        `Dim(region, nil)` and through `Restore`.
+  - **The repair buttons** (`MerchantRepairAllButton`, `MerchantRepairItemButton`,
+    `MerchantGuildBankRepairButton`):
+    - their slot background (`UI-EmptySlot`, the first BACKGROUND texture) is faded;
+    - our small glass goes behind each, as the rows' slots have;
+    - the icon, the disabled desaturation (`MerchantFrame_UpdateCanRepairAll`), the tooltips and
+      the clicks stay Blizzard's.
+  - **The footer:** the two visibility rules above remove the empty box and the divider through the
+    money strip. Nothing is added on the Buyback tab beyond the money box, and the currency box
+    when shown.
+- **In game (the amended run 3).** Every check records Blizzard's visibility (the currency inset,
+  the four buttons, the tab) beside ours (Codex).
+  - **An ordinary vendor**, with Sell All Junk hidden (recorded: whether this client enables it at
+    all, `C_MerchantFrame.IsSellAllJunkEnabled`): the left and currency boxes absent, on both
+    tabs.
+  - **If junk selling shows here:** the left box stays while the junk button is shown, even
+    disabled (no junk).
+  - **A smith:**
+    - the left box with the repair buttons, Merchant → Buyback → Merchant;
+    - the repair buttons enabled, then with nothing to repair;
+    - with and without guild repair, if a guild with bank repair is at hand (else recorded as not
+      run).
+  - **The currency box:** an ordinary vendor, a currency vendor (one selling for tokens or
+    honor), then an ordinary vendor again, **without a `/reload`**. The box follows Blizzard's
+    inset on both tabs. Recorded as not run if no such vendor is reachable at this level.
+  - **Pages 1 and 2:** "Prev" dimmed on page 1, "Next" on the last.
+  - **Buyback** with zero, one and several entries; the slot before and after a sale.
+  - **Off, a vendor or tab change, then on;** close and reopen; `/reload`.
+  - Script errors and the taint log on, with a repair done.
+- **Built** (2026-10-20). Codex `gpt-6-astra` consensus on the amendment in round 3.
+  - Tests: test_merchant 308, test_probe 519.
+  - 32 mutants of the skin, the kit's `Dim` and the probe's checks. All are killed but one equivalent:
+    hiding a repair button's glass at install, which the kit's `ShowPanels` undoes at style time.
+  - Two were killed only after fixes. The stub's order was wrong: Blizzard runs the repair update
+    (MerchantFrame.lua:413), then the slot's `Show` (:479), then the junk button's `SetShown` (:482),
+    last. And Blizzard's standalone repair refresh (`PLAYER_MONEY`/`GUILDBANK_UPDATE_MONEY`, :99-101)
+    is now exercised.
+
 ## Tests
 
 - **Theme:** a "window" surface gets the floor on clear and class, and keeps smoked's 0.92; a body

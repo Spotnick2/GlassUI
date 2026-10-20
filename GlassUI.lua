@@ -15,8 +15,7 @@ local say = API.Print
 --   suite    { theme = Suite.THEMES key, follow = { [addon] = false } (an opt-out, #82),
 --              look = { [key] = value } }, or nil when nothing differs
 --              (Suite keeps it sparse). The skins' tint is look.tint (#67).
---   merchantLayout  "bar" | "sections", the merchant's layout (#86)
-local DEFAULTS = { enabled = true, merchantLayout = "bar" }
+local DEFAULTS = { enabled = true }
 GUI.DEFAULTS = DEFAULTS
 
 local function ensureDefaults()
@@ -79,7 +78,6 @@ local function helpLines()
         "/glassui suite - the Glass addons and whether each follows the suite theme",
         "/glassui suite follow <addon> on|off - an addon follows Glass UI (after /reload)",
         "/glassui look - the suite look (tint and button feedback); look tint smoked, look preset soft",
-        "/glassui merchant bar|sections - the merchant window: one footer, or Blizzard's boxes",
         "/glassui options - the settings page",
         "/glassui failures - what failed to build or register",
         "/glassui version - client build vs the measured one",
@@ -181,11 +179,6 @@ local function slash(msg)
         look("tint", a)
     elseif cmd == "theme" then
         say("/glassui theme " .. table.concat(GUI.Theme.NAMES, "|") .. " (now " .. GUI.Theme.Name() .. ")")
-    elseif cmd == "merchant" and (a == "bar" or a == "sections") then
-        GUI.Merchant.SetSaved(a)
-        say("merchant window: " .. a)
-    elseif cmd == "merchant" then
-        say("/glassui merchant bar|sections (now " .. GUI.Merchant.Saved() .. ")")
     elseif cmd == "options" then
         if not GUI.Options.Open() then say("the settings page isn't available") end
     elseif cmd == "look" then

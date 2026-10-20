@@ -1062,26 +1062,10 @@ Probe:Steps("merchant", {
 })
 
 --------------------------------------------------------------------------------
--- The merchant's layout (#84, docs/MERCHANT.md section 4): sections (closer
--- to Blizzard's) or the mockup's bar, switched live through Glass UI's own
--- GUI.Merchant.SetLayout (not saved: a /reload is sections again). Each
--- check reads our pieces as the layout shows them. Saved as ML.<label>.
+-- The merchant's layout (#84, #86; docs/MERCHANT.md sections 4-5): Blizzard's
+-- boxes as sections of ours, each shown while Blizzard shows what it holds.
+-- Each check records Blizzard's state beside ours. Saved as ML.<label>.
 --------------------------------------------------------------------------------
-
--- A layout, or nil for the saved one (#86: the override dropped).
-local function layoutTry(name)
-    local G = glassUI()
-    if not (G and G.Merchant and G.Merchant.SetLayout) then return false, "Glass UI not loaded" end
-    local ok = G.Merchant.SetLayout(name)
-    say("ML layout " .. tostring(name) .. ": " .. tostring(ok))
-    record("ML.layout", name or "saved")
-    return ok, name or "saved"
-end
-
-local function savedLayout()
-    local G = glassUI()
-    return G and G.Merchant and G.Merchant.Saved and G.Merchant.Saved() or nil
-end
 
 -- The close button (#86): our disc and X shown, Blizzard's four textures
 -- faded, the X's strength and offset as our feedback set them.
@@ -1122,7 +1106,7 @@ end
 
 local function sectionSeen(sec) return sec ~= nil and seen(sec.fill) end
 
--- Run 2: the header clear Pearl (on) or the floor whole (off), live.
+-- The header smoky (on) or the floor whole (off), live.
 local function headerTry(on)
     local G = glassUI()
     if not (G and G.Merchant and G.Merchant.SetHeader) then return false, "Glass UI not loaded" end
@@ -1132,24 +1116,39 @@ local function headerTry(on)
     return ok, on
 end
 
+local BAND = { "MerchantRepairAllButton", "MerchantRepairItemButton", "MerchantGuildBankRepairButton",
+               "MerchantSellAllJunkButton" }
+
+-- A page button's label alpha and whether the button is enabled.
+local function pageState(name)
+    local b = frameByName(name)
+    if not b then return nil end
+    local okE, on = call(b, "IsEnabled")
+    local alpha
+    local okR, regions = pcall(function() return { b:GetRegions() } end)
+    for _, r in ipairs(okR and regions or {}) do
+        local okT, t = call(r, "GetObjectType")
+        if okT and plain(t) == "FontString" then
+            local okA, a = call(r, "GetAlpha")
+            alpha = okA and plain(a) or nil
+        end
+    end
+    return { enabled = okE and plain(on) == true, label = alpha }
+end
+
 -- What our layout shows now, beside what Blizzard shows.
 local function layoutState(label)
     local G = glassUI()
     local u = G and G.Merchant and G.Merchant._test and G.Merchant._test.ui[frameByName("MerchantFrame") or {}]
-    local rec = { layout = G and G.Merchant and G.Merchant.Layout and G.Merchant.Layout() or nil }
+    local rec = {}
     if u then
         rec.merchantTab = seen(u.bb)
-        rec.sections = (sectionSeen(u.inset) and 1 or 0) + (sectionSeen(u.money) and 1 or 0)
-            + (sectionSeen(u.currency) and 1 or 0) + (sectionSeen(u.boxLeft) and 1 or 0)
-            + (sectionSeen(u.boxRight) and 1 or 0)
-        rec.bar = sectionSeen(u.bar)
-        rec.line = seen(u.line)
-        rec.square = u.square ~= nil and sectionSeen(u.square)
-        rec.label = seen(u.label)
+        rec.inset, rec.money, rec.currency = sectionSeen(u.inset), sectionSeen(u.money), sectionSeen(u.currency)
+        rec.boxLeft, rec.boxRight = sectionSeen(u.boxLeft), sectionSeen(u.boxRight)
         rec.empty = seen(u.empty)
         local lit = {}
-        for tab, hl in pairs(u.tabs) do
-            if seen(hl) then
+        for tab, light in pairs(u.tabs) do
+            if seen(light) then
                 local ok, n = call(tab, "GetName")
                 lit[#lit + 1] = ok and plain(n) or "?"
             end
@@ -1158,15 +1157,6 @@ local function layoutState(label)
         rec.lit = table.concat(lit, ",")
         local okN, n = pcall(GetNumBuybackItems)
         rec.buyback = okN and plain(n) or nil
-        if u.bar then
-            local okT, top = call(u.bar.fill, "GetTop")
-            local okB, bottom = call(u.bar.fill, "GetBottom")
-            rec.barTop, rec.barBottom = okT and plain(top) or nil, okB and plain(bottom) or nil
-        end
-        local r11 = frameByName("MerchantItem11")
-        local okR, rb = call(r11, "GetBottom")
-        rec.row11Bottom = okR and plain(rb) or nil
-        -- Run 2: the tabs tucked in the strata below the window's.
         local okW, ws = call(u.frame, "GetFrameStrata")
         rec.windowStrata = okW and plain(ws) or nil
         for _, t in pairs(u.tabGlass or {}) do
@@ -1174,82 +1164,96 @@ local function layoutState(label)
             rec.tabStrata = okS and plain(ts) or nil
         end
     end
+    -- Blizzard's side: the currency box, the band's buttons, the pages.
+    rec.blizzCurrency = seen(frameByName("MerchantExtraCurrencyInset"))
+    local band = {}
+    rec.bandUsed = false
+    for _, n in ipairs(BAND) do
+        band[n] = seen(frameByName(n))
+        if band[n] then rec.bandUsed = true end
+    end
+    rec.band = band
+    local CM = rawget(_G, "C_MerchantFrame")
+    if CM and CM.IsSellAllJunkEnabled then
+        local okJ, j = pcall(CM.IsSellAllJunkEnabled)
+        rec.junkEnabled = okJ and plain(j) or nil
+    end
+    rec.prev, rec.next = pageState("MerchantPrevPageButton"), pageState("MerchantNextPageButton")
     if G and G.Merchant and G.Merchant.Header then rec.header = G.Merchant.Header() end
     rec.floor = G and G.Theme and G.Theme.WINDOW_BACKING or nil
-    say("ML " .. label .. ": " .. tostring(rec.layout) .. ", merchant tab " .. tostring(rec.merchantTab)
-        .. ", sections " .. tostring(rec.sections) .. ", bar " .. tostring(rec.bar) .. ", square "
-        .. tostring(rec.square) .. ", label " .. tostring(rec.label) .. ", empty " .. tostring(rec.empty)
+    say("ML " .. label .. ": merchant tab " .. tostring(rec.merchantTab) .. ", currency " .. tostring(rec.currency)
+        .. " (Blizzard " .. tostring(rec.blizzCurrency) .. "), left box " .. tostring(rec.boxLeft) .. " (band used "
+        .. tostring(rec.bandUsed) .. "), right box " .. tostring(rec.boxRight) .. ", empty " .. tostring(rec.empty)
         .. ", lit " .. tostring(rec.lit) .. ", buyback " .. tostring(rec.buyback) .. ", header "
         .. tostring(rec.header) .. ", tabs " .. tostring(rec.tabStrata) .. " under " .. tostring(rec.windowStrata))
     record("ML." .. label, rec)
     return rec
 end
 
--- A check: the layout's pieces as `want` says ({ layout, tab = 1 | 2, label,
--- empty, header }); sections shows its 5 (Merchant tab) or 3 (Buyback tab),
--- the bar its bar and line and, on the Merchant tab, its square. The tabs'
--- glass, when read, sits in a strata other than the window's (tucked).
+-- A check: each pane against what Blizzard shows ({ tab = 1 | 2, header,
+-- empty }): the inset and the money always; the currency box with Blizzard's;
+-- the right box on the Merchant tab; the left box there while a band button
+-- shows. The tabs tucked; a page label dimmed exactly while its button is
+-- disabled.
 local function layoutOn(label, want)
     return function()
         local r = layoutState(label)
         local bad = {}
         local function want_(cond, why) if not cond then bad[#bad + 1] = why end end
-        want_(r.layout == want.layout, "layout " .. tostring(r.layout))
         local tab1 = want.tab == 1
         want_(r.merchantTab == tab1, "not on the " .. (tab1 and "Merchant" or "Buyback") .. " tab")
         want_(r.lit == (tab1 and "MerchantFrameTab1" or "MerchantFrameTab2"), "tabs lit: " .. tostring(r.lit))
         if want.header ~= nil then want_(r.header == want.header, "header " .. tostring(r.header)) end
+        want_(r.inset and r.money, "the inset or the money box missing")
+        want_(r.currency == r.blizzCurrency, "currency box " .. tostring(r.currency) .. ", Blizzard's "
+            .. tostring(r.blizzCurrency))
+        want_(r.boxRight == tab1, "right box " .. tostring(r.boxRight))
+        want_(r.boxLeft == (tab1 and r.bandUsed), "left box " .. tostring(r.boxLeft) .. ", band used "
+            .. tostring(r.bandUsed))
+        if want.empty ~= nil then want_(r.empty == want.empty, "empty state " .. tostring(r.empty)) end
         if r.tabStrata and r.windowStrata then
             want_(r.tabStrata ~= r.windowStrata, "the tabs not tucked (" .. r.tabStrata .. ")")
         end
-        if want.layout == "sections" then
-            want_(r.sections == (tab1 and 5 or 3), tostring(r.sections) .. " sections")
-            want_(not r.bar and not r.line and not r.square and not r.label, "a bar piece shown")
-            if want.empty ~= nil then want_(r.empty == want.empty, "empty state " .. tostring(r.empty)) end
-        else
-            want_(r.sections == 0, tostring(r.sections) .. " sections in the bar layout")
-            want_(r.bar and r.line, "no bar or line")
-            want_(r.square == tab1, "square " .. tostring(r.square))
-            if want.label ~= nil then want_(r.label == want.label, "label " .. tostring(r.label)) end
-            if want.empty ~= nil then want_(r.empty == want.empty, "empty state " .. tostring(r.empty)) end
-            if not tab1 and r.barTop and r.row11Bottom then
-                want_(r.barTop <= r.row11Bottom, "the bar over row 11")
+        for _, side in ipairs({ "prev", "next" }) do
+            local pg = r[side]
+            if tab1 and pg and type(pg.label) == "number" then
+                local dimmed = math.abs(pg.label - 0.4) < 0.02
+                want_(dimmed == not pg.enabled, side .. " label " .. pg.label .. ", enabled " .. tostring(pg.enabled))
             end
         end
-        return #bad == 0, #bad == 0 and (tostring(r.layout) .. " as wanted") or table.concat(bad, "; ")
+        return #bad == 0, #bad == 0 and "as Blizzard shows it" or table.concat(bad, "; ")
     end
 end
 
--- Run 3 (#86, docs/MERCHANT.md section 5): the layout a setting (the bar by
--- default), the item area denser (0.93), a smoky header, quieter red, the
--- tabs' gradient, the close button in glass.
+-- Run 3, amended (#86, docs/MERCHANT.md section 5, "Amendment: sections
+-- only"): one layout; the panes follow Blizzard's boxes; the tabs, the close
+-- button, the page and repair buttons in glass.
 Probe:Steps("merchantlayout", {
-    title = "Glass UI: the merchant, run 3: denser items, smoky header, tabs, close button, the setting (#86)",
-    rev = 3,
-    { text = "Sets the defaults: the saved layout (the bar unless you changed it), the smoky header, the window "
-          .. "93% opaque.", auto = true,
-      run = function() return setCVar("scriptErrors", "1"), layoutTry(nil), headerTry(true), floorRestore() end },
-    { text = "Talk to a vendor with something behind the window (RestedXP's guide, as in run 2), ideally one "
-          .. "selling an item you can't use (red).", event = "MERCHANT_SHOW" },
-    { text = "What changed: the item area denser; the top smoky glass running into it, a line between; the red "
-          .. "cards quieter (the icons stay red); the open tab with a warm gradient like Blizzard's, the other "
-          .. "darker; the close button a glass disc with a gold X. Press Next for a screenshot.",
-      screenshot = "run 3, defaults", check = layoutOn("r3 defaults", { layout = "bar", tab = 1, header = true }) },
-    { text = "Is the guide behind the rows hard enough to read now, and does the top read as smoky glass joined to "
-          .. "the item area? Anything off: the Note.", ask = true },
-    -- The floor.
-    { text = "For comparison, run 2's 85%.", button = "85%", run = function() return floorTry(0.85) end,
-      screenshot = "run 3, floor 0.85" },
-    { text = "And back to 93%.", button = "93%", run = function() return floorTry(0.93) end },
-    { text = "Keep 93%? Yes keeps it; No, and write the number you want in the Note.", ask = true },
-    -- The tabs.
-    { text = "Open the Buyback tab. Press Next for a screenshot.", screenshot = "run 3, buyback tab",
-      check = layoutOn("r3 buyback", { layout = "bar", tab = 2, header = true }) },
-    { text = "The open tab's warm gradient: does it read like Blizzard's selected tab, the other one darker? Hover "
-          .. "each tab: Blizzard's own hover glow shows?", ask = true },
+    title = "Glass UI: the merchant, run 3: sections following Blizzard, tabs, close, pages, repair (#86)",
+    rev = 4,
+    { text = "Turns on script errors and the taint log; sets the header smoky and the window 93% opaque.",
+      auto = true, run = function()
+          return setCVar("scriptErrors", "1"), setCVar("taintLog", "1"), headerTry(true), floorRestore()
+      end },
+    -- An ordinary vendor.
+    { text = "Talk to an ORDINARY vendor (no repair: a food or general goods vendor), with something behind the "
+          .. "window if you can (RestedXP's guide).", event = "MERCHANT_SHOW" },
+    { text = "What changed: no empty box on the left of the bottom band, no line through the money strip; the "
+          .. "selected tab lighter with a thin gold edge; Prev or Next dimmed when it can't be used; the item area "
+          .. "denser, the top smoky. Press Next for a screenshot.", screenshot = "run 3, ordinary vendor",
+      check = layoutOn("r3 ordinary", { tab = 1, header = true }) },
+    { text = "Open the Buyback tab. With nothing sold this session it says 'No items to buy back'. Press Next for "
+          .. "a screenshot.", screenshot = "run 3, ordinary buyback",
+      check = layoutOn("r3 ordinary buyback", { tab = 2, header = true }) },
+    { text = "Sell one item, then press Next: the item on the Buyback page, no message.",
+      check = layoutOn("r3 one sold", { tab = 2, empty = false }) },
+    { text = "Back on the Merchant tab: the slot shows it. Press Next for a screenshot.",
+      screenshot = "run 3, slot filled", check = layoutOn("r3 slot filled", { tab = 1 }) },
+    { text = "Is the guide behind hard enough to read, the top smoky glass joined to the item area, and the tabs "
+          .. "clear (the selected one lighter with its gold edge)? Anything off: the Note.", ask = true },
     -- The close button.
-    { text = "Open the Merchant tab, then rest the mouse on the close button (don't click) until this step goes "
-          .. "on by itself; a screenshot is taken.", screenshot = "run 3, close hover", timeout = 60,
+    { text = "Rest the mouse on the close button (don't click) until this step goes on by itself; a screenshot is "
+          .. "taken.", screenshot = "run 3, close hover", timeout = 60,
       wait = function()
           local r = closeState("r3 close hover")
           return r.hover == true, "waiting for the mouse on the close button"
@@ -1258,27 +1262,47 @@ Probe:Steps("merchantlayout", {
     { text = "Does the close button read as glass with a gold X, with clean round edges? Press and hold it a moment "
           .. "(then move away before releasing, so the window stays): the X dips 1 px?", ask = true },
     { text = "Now click the close button: the window closes.", event = "MERCHANT_CLOSED" },
-    { text = "Talk to the vendor again.", event = "MERCHANT_SHOW", check = closeOn("r3 close reopened", false) },
-    -- The setting, through the slash, across a /reload.
-    { text = "Type /glassui merchant sections (the setting, saved).", timeout = 120,
-      wait = function() return savedLayout() == "sections", "waiting for the setting" end,
-      screenshot = "run 3, sections saved", check = layoutOn("r3 sections saved", { layout = "sections", tab = 1, header = true }) },
-    { text = "Type /reload: the setting should hold.", reload = true },
-    { text = "Talk to a vendor again.", event = "MERCHANT_SHOW",
-      check = layoutOn("r3 sections after reload", { layout = "sections", tab = 1, header = true }) },
-    { text = "Type /glassui merchant bar (the default again, or keep sections: the setting is yours).", timeout = 120,
-      wait = function() return savedLayout() ~= nil, savedLayout() end },
-    -- Off and on.
+    -- A smith.
+    { text = "Talk to a SMITH (a vendor who repairs).", event = "MERCHANT_SHOW",
+      check = closeOn("r3 close reopened", false) },
+    { text = "The repair buttons on the left of the band, in their box, on glass. Press Next for a screenshot.",
+      screenshot = "run 3, smith", check = layoutOn("r3 smith", { tab = 1 }) },
+    { text = "Open the Buyback tab, then the Merchant tab again, then press Next.",
+      check = layoutOn("r3 smith tabs", { tab = 1 }) },
+    { text = "If the vendor has 2 pages: press Next (the page arrow) and come back, then press Next here: the label "
+          .. "of the arrow you can't use is dimmed. Skip if one page.", screenshot = "run 3, page 2",
+      check = layoutOn("r3 pages", { tab = 1 }) },
+    { text = "Repair one item or everything (if anything needs it), then press Next: the repair buttons as "
+          .. "Blizzard greys them, the box still there.", check = layoutOn("r3 repaired", { tab = 1 }) },
+    { text = "Do the repair and page buttons read well on glass (Blizzard's icons and arrows kept, no gold rims)? "
+          .. "Anything off: the Note.", ask = true },
+    -- A currency vendor, and back.
+    { text = "Optional (Skip if none near): talk to a vendor selling for a currency (tokens, honor). Its currency "
+          .. "box shows beside the money.", event = "MERCHANT_SHOW" },
+    { text = "Press Next for a screenshot; then open the Buyback tab and press Next on the next step.",
+      screenshot = "run 3, currency vendor", check = layoutOn("r3 currency", { tab = 1 }) },
+    { text = "On the Buyback tab: the currency box as Blizzard shows it.",
+      check = layoutOn("r3 currency buyback", { tab = 2 }) },
+    { text = "Talk to an ordinary vendor again (no /reload): the currency box gone.", event = "MERCHANT_SHOW",
+      check = layoutOn("r3 ordinary again", { tab = 1 }) },
+    -- Off and on, a change meanwhile.
     { text = "Switches the skin off.", button = "Skin off", run = function() return switch(false) end,
       screenshot = "run 3, skin off",
       check = function()
           local r, c = layoutState("r3 off"), closeState("r3 close off")
-          local ok = r.sections == 0 and not r.bar and not r.square and not r.empty and r.lit == ""
-              and not c.disc and not c.x and c.blizzardArt == 1
+          local ok = not r.inset and not r.money and not r.boxLeft and not r.boxRight and not r.empty
+              and r.lit == "" and not c.disc and not c.x and c.blizzardArt == 1
           return ok, ok and "nothing of ours shown, Blizzard's close art back" or "something of ours shown while off"
       end },
-    { text = "Switches the skin on.", button = "Skin on", run = function() return switch(true) end,
-      screenshot = "run 3, on again", check = closeOn("r3 close on again", false) },
+    { text = "Close the window and talk to a different kind of vendor (a smith if you're at an ordinary one, or the "
+          .. "other way round).", event = "MERCHANT_SHOW" },
+    { text = "Switches the skin on: the boxes as Blizzard shows them now.", button = "Skin on",
+      run = function() return switch(true) end, screenshot = "run 3, on again",
+      check = layoutOn("r3 on again", { tab = 1, header = true }) },
+    { text = "Type /reload to save the results.", reload = true },
+    { text = "Talk to a vendor once more.", event = "MERCHANT_SHOW",
+      check = layoutOn("r3 after reload", { tab = 1, header = true }) },
+    taintOff(),
     { text = "Type /reload to save the results.", reload = true },
 })
 
@@ -3162,7 +3186,7 @@ boot:SetScript("OnEvent", function(_, _, name)
     say("loaded (" .. SkinProbeDB.loads .. " loads). /fp skin for the commands, /fp steps skin wave1 to start")
 end)
 
-NS._test = { closeState = closeState, closeOn = closeOn, headerTry = headerTry, layoutTry = layoutTry, layoutState = layoutState, layoutOn = layoutOn, Probe = Probe, state = state, tree = tree, fade = fade, slashOwners = slashOwners,
+NS._test = { closeState = closeState, closeOn = closeOn, headerTry = headerTry, layoutState = layoutState, layoutOn = layoutOn, Probe = Probe, state = state, tree = tree, fade = fade, slashOwners = slashOwners,
              gamepad = gamepad, panelsOn = panelsOn, panelsOff = panelsOff, borderFade = borderFade,
              borderRestore = borderRestore, gradientOn = gradientOn, gradientOff = gradientOff,
              panels = panels, faded = faded, cardAtlas = cardAtlas, cardOn = cardOn, cardOff = cardOff,

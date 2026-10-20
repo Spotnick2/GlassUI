@@ -275,8 +275,8 @@ end })
 WoW.showMerchant()
 eq(ours(MerchantFrame)[2]:GetWidth(), 58 + 2 * GUI.Merchant._test.DISC_RING, "unreadable: 58, the XML's")
 
--- The layout (#84, docs/MERCHANT.md section 4): sections (the default) or the
--- mockup's bar, switched live; the active tab marked in both.
+-- The layout (#84, #86; docs/MERCHANT.md sections 4-5): Blizzard's boxes as
+-- sections, each shown while Blizzard shows what it holds; the tabs marked.
 GUI = loadAddon()
 WoW.showMerchant()
 R = GUI.Merchant._test
@@ -284,9 +284,8 @@ local u = R.ui[MerchantFrame]
 check(u ~= nil, "the layout is built at install")
 local win = ours(MerchantFrame)[1]
 local L = GUI.Merchant
-eq(L.Layout(), "bar", "the bar by default (owner, #86)")
-eq(L.Saved(), "bar", "saved: the default")
-check(L.SetLayout("sections"), "sections for the next checks (the probe's override)")
+eq(L.Layout, nil, "one layout: no switch (#86, sections only)")
+eq(L.SetSaved, nil, "and no setting")
 local function on(sec) return sec ~= nil and sec.fill:IsShown() and sec.edges[1]:IsShown() and sec.edges[4]:IsShown() end
 local function off(sec) return sec == nil or (not sec.fill:IsShown() and not sec.edges[1]:IsShown()) end
 local function anchored(tex, point, rel, relPoint, x, y, msg) at(tex, point, rel, relPoint, x, y, msg) end
@@ -316,37 +315,78 @@ local BL, BR = R.BOX_LEFT, R.BOX_RIGHT
 anchored(u.boxLeft.fill, "TOPLEFT", MerchantFrameBottomLeftBorder, "TOPLEFT", BL[1], -BL[2], "the band's left box")
 anchored(u.boxLeft.fill, "BOTTOMRIGHT", MerchantFrameBottomLeftBorder, "BOTTOMRIGHT", -BL[3], BL[4], "inside the band")
 anchored(u.boxRight.fill, "TOPLEFT", MerchantFrameBottomLeftBorder, "TOPLEFT", BR[1], -BR[2], "the band's right box")
-check(on(u.inset) and on(u.money) and on(u.currency), "sections: the inset, money and currency boxes shown")
-check(on(u.boxLeft) and on(u.boxRight), "and the band's two boxes on the Merchant tab")
-check(off(u.bar) and not u.line:IsShown(), "no bar, no header line")
-check(not u.square.host:IsShown() and not u.label:IsShown(), "no buyback square or label")
+check(u.bar == nil and u.line == nil and u.square == nil and u.label == nil, "no bar pieces (#86)")
+-- An ordinary vendor: no extra currency, no repair, no junk selling.
+check(on(u.inset) and on(u.money), "the item inset and the money box")
+check(off(u.currency), "no extra currency: Blizzard hides its box, so no pane (the run 2 divider)")
+check(on(u.boxRight), "the band's right box: the buyback slot")
+check(off(u.boxLeft), "the left box empty: no pane (the critique's empty rectangle)")
 check(not u.empty:IsShown(), "no empty state")
+-- A smith: the repair buttons in Blizzard's order.
+WoW.merchantBand(true, false, false)
+check(on(u.boxLeft), "a smith: the left box holds the repair buttons")
 WoW.merchantTab(2)
 check(off(u.boxLeft) and off(u.boxRight), "the Buyback tab: the band's boxes go with the band")
 check(on(u.inset) and on(u.money), "the rest stays")
+WoW.asBlizzard(function() MerchantRepairAllButton:Show() end)
+check(off(u.boxLeft), "a repair update while on the Buyback tab: no box over its rows")
+WoW.asBlizzard(function() MerchantRepairAllButton:Hide() end)
 WoW.merchantTab(1)
-check(on(u.boxLeft) and on(u.boxRight), "the Merchant tab: back")
+check(on(u.boxLeft) and on(u.boxRight), "the Merchant tab: back, the repair buttons with them")
+WoW.merchantBand(true, true, false)
+check(on(u.boxLeft), "with guild bank repair")
+WoW.merchantBand(false, false, false)
+check(off(u.boxLeft), "an ordinary vendor again: gone")
+-- PLAYER_MONEY / GUILDBANK_UPDATE_MONEY: the repair buttons alone, no slot Show after (MerchantFrame.lua:99-101).
+WoW.asBlizzard(function() MerchantRepairAllButton:Show(); MerchantRepairItemButton:Show() end)
+check(on(u.boxLeft), "a repair refresh on its own: the box follows (the buttons' own hooks)")
+WoW.asBlizzard(function() MerchantRepairAllButton:Hide(); MerchantRepairItemButton:Hide() end)
+check(off(u.boxLeft), "and goes")
+-- Sell-junk alone: Blizzard's SetShown, which never calls the Lua Show/Hide.
+WoW.merchantBand(false, false, true)
+check(on(u.boxLeft), "the junk button shown by SetShown: the box (its own hook)")
+WoW.asBlizzard(function() MerchantSellAllJunkButton:SetEnabled(false) end)
+WoW.merchantBand(false, false, true)
+check(on(u.boxLeft), "shown but disabled (no junk): the box stays")
+WoW.merchantBand(false, false, false)
+check(off(u.boxLeft), "hidden: gone")
+-- A currency vendor, and back, without a reload.
+WoW.merchantCurrencies(2)
+check(on(u.currency), "extra currency: Blizzard shows its box, so the pane")
+WoW.merchantTab(2)
+check(on(u.currency), "on the Buyback tab too, as Blizzard keeps it")
+WoW.merchantTab(1)
+WoW.merchantCurrencies(0)
+check(off(u.currency), "none again: gone")
 
 -- The active tab: the stock tab's warm gradient on its glass, the other
 -- darker, following Blizzard's MiddleActive.
 local hl1, hl2 = u.tabs[MerchantFrameTab1], u.tabs[MerchantFrameTab2]
 local dim1, dim2 = u.dims[MerchantFrameTab1], u.dims[MerchantFrameTab2]
-check(hl1 and hl2 and dim1 and dim2, "a glow and a dim on each tab")
+local edge1, edge2 = u.edges[MerchantFrameTab1], u.edges[MerchantFrameTab2]
+check(hl1 and hl2 and dim1 and dim2 and edge1 and edge2, "a light, an edge and a dim on each tab")
 eq(hl1:GetParent(), ours(MerchantFrameTab1)[1], "on the tab's glass")
 check(hl1._masks and hl1._masks[1] == u.tabGlass[MerchantFrameTab1].g.mask, "inside its glass")
 check(dim1._masks and dim1._masks[1] == u.tabGlass[MerchantFrameTab1].g.mask, "the dim too")
 check(hl1:IsShown() and not hl2:IsShown(), "the Merchant tab lit")
+check(edge1:IsShown() and not edge2:IsShown(), "and edged")
 check(dim2:IsShown() and not dim1:IsShown(), "the Buyback tab dimmed")
-local gr = hl1._gradient
-check(gr and gr[1] == "VERTICAL", "a vertical gradient")
+check(hl1._color[1] == 1 and hl1._color[2] == 1 and hl1._color[4] == R.TAB_LIGHT, "a neutral light: white at TAB_LIGHT")
+check(hl1._gradient == nil, "no gradient: the gold fill gone (the critique's 'muddy gold')")
 local gold = GUI.Suite.ACCENTS.gold
-check(gr and gr[2].r == gold[1] and gr[2].g == gold[2] and gr[2].a == R.TAB_GLOW, "the accent at TAB_GLOW at the bottom")
-check(gr and gr[3].r == gold[1] and gr[3].a == 0, "to nothing at the top")
+local ec1 = edge1._color
+check(ec1 and ec1[1] == gold[1] and ec1[2] == gold[2] and ec1[4] == R.TAB_EDGE, "the edge in the accent at TAB_EDGE")
+eq(edge1._height, 1, "1 px")
+local tgl = ours(MerchantFrameTab1)[1]
+at(edge1, "BOTTOMLEFT", tgl, "BOTTOMLEFT", R.TAB_EDGE_INSET, 1, "along the tab glass's bottom, clear of its corners")
+at(edge1, "BOTTOMRIGHT", tgl, "BOTTOMRIGHT", -R.TAB_EDGE_INSET, 1, "to the other side")
+check(edge1._masks and edge1._masks[1] == u.tabGlass[MerchantFrameTab1].g.mask, "inside its glass")
 eq(dim1._color[1], 0, "the dim black")
 eq(dim1._color[4], R.TAB_DIM, "at TAB_DIM")
 WoW.merchantTab(2)
 check(hl2:IsShown() and not hl1:IsShown(), "the Buyback tab lit after the switch")
 check(dim1:IsShown() and not dim2:IsShown(), "and the Merchant tab dimmed")
+check(edge2:IsShown() and not edge1:IsShown(), "the edge moved with it")
 WoW.asBlizzard(function() MerchantFrameTab1.MiddleActive:Show() end)
 check(hl1:IsShown(), "MiddleActive shown alone lights it (the hook on the instance)")
 WoW.asBlizzard(function() MerchantFrameTab1.MiddleActive:Hide() end)
@@ -361,7 +401,8 @@ eq(MerchantFrame:GetFrameStrata(), "MEDIUM", "the window: a MEDIUM panel")
 eq(tg1:GetFrameStrata(), "LOW", "the tab's glass in the strata below, behind the window's floor")
 eq(R.ui[MerchantFrame].tabGlass[MerchantFrameTab1].g.top:GetFrameStrata(), "LOW", "its rim too")
 eq(ours(MerchantFrameTab2)[1]:GetFrameStrata(), "LOW", "both tabs")
-eq(R.TAB_GLOW, 0.3, "the glow")
+eq(R.TAB_LIGHT, 0.12, "the light")
+eq(R.TAB_EDGE, 0.8, "the edge")
 eq(R.TAB_DIM, 0.25, "the dim")
 
 -- The header: the window's backing from the item inset's top down, a smoky
@@ -416,45 +457,13 @@ WoW.merchantRow(2, "red")
 local r2 = R.rows[MerchantItem2]
 eq(R.RED, 0.12, "0.12")
 near(r2.red._color[4], R.RED, "sections: full red at RED")
-eq(L.SetLayout("glitter"), false, "an unknown layout is refused")
-eq(L.Layout(), "sections", "and changes nothing")
-
--- The bar, live.
-check(L.SetLayout("bar"), "bar")
-near(r2.red._color[4], R.RED, "bar: the same")
-check(r2.red:IsShown(), "still shown")
 WoW.merchantRow(4, "darkred")
 near(R.rows[MerchantItem4].red._color[4], R.RED * 0.5, "dark red: half of it")
-check(off(u.inset) and off(u.money) and off(u.currency) and off(u.boxLeft) and off(u.boxRight), "bar: no sections")
-check(on(u.bar), "one footer bar")
-check(u.line:IsShown(), "a header line")
-anchored(u.line, "TOPLEFT", MerchantFrame.Inset, "TOPLEFT", 0, 0, "along the inset's top")
-anchored(u.bar.fill, "TOPLEFT", MerchantFrameBottomLeftBorder, "TOPLEFT", R.BAR_TOPLEFT[1], -R.BAR_TOPLEFT[2],
-    "Merchant tab: from the band's top")
-anchored(u.bar.fill, "BOTTOMRIGHT", MerchantMoneyInset, "BOTTOMRIGHT", 0, 0, "to the money's bottom right")
--- The buyback slot: a square always, its label while empty.
-eq(u.square.host:GetParent(), MerchantBuyBackItem, "the square's frame is in the buyback slot: it hides with it")
-eq(u.square.host:GetFrameLevel(), MerchantBuyBackItem:GetFrameLevel(), "at its level, under its ItemButton")
-check(u.square.host:IsShown() and on(u.square), "the square shown")
-anchored(u.square.fill, "TOPLEFT", MerchantBuyBackItemItemButton, "TOPLEFT", -R.SQUARE_OUTSET, R.SQUARE_OUTSET,
-    "round the ItemButton")
-check(u.label:IsShown(), "empty: the label shown")
-eq(u.label:GetText(), "Buyback", "Buyback")
-eq(u.label._font, "GameFontHighlight", "in a Blizzard font")
-anchored(u.label, "LEFT", MerchantBuyBackItemItemButton, "RIGHT", 8, 0, "beside the slot")
-WoW.buybackSlot(134400)
-check(not u.label:IsShown(), "an item sold: Blizzard's name instead")
-check(u.square.host:IsShown(), "the square stays")
-WoW.buybackSlot(nil)
-check(u.label:IsShown(), "bought back: the label again")
 -- The Buyback tab: the bar clear of rows 11-12; the empty state with nothing sold.
 -- Nothing sold: Blizzard's Buyback page has every row's button hidden.
 WoW.buybackCount = 0
 for i = 1, 12 do WoW.merchantRow(i, "empty") end
 WoW.merchantTab(2)
-anchored(u.bar.fill, "TOPLEFT", MerchantExtraCurrencyInset, "TOPLEFT", 0, 0, "Buyback tab: the money strip only")
-anchored(u.bar.fill, "BOTTOMRIGHT", MerchantMoneyInset, "BOTTOMRIGHT", 0, 0, "to the money's bottom right")
-eq(#u.bar.fill._points, 2, "two points, the old ones cleared")
 check(u.empty:IsShown(), "nothing sold: the empty state")
 eq(u.empty:GetParent(), MerchantFrame, "in the window")
 eq(u.empty:GetFrameLevel(), MerchantFrame:GetFrameLevel() + 1, "over its glass")
@@ -472,9 +481,6 @@ WoW.merchantRow(1, "empty")
 check(u.empty:IsShown(), "the last bought back: back")
 WoW.merchantTab(1)
 check(not u.empty:IsShown(), "the Merchant tab: none")
-anchored(u.bar.fill, "TOPLEFT", MerchantFrameBottomLeftBorder, "TOPLEFT", R.BAR_TOPLEFT[1], -R.BAR_TOPLEFT[2],
-    "back to the band's top")
-eq(#u.bar.fill._points, 2, "two points again, the Buyback tab's cleared")
 -- Closing on the Buyback tab, and the window shown again.
 WoW.merchantTab(2)
 check(u.empty:IsShown(), "on the Buyback tab")
@@ -482,79 +488,97 @@ WoW.hideMerchant()
 WoW.merchantTab(1)
 WoW.showMerchant()
 check(not u.empty:IsShown(), "reopened on the Merchant tab: none")
--- The empty message in sections too (#86).
-L.SetLayout("sections")
-WoW.merchantTab(2)
-check(u.empty:IsShown(), "sections: the empty message on an empty Buyback page")
-WoW.buybackCount = 1
-WoW.merchantRow(1, "normal")
-check(not u.empty:IsShown(), "and gone with the first sale")
-WoW.buybackCount = 0
-WoW.merchantRow(1, "empty")
-WoW.merchantTab(1)
-L.SetLayout("bar")
 
--- Off: nothing of ours; every hook a no-op; switching meanwhile; on: re-synced.
+-- Off: nothing of ours; every hook a no-op; Blizzard's changes meanwhile; on: re-synced.
 WoW.merchantTab(2)
 GUI._test.slash("skin merchant off")
 check(not u.empty:IsShown() or not u.empty:IsVisible(), "off: the empty state hidden")
 check(not win:IsShown() and not ours(MerchantFrameTab1)[1]:IsShown(), "the window glass, its sections and the tab lights hidden")
-check(not u.square.host:IsShown(), "the square hidden")
-local count = 0
-for _ in pairs(R.ui) do count = count + 1 end
-check(u.label:IsShown(), "the label was shown (slot empty) when the skin went off")
 WoW.merchantTab(1)
-WoW.buybackSlot(134400)
+WoW.merchantBand(true, false, false)
+WoW.merchantCurrencies(1)
 WoW.merchantRow(2, "red")
-check(not u.square.host:IsShown(), "off: Blizzard's changes show nothing of ours")
-check(u.label:IsShown(), "and its hooks are no-ops: the label's state untouched by the sale")
-check(not hl1:IsShown() or not ours(MerchantFrameTab1)[1]:IsShown(), "nor light a tab")
-check(L.SetLayout("sections"), "switching while off is kept")
+check(off(u.boxLeft) and off(u.currency), "off: Blizzard's changes lay nothing out")
 L.SetHeader(false)
 eq(u.backing._points[1][1], "TOP", "the header switched while off moves nothing")
 near(r2.red._color[4], R.RED, "the red unchanged while off")
 GUI._test.slash("skin merchant on")
-check(on(u.inset) and on(u.boxLeft) and off(u.bar), "on again: the layout chosen meanwhile")
-check(not u.square.host:IsShown() and not u.empty:IsShown(), "and none of the bar's pieces")
+check(on(u.boxLeft) and on(u.currency), "on again: the repair box and the currency box as Blizzard shows them now")
+check(not u.empty:IsShown(), "no empty state on the Merchant tab")
 near(r2.red._color[4], R.RED, "its red")
 check(hl1:IsShown() and not hl2:IsShown(), "the tab lit as Blizzard shows it now")
 eq(u.backing._points[1][1], "ALL", "and the header as set while off")
 L.SetHeader(true)
-L.SetLayout(nil)
-WoW.buybackSlot(nil)
+WoW.merchantBand(false, false, false)
+WoW.merchantCurrencies(0)
 WoW.buybackCount = nil
 
--- The setting (#86): saved sparsely, the probe's override over it.
-eq(L.Layout(), "bar", "no override: the saved bar")
-local refreshed = 0
-local realRefresh = GUI.Options.Refresh
-GUI.Options.Refresh = function() refreshed = refreshed + 1 end
-GUI._test.slash("merchant sections")
-eq(rawget(GlassUIDB, "merchantLayout"), "sections", "saved")
-eq(L.Saved(), "sections", "the saved value")
-eq(L.Layout(), "sections", "shown")
-check(on(u.inset) and off(u.bar), "applied live")
-eq(refreshed, 1, "the settings page redrawn")
-check(L.SetLayout("bar"), "the probe's override")
-eq(L.Layout(), "bar", "shows the bar")
-eq(L.Saved(), "sections", "the saved value untouched")
-check(on(u.bar), "laid out")
-check(L.SetLayout(nil), "dropped")
-eq(L.Layout(), "sections", "back to the saved one")
-check(on(u.inset), "laid out again")
-GUI._test.slash("merchant bar")
-eq(rawget(GlassUIDB, "merchantLayout"), nil, "the default: nothing saved")
-eq(L.Layout(), "bar", "the bar")
-eq(L.SetSaved("glitter"), false, "an unknown layout is refused")
-eq(rawget(GlassUIDB, "merchantLayout"), nil, "nothing saved")
+-- The page buttons (#86): their gold-rimmed background faded, our glass under
+-- them, a disabled one's label dimmed (Kit Dim).
+local function pageRegions(b)
+    local label, bg
+    for _, r in ipairs({ b:GetRegions() }) do
+        if r._type == "FontString" then label = r end
+        if r._type == "Texture" and r._layer == "BACKGROUND" then bg = r end
+    end
+    return label, bg
+end
+local prevLabel, prevBg = pageRegions(MerchantPrevPageButton)
+local nextLabel, nextBg = pageRegions(MerchantNextPageButton)
+eq(prevBg:GetAlpha(), 0, "Prev's gold-rimmed background faded")
+eq(nextBg:GetAlpha(), 0, "Next's too")
+eq(MerchantPrevPageButton._normal:GetAlpha(), 1, "the arrow stays Blizzard's")
+local pg = ours(MerchantPrevPageButton)[1]
+check(pg ~= nil, "our glass in the page button")
+eq(pg:GetFrameLevel(), MerchantPrevPageButton:GetFrameLevel() - 1, "under it")
+at(pg, "TOPLEFT", MerchantPrevPageButton, "TOPLEFT", 0, 0, "round its own size")
+WoW.merchantPage(1, 2)
+eq(prevLabel:GetAlpha(), R.PAGE_DIM, "page 1: Prev disabled, its label dimmed")
+eq(nextLabel:GetAlpha(), 1, "Next enabled: its label as Blizzard has it")
+WoW.asBlizzard(function() prevLabel:SetAlpha(0.9) end)
+eq(prevLabel:GetAlpha(), R.PAGE_DIM, "Blizzard's alpha while dimmed: held")
+WoW.merchantPage(2, 2)
+eq(prevLabel:GetAlpha(), 0.9, "page 2: Prev enabled, given back Blizzard's latest alpha")
+eq(nextLabel:GetAlpha(), R.PAGE_DIM, "Next disabled on the last page: dimmed")
+WoW.merchantPage(2, 2)
+eq(nextLabel:GetAlpha(), R.PAGE_DIM, "dimmed again: no recapture of our own alpha")
 GUI._test.slash("skin merchant off")
-GUI._test.slash("merchant sections")
-eq(refreshed, 3, "the page redrawn while off too")
-check(u.bar.fill:IsShown() and not u.inset.fill:IsShown(), "off: nothing laid out (the bar's pieces as they were)")
+eq(nextLabel:GetAlpha(), 1, "off: the label back")
+eq(prevBg:GetAlpha(), 1, "and the background")
+WoW.merchantPage(1, 2)
+eq(prevLabel:GetAlpha(), 0.9, "off: Blizzard disabling Prev dims nothing")
 GUI._test.slash("skin merchant on")
-check(on(u.inset) and off(u.bar), "on: the setting saved while off")
-GUI._test.slash("merchant bar")
-GUI.Options.Refresh = realRefresh
+eq(prevLabel:GetAlpha(), R.PAGE_DIM, "on: dimmed from the button's state now")
+eq(nextLabel:GetAlpha(), 1, "and Next as it is")
+-- Dim on its own: a fractional read-back within 0.01; a region ignoring SetAlpha refused.
+local K = GUI.Kit.New(GUI.Engine.byKey.merchant)
+local fs = WoW.blizzObject("FontString", MerchantFrame, nil, "OVERLAY")
+rawset(fs, "GetAlpha", function() return 0.4049 end)
+check(K:Dim(fs, 0.4), "a read-back off by under 0.01 is accepted")
+local stuck = WoW.blizzObject("FontString", MerchantFrame, nil, "OVERLAY")
+rawset(stuck, "GetAlpha", function() return 1 end)
+check(not K:Dim(stuck, 0.4), "a region that reads back 1 is refused")
+check(GUI.failures["fade:merchant:FontString"] ~= nil or next(GUI.failures) ~= nil, "and recorded")
+for k in pairs(GUI.failures) do GUI.failures[k] = nil end
+K:Dim(fs, nil)
+
+-- The repair buttons (#86): their slot faded, our glass behind them; the icon Blizzard's.
+WoW.merchantBand(true, true, false)
+for _, n in ipairs({ "MerchantRepairAllButton", "MerchantRepairItemButton", "MerchantGuildBankRepairButton" }) do
+    local b = _G[n]
+    local slot = select(2, b:GetRegions())
+    eq(slot._layer, "BACKGROUND", n .. ": (its slot)")
+    eq(slot:GetAlpha(), 0, n .. ": its slot faded")
+    eq(b.Icon:GetAlpha(), 1, n .. ": its icon Blizzard's")
+    local g = ours(b)[1]
+    check(g ~= nil and g:GetFrameLevel() == b:GetFrameLevel() - 1, n .. ": our glass under it")
+    check(g:IsShown(), n .. ": shown")
+end
+eq(select(2, MerchantSellAllJunkButton:GetRegions()):GetAlpha(), 1, "the junk button left stock")
+GUI._test.slash("skin merchant off")
+eq(select(2, MerchantRepairAllButton:GetRegions()):GetAlpha(), 1, "off: the repair slot back")
+GUI._test.slash("skin merchant on")
+WoW.merchantBand(false, false, false)
 
 -- The close button (#86): Blizzard's red art faded, our disc and gold X.
 local cb = MerchantFrame.CloseButton
@@ -590,7 +614,8 @@ at(x, "CENTER", cb, "CENTER", 0, 0, "released")
 GUI._test.slash("look accent ice")
 local ice = GUI.Suite.ACCENTS.ice
 check(u.closeX[1]._color[1] == ice[1] and u.closeX[1]._color[4] == 1, "the X in ice, at its current strength")
-check(hl1._gradient[2].r == ice[1] and hl1._gradient[2].a == R.TAB_GLOW, "the glow in ice")
+check(edge1._color[1] == ice[1] and edge1._color[4] == R.TAB_EDGE, "the tab's edge in ice")
+check(hl1._color[1] == 1, "the light stays neutral")
 GUI._test.slash("look accent gold")
 check(u.closeX[1]._color[1] == gold[1], "and gold again")
 -- A hover that ends while off: re-synced when on.
@@ -619,12 +644,6 @@ eq(u.closeX[1]._color[4], 1, "on with the mouse over it: full")
 at(x, "CENTER", cb, "CENTER", 0, 0, "not pressed")
 WoW.mouseOver[cb] = nil
 WoW.asBlizzard(function() cb._scripts.OnLeave(cb) end)
-
--- The saved layout after a reload.
-GUI = loadAddon({ db = { merchantLayout = "sections" } })
-WoW.showMerchant()
-eq(GUI.Merchant.Layout(), "sections", "a saved sections survives a reload")
-check(GUI.Merchant._test.ui[MerchantFrame].inset.fill:IsShown(), "and is laid out")
 
 -- The switch survives a reload.
 GUI = loadAddon({ db = { skins = { merchant = false } } })

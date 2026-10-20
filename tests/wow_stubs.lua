@@ -177,6 +177,7 @@ function Methods.IsObjectType(w, t)
     return t == "Frame" and (w._type == "Button" or w._type == "CheckButton")
 end
 function Methods.GetObjectType(w) return w._type end
+function Methods.GetDrawLayer(w) return w._layer, w._sub or 0 end
 function Methods.IsForbidden(w) return false end
 function Methods.IsProtected(w) return w._protected == true end
 function Methods.EnableMouse(w, v) w._mouse = v and true or false end
@@ -665,9 +666,39 @@ function WoW.makeMerchant()
         f.Inset = inset(f)
         f.FilterDropdown = blizz("DropdownButton", f)
         inset(f, "MerchantMoneyInset")
-        inset(f, "MerchantExtraCurrencyInset")
+        -- The common case: no extra currency, so Blizzard hides its box
+        -- (MerchantFrame_UpdateCurrencies, :1029-1035).
+        inset(f, "MerchantExtraCurrencyInset")._shown = false
         blizz("Frame", f, "MerchantMoneyBg")
-        blizz("Frame", f, "MerchantExtraCurrencyBg")
+        blizz("Frame", f, "MerchantExtraCurrencyBg")._shown = false
+        -- A button's own regions, as GetRegions lists them.
+        local function region(parent, wtype, layer)
+            local r = blizz(wtype, parent, nil, layer)
+            table.insert(parent._regions, r)
+            return r
+        end
+        -- The page buttons (MerchantFrame.xml:527-560): the label and the
+        -- gold-rimmed background on BACKGROUND, the arrow in the state
+        -- textures (ARTWORK).
+        for _, n in ipairs({ "MerchantPrevPageButton", "MerchantNextPageButton" }) do
+            local b = blizz("Button", f, n)
+            b._width, b._height = 32, 32
+            -- A state texture listed first: the background is found by its layer.
+            b._normal = region(b, "Texture", "ARTWORK")
+            region(b, "FontString", "BACKGROUND")
+            region(b, "Texture", "BACKGROUND")._atlas = "UI-PageButton-Background"
+            b._disabled = region(b, "Texture", "ARTWORK")
+        end
+        -- The band's left box (MerchantFrame.xml:200-330): the repair buttons
+        -- and the sell-junk button, each a slot on BACKGROUND and its Icon,
+        -- hidden until Blizzard's update shows them.
+        for _, n in ipairs({ "MerchantRepairAllButton", "MerchantRepairItemButton", "MerchantGuildBankRepairButton",
+                             "MerchantSellAllJunkButton" }) do
+            local b = blizz("Button", f, n)
+            b._width, b._height, b._shown = 36, 36, false
+            b.Icon = region(b, "Texture", "BORDER")
+            region(b, "Texture", "BACKGROUND")._atlas = "UI-EmptySlot"
+        end
         blizz("Texture", f, "MerchantFrameBottomLeftBorder", "OVERLAY")
         blizz("Texture", f, "BuybackBG", "BACKGROUND")._shown = false
         -- MerchantItemTemplate rows (level 2), and the buyback slot, whose
@@ -695,8 +726,54 @@ function WoW.makeMerchant()
     return MerchantFrame
 end
 
+-- The vendor's band (MerchantFrame.lua:482, 987-1020): repair (and guild bank
+-- repair) and sell-junk, applied on the Merchant tab in Blizzard's order.
+WoW.merchantVendor = { repair = false, guild = false, junk = false }
+local function vendorBand()
+    local v = WoW.merchantVendor
+    if v.repair then                                        -- MerchantFrame_UpdateRepairButtons, :413
+        if v.guild then MerchantGuildBankRepairButton:Show() else MerchantGuildBankRepairButton:Hide() end
+        MerchantRepairAllButton:Show()
+        MerchantRepairItemButton:Show()
+    else
+        MerchantRepairAllButton:Hide()
+        MerchantRepairItemButton:Hide()
+        MerchantGuildBankRepairButton:Hide()
+    end
+    MerchantBuyBackItem:Show()                              -- :479
+    MerchantSellAllJunkButton:SetShown(v.junk)              -- :482, last, never the Lua Show/Hide
+end
+
+-- A vendor's band changing (another vendor, or the same one updated).
+function WoW.merchantBand(repair, guild, junk)
+    WoW.merchantVendor = { repair = repair, guild = guild, junk = junk }
+    WoW.asBlizzard(function()
+        if MerchantBuyBackItem:IsShown() then vendorBand() end
+    end)
+end
+
+-- Blizzard's currency box (MerchantFrame_UpdateCurrencies, :1029-1039).
+function WoW.merchantCurrencies(n)
+    WoW.asBlizzard(function()
+        if n == 0 then
+            MerchantExtraCurrencyInset:Hide(); MerchantExtraCurrencyBg:Hide()
+        else
+            MerchantExtraCurrencyInset:Show(); MerchantExtraCurrencyBg:Show()
+        end
+    end)
+end
+
+-- Blizzard's page buttons (MerchantFrame.lua:438-458).
+function WoW.merchantPage(page, pages)
+    WoW.asBlizzard(function()
+        if page == 1 then MerchantPrevPageButton:Disable() else MerchantPrevPageButton:Enable() end
+        if page == pages then MerchantNextPageButton:Disable() else MerchantNextPageButton:Enable() end
+    end)
+end
+
 -- Blizzard selecting merchant tab i (PanelTemplates_SelectTab and the buyback
--- page's art, MerchantFrame.lua:480-593): Show/Hide, never an alpha.
+-- page's art, MerchantFrame.lua:480-593): Show/Hide, never an alpha. The
+-- Buyback tab hides the band's buttons (:588-596).
 function WoW.merchantTab(i)
     WoW.asBlizzard(function()
         for n = 1, 2 do
@@ -709,7 +786,13 @@ function WoW.merchantTab(i)
         BuybackBG:SetShown(i == 2)
         MerchantFrameBottomLeftBorder:SetShown(i == 1)
         MerchantItem11:SetShown(i == 2); MerchantItem12:SetShown(i == 2)
-        MerchantBuyBackItem:SetShown(i == 1)
+        if i == 1 then
+            vendorBand()
+        else
+            MerchantRepairAllButton:Hide(); MerchantRepairItemButton:Hide()
+            MerchantBuyBackItem:Hide()
+            MerchantGuildBankRepairButton:Hide(); MerchantSellAllJunkButton:Hide()
+        end
         WoW.bset(MerchantFrame, "selectedTab", i)
     end)
 end
