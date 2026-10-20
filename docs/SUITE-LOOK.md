@@ -197,6 +197,127 @@ tint is a later step when they resume.
 - **The owner's verdict** on Pearl as GAB's default and on suite control decides what comes next:
   more followers (GUF's and GRF's body/tint) or back to GAB-owned.
 
+## The body (#67) and the accent (#52): addendum, 2026-10-19
+
+**Why.** GlassChat (its session, for the owner: "try the pearl skin glassui used for the damage meter
+and quest tracker ... synced as the glassui sync setting. Same would go for the text colors going
+back to original yellow or being set in glassui") wants to wear the glass body Glass UI's skins wear:
+- the tint;
+- the opaque backing under it;
+- the wash.
+
+The owner wants that tuning, backing density included, in one place. Followers must read it, never
+copy `Theme.PRESETS`, so it can't drift.
+
+### `Suite.Body(tint)` (additive, `Suite.API` stays 1)
+
+- **Returns** a fresh table for a tint name (`clear`, `smoked`, `class`; nil means the suite look's
+  current tint, and is nil before Glass UI is ready, as `Suite.Look`), or nil for a name it doesn't
+  know. Every nested table is fresh too, so a follower may keep or change what it gets:
+  ```lua
+  { tint = { r, g, b, a } or nil, classShade = n or nil,
+    backing = { r, g, b, a }, wash = factor }
+  ```
+  - `tint` is the body's colour. For `class` it's nil and `classShade` is set: the follower
+    multiplies its own class colour by it, keeping its surface's **built alpha** (today's Theme:
+    `SetSurfaceTint` with three values). The class colour can be unreadable early in a login; the
+    follower keeps its built tint until it can read it, and paints again then (Theme's retry at
+    PLAYER_ENTERING_WORLD).
+  - `backing` is an opaque texture under the tint, clipped by the glass mask (the kit's recipe).
+  - `wash` is a factor of the follower's own instance's `STYLE.wash`, never an absolute (#54: Pearl's
+    0.10).
+- **The numbers move from `Theme.PRESETS` into Suite**, unchanged:
+  - clear: tint {0.13, 0.16, 0.22, 0.24}, wash ×1, backing alpha 0.35;
+  - smoked: tint {0.05, 0.06, 0.08, 0.62}, wash ×0.14/0.18, backing alpha 0.92;
+  - class: classShade 0.6, wash ×1, backing alpha 0.35;
+  - backing RGB {0.04, 0.05, 0.07}.
+
+  `Theme` paints from `Suite.Body`, so Glass UI's own skins and every follower share one table.
+- **Live:** the body follows the suite look's `tint`, which already fires `LookChanged`. A follower
+  calls `Suite.Body(tint)` there with its **effective** tint: the suite's, or its own when it
+  overrides that key. No new event.
+- **Feature-detected** like `Suite.Look`: `type(rawget(Suite, "Body")) == "function"`. Without it a
+  follower uses its own body.
+- **Overrides:** a follower may keep a key of its own (GlassChat's `/gchat alpha` over the backing's
+  opacity: chat is denser reading). It reports it as `own.backing = true` in its Report.
+  - `backing` is **not** a look key (it isn't a choice on the subpage), so it can't ride on
+    `LOOK_KEYS`: `copyReport` (Suite.lua:129) copies it separately, and the card's line
+    (Options.lua:214) and `LookLine` (Suite.lua:279) add "its own backing" after the look keys.
+  - Tested on both displays (the card and `/glassui suite`).
+
+### One tint for Glass UI's skins
+
+Today Glass UI's skins read `GlassUIDB.theme` (`/glassui theme`), and the followers read the suite
+look's `tint`: two choices for the same thing. The parked note above ("Glass UI's own window skins
+keep their own clear/smoked/class for now") ends here.
+- `Theme.Name()` returns the suite look's `tint`.
+- `/glassui theme <x>` becomes `/glassui look tint <x>`, kept as an alias.
+- **Migration,** in `ensureDefaults` (GlassUI.lua:21) at ADDON_LOADED, before `MarkReady`:
+  - a saved `GlassUIDB.theme` that is a valid tint (`Theme.IsValid`) and not the default moves into
+    `GlassUIDB.suite.look.tint`, unless a look tint is already saved (read raw: a saved one wins);
+  - the other `suite` fields are kept;
+  - `theme` is dropped either way.
+
+  A suite Clear chosen explicitly is pruned to absence like the default, so it can't be told from
+  never chosen; a saved theme then moves in. The owner is the only user, so this is accepted.
+- `LookChanged` repaints the skins (`Theme.Refresh`), so a tint change on the "Suite look" subpage
+  shows on the merchant, the meter and the tracker at once.
+
+### The accent (#52)
+
+- **A suite look key, `accent`:** values `"ice"` (Pearl's {0.65, 0.835, 0.905}, GlassChat's today)
+  and `"gold"` (Blizzard's {1, 0.82, 0}).
+  - It's live, through `LookChanged`, and saved sparse like the other keys.
+  - **The default is `gold`:** the owner is unsure about GlassChat's ice blue, and gold is what
+    Blizzard's own headers show.
+- **`Suite.Accent(name)`** returns a fresh {r, g, b} for an accent name, nil meaning the suite's
+  current one (nil before Glass UI is ready), and nil for a name it doesn't know. A follower that
+  overrides the key passes its own value, so the colours live only in Glass UI and a follower maps
+  nothing. Feature-detected like `Body`.
+- **Who uses it:**
+  - GlassChat's selected tab;
+  - the quest tracker's minimize-button tint (today GQT's cool {0.75, 0.9, 1}), which becomes the
+    accent, desaturated as now. Its `LookChanged` subscriber checks `Engine.Active("tracker")`
+    first, like every hook, and recolours through `kit:Tint`, which keeps the first snapshot. So any
+    number of recolours restores Blizzard's own colour and desaturation, and leaves the current
+    atlas.
+  - **The damage meter's header titles are not part of this:** colouring Blizzard's text needs
+    `SetTextColor`, which the skin contract forbids. That's an owner exception, decided separately.
+- The "Suite look" subpage gains an Accent radio (Gold / Ice), and `/glassui look accent gold|ice`.
+
+### Tests
+
+- `Suite.Body` for each name: fresh tables, nested ones included (mutating one leaves the next
+  call's untouched), nil for an unknown name, the current tint for nil, nil before ready.
+- The class body with the class colour unreadable: the built tint kept, painted at the retry.
+- Theme paints the same numbers as before for each tint, under Pearl and clean (test_glass's wash
+  cases, unchanged results).
+- The migration: a saved `theme = "smoked"` moves once; a saved look tint wins; the default isn't
+  saved.
+- A `LookChanged` tint change repaints a registered surface. The `theme` command alias works.
+- `accent`: the values, `Suite.Accent(name)` (current, a name, unknown, before ready), the default
+  gold, saved sparse, the subpage radio.
+- The tracker's tint follows the accent live. It doesn't follow while the skin is off, and on again
+  uses the current accent. After a handover to GQT, a change touches nothing. After several
+  recolours, off restores Blizzard's colour and desaturation, with the current atlas kept.
+  - **In combat** (`WoW.combat`): an accent change recolours at once (vertex colour on Blizzard's
+    unprotected tracker textures, allowed in combat), nothing is deferred or blocked, and
+    test_contract's session includes it.
+  - In game: the accent changed on the subpage while fighting, the tracker recoloured, nothing
+    blocked (an acceptance step).
+- `own.backing` on the card and in `/glassui suite`.
+- Mutation-checked.
+
+**Review of the addendum:** Codex (`gpt-6-astra`, high effort), **consensus in round 3**
+(2026-10-19). Round 1 found no blocker; three SHOULDs and two NITs, all adopted:
+- `Accent(name)` for a follower's override;
+- `own.backing` copied and shown apart from `LOOK_KEYS`;
+- the tracker's accent path through off, handover and repeated recolours;
+- `Body`'s fresh nested tables, readiness and class alpha;
+- the migration's placement.
+
+Round 2 left the tracker's accent change in combat untested; round 3 found it resolved.
+
 ## Issues
 
 - **Glass UI:** the contract, the subpage and the page lines.
