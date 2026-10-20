@@ -66,15 +66,18 @@ W1.2's tree (70374, account #1's log):
 - **Per skin, not per theme:** `Engine.Register` gains an optional `backing = "window"`. The kit
   passes it to `Theme.Register(g, backing, "window")`.
 - **The window floor:** `paint` uses `max(body.backing[4], Theme.WINDOW_BACKING)` (`Suite.Body`'s backing
-  is positional RGBA). Clear and class
-  rise to the floor, and smoked's 0.92 stays. The tint, the wash and the colour of the backing stay
-  the body's; only the alpha rises.
+  is positional RGBA). Clear, class and smoked all rise to it. The tint, the wash and the colour of
+  the backing stay the body's; only the alpha rises.
 - **The tracker and the meter keep the body's 0.35:** QT.3 found it enough over bright ground, and
   they sit over the world, not over other windows.
-- **The floor's value is the owner's pick in game:** `Theme.WINDOW_BACKING`, 0.75 until then. The
-  acceptance tries 0.6, 0.75 and 0.85 live over another window (RestedXP's, or the quest log). It
-  sets the value on Glass UI's own table and calls `Theme.Refresh`, then takes a screenshot each
-  time.
+- **The floor is opaque, `Theme.WINDOW_BACKING = 1`** (MS.1, 70450, 2026-10-20). Over RestedXP's
+  window, its text still read through at 0.6, 0.75 and 0.85, dimmed by exactly the floor: 63, 40 and
+  23 levels above the background in the screenshots, which is 0.4 : 0.25 : 0.15. The owner picked
+  "0.85 more", then asked to hide what's behind altogether. An opaque backing does that without
+  touching RestedXP's frame (another addon's window is never ours to hide or fade). Changing the
+  merchant's strata doesn't help either: the merchant already draws over RestedXP, and it was only
+  see-through. The glass is the tint, wash and rim over the backing. The acceptance now tries 0.85,
+  0.95 and 1 live (on Glass UI's own table, then `Theme.Refresh`), a screenshot each.
 - **The merchant's tabs:** they get the floor too (same skin).
 
 ## 2. The item rows in glass
@@ -125,8 +128,10 @@ For each `MerchantItem1`..`12` and `MerchantBuyBackItem`, found by global name (
   the mask's width + 2 x `DISC_RING` (6 px), read with `GetWidth` at install.
   - The mask and portrait are sized in XML and never resized by Blizzard. A width that can't be read
     falls back to 58.
-- **The glass:** `GUI.Glass.Disc(host, "disc_small")`, registered with Theme. Its backing is masked
-  by the disc's mask, at the window's floor, so the ring reads as part of the window.
+- **The glass:** `GUI.Glass.Disc(host, "disc_small")`: Pearl, painted clear whatever the suite tint
+  (`Theme.Register(g, nil, "clear")`), with **no backing**, like GlassMiniMap's ring. With a backing
+  at the window's floor it read as a dark ring, and the owner wants it Pearl and clear (MS.3,
+  2026-10-20).
 - **Levels:** the host and its rim (`g.top`) at the PortraitContainer's level - 1 (399).
   - That's under the portrait, which covers the disc's centre, so only a ring shows, as on
     GlassMiniMap.
@@ -167,8 +172,8 @@ All mutation-checked.
 
 The existing procedure (buy, sell, buyback, off and on, a /reload), plus, recorded as MS.1-MS.3 in
 docs/FOREVER-PROBE.md:
-- **MS.1: the window floor.** 0.6, 0.75 and 0.85 over RestedXP's window or the quest log, a
-  screenshot each. The owner picks one, and that becomes `WINDOW_BACKING`.
+- **MS.1: the window floor.** 0.85, 0.95 and 1 over RestedXP's window or the quest log, a
+  screenshot each. 1 is the default; the owner confirms it still reads as glass.
 - **MS.2: the rows.** A vendor with an item you can't use (red) and a page with empty rows:
   - the red reads on the glass;
   - empty rows show no glass;

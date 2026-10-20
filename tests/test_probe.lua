@@ -214,7 +214,7 @@ local floor = { WINDOW_BACKING = 0.75, Refresh = function() end }
 rawset(_G, "GlassUI", { Theme = floor })
 local shown = 0
 for _, st in ipairs(FP.procedures["SkinProbe/merchant"].steps) do
-    local label = st.button and st.button:match("^Floor (%d%.%d+)$")
+    local label = st.button and st.button:match("^Floor (%d[%.%d]*)$")
     if label then
         st.run()
         eq(floor.WINDOW_BACKING, tonumber(label), "the step labelled " .. st.button .. " shows floor " .. label)

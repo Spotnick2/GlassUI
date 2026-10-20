@@ -281,7 +281,9 @@ function K:Disc(parent, around, opts)
     -- LibGlass: "disc" from ~96 px up, "disc_small" below (GLASS-MATERIAL.md).
     local g = GUI.BuildGlass().Disc(host, side >= 96 and "disc" or "disc_small")
     if g.top then g.top:SetFrameLevel(host:GetFrameLevel()) end
-    GUI.Theme.Register(g, self:Backing(host, g), self.backing)
+    -- Pearl, clear and without a backing, like GlassMiniMap's ring: with the
+    -- window's floor it read as a dark ring (the owner, MS.3, 2026-10-20).
+    GUI.Theme.Register(g, nil, "clear")
     self.panels[#self.panels + 1] = host
     return host, g
 end

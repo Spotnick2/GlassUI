@@ -135,14 +135,29 @@ eq(S[1].backing._color[4], 0.35, "clear repaints the backing light")
 local function surfaceOf(host)
     for _, x in ipairs(S) do if x.backing and x.backing._parent == host then return x end end
 end
+-- A surface by its glass (the disc has no backing to find it by).
+local function glassOf(host)
+    for _, x in ipairs(S) do if x.g.tint and x.g.tint._parent == host then return x end end
+end
 local win = surfaceOf(panels[1])
 eq(win.backing._color[4], GUI.Theme.WINDOW_BACKING, "clear: the window at the window floor")
-eq(GUI.Theme.WINDOW_BACKING, 0.75, "0.75 until the owner's pick (MS.1)")
-eq(surfaceOf(panels[2]).backing._color[4], GUI.Theme.WINDOW_BACKING, "its disc too")
+eq(GUI.Theme.WINDOW_BACKING, 1, "opaque: nothing behind a window reads through (owner, MS.1)")
+-- The disc (#48): Pearl clear, no backing, whatever the tint (owner, MS.3).
+local disc = glassOf(panels[2])
+check(disc ~= nil, "the disc is painted by the theme")
+eq(disc.backing, nil, "with no backing: a dark ring otherwise")
+local clearTint = B.clear.tint
+local function isClear(msg)
+    local dc = disc.g.tint._color
+    check(dc and dc[1] == clearTint[1] and dc[4] == clearTint[4], msg)
+end
+isClear("clear on the clear tint")
 GUI._test.slash("theme smoked")
-eq(win.backing._color[4], B.smoked.backing, "smoked's denser 0.92 stays")
+eq(win.backing._color[4], GUI.Theme.WINDOW_BACKING, "smoked's 0.92 rises to the floor too")
+isClear("the disc stays clear on smoked")
 GUI._test.slash("theme class")
 eq(win.backing._color[4], GUI.Theme.WINDOW_BACKING, "class rises to the floor too")
+isClear("and on class")
 eq(S[1].backing._color[4], 0.35, "while a skin over the world keeps the body's")
 GUI._test.slash("theme clear")
 
@@ -243,7 +258,7 @@ eq(disc:GetWidth(), mask:GetWidth() + 2 * R.DISC_RING, "the mask's width and a 6
 eq(disc:GetWidth(), disc:GetHeight(), "square, as a disc wants")
 at(disc, "CENTER", mask, "CENTER", 0, 0, "centred on the round mask, not the portrait's rectangle")
 eq(disc:GetFrameLevel(), M.PortraitContainer:GetFrameLevel() - 1, "one level under the portrait")
-eq(surfaceOf(disc).g.top:GetFrameLevel(), disc:GetFrameLevel(), "its rim too")
+eq(glassOf(disc).g.top:GetFrameLevel(), disc:GetFrameLevel(), "its rim too")
 check(disc:GetFrameLevel() > r1.glass:GetFrameLevel(), "over the rows' glass")
 eq(disc._name, nil, "unnamed")
 

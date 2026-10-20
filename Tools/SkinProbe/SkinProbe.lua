@@ -1005,13 +1005,14 @@ Probe:Steps("merchant", {
     { text = "Can you read every item name and price clearly?", ask = true },
     -- MS.1: the window floor (#80), over other UI.
     { text = "MS.1: have the merchant window over RestedXP's guide window or your quest log (open it beside the "
-          .. "vendor), on the clear tint. Then the window floor, one screenshot each. First 0.6.",
-      button = "Floor 0.6", run = function() return floorTry(0.6) end, screenshot = "merchant, floor 0.6" },
-    { text = "0.75 (the default for now).", button = "Floor 0.75", run = function() return floorTry(0.75) end,
-      screenshot = "merchant, floor 0.75" },
-    { text = "0.85.", button = "Floor 0.85", run = function() return floorTry(0.85) end,
-      screenshot = "merchant, floor 0.85" },
-    { text = "Which floor hides what's behind and still looks like glass? Say the number in the Note.", ask = true },
+          .. "vendor), on the clear tint. Then the window floor, one screenshot each. First 0.85 (the last pick).",
+      button = "Floor 0.85", run = function() return floorTry(0.85) end, screenshot = "merchant, floor 0.85" },
+    { text = "0.95.", button = "Floor 0.95", run = function() return floorTry(0.95) end,
+      screenshot = "merchant, floor 0.95" },
+    { text = "1: opaque, nothing behind shows (the default now).", button = "Floor 1",
+      run = function() return floorTry(1) end, screenshot = "merchant, floor 1" },
+    { text = "Does 1 hide what's behind and still look like glass (the tint and rim over it)? If not, say the number "
+          .. "you'd keep in the Note.", ask = true },
     { text = "Puts the floor back to the default.", button = "Restore", run = floorRestore },
     -- MS.2: the rows (#80).
     { text = "MS.2: the rows. Our glass under each item, none on an empty slot, and an item you can't use or afford "
@@ -1019,12 +1020,14 @@ Probe:Steps("merchant", {
       screenshot = "merchant, rows", check = rowsOn("rows", { red = true }) },
     { text = "Do the rows read well: icon, name and price on the glass, the red clear?", ask = true },
     -- MS.3: the disc (#48).
-    { text = "MS.3: the portrait's disc. It should sit round the NPC's face as a ring, centred.",
+    { text = "MS.3: the portrait's disc, now Pearl clear with no dark backing, like Glass MiniMap's ring. It should "
+          .. "sit round the NPC's face as a ring, centred.",
       check = rowsOn("disc"), screenshot = "merchant, disc" },
     { text = "Is the ring centred and the right width? Say what you'd change in the Note.", ask = true },
     { text = "Buy one cheap item. Did it land in your bags, and the money go?", ask = true },
     { text = "Sell an item from your bags (right-click it). Did it sell?", ask = true },
-    { text = "The sold item in the buyback slot under the rows, on its glass.", screenshot = "merchant, buyback slot",
+    { text = "Stay on the Merchant tab: the sold item is in the buyback slot at the bottom right (the box with the "
+          .. "arrow while it's empty), on its glass. Press Next for a screenshot.", screenshot = "merchant, buyback slot",
       check = rowsOn("buyback slot", { buyback = true }) },
     { text = "Open the Buyback tab, then press Next for a screenshot (its 12 rows, and the portrait's disc).",
       screenshot = "merchant, buyback tab",

@@ -22,9 +22,9 @@
 -- A window that opens over other UI is another case (#80, docs/MERCHANT.md):
 -- over RestedXP's guide window, clear's 0.35 let its bright text read through
 -- the merchant (the owner, 2026-10-20). Such a skin (Engine.Register's
--- backing = "window") gets at least WINDOW_BACKING; its tint, wash and the
--- backing's colour stay the body's, and smoked's denser 0.92 stays. The
--- tracker and the meter, over the world, keep the body's.
+-- backing = "window") gets at least WINDOW_BACKING (opaque now); its tint,
+-- wash and the backing's colour stay the body's. The tracker and the meter,
+-- over the world, keep the body's.
 --
 -- Only body regions are repainted (tint, wash, backing); rims are the
 -- material's. The wash is a gradient, which ignores SetAlpha on this client
@@ -40,10 +40,14 @@ GUI.Theme = Theme
 Theme.NAMES = { "clear", "smoked", "class" }
 Theme.LABELS = { clear = "Clear glass", smoked = "Smoked glass", class = "Class colour glass" }
 
--- The window floor: the owner picks it in game (docs/MERCHANT.md, MS.1).
-Theme.WINDOW_BACKING = 0.75
+-- The window floor, opaque: at 0.6, 0.75 and 0.85 RestedXP's text still read
+-- through the merchant, dimmed exactly by the floor (MS.1, 70450), and the
+-- owner wants nothing behind a window (2026-10-20). The glass is the tint,
+-- wash and rim over it.
+Theme.WINDOW_BACKING = 1
 
-local surfaces = {}   -- { g = LibGlass regions, backing = our texture, kind = "window" | nil }
+-- { g = LibGlass regions, backing = our texture, kind = "window" | "clear" | nil }
+local surfaces = {}
 Theme.pending = false
 
 function Theme.IsValid(name) return GUI.Suite.LookValid("tint", name) end
@@ -67,6 +71,8 @@ local function tintFor(name)
 end
 
 local function paint(s, name, tint)
+    -- A surface that stays clear whatever the suite tint (the merchant's disc, #48).
+    if s.kind == "clear" then name, tint = "clear", (tintFor("clear")) end
     local p = GUI.Suite.Body(name)
     local Glass = GUI.Glass
     if tint then
@@ -84,7 +90,8 @@ local function paint(s, name, tint)
 end
 
 -- Add a surface (and the backing under it, if any) and paint it with the
--- current theme. kind: "window" for the window floor.
+-- current theme. kind: "window" for the window floor, "clear" for a surface
+-- painted clear whatever the tint.
 function Theme.Register(g, backing, kind)
     if type(g) ~= "table" or not g.tint then return end
     local s = { g = g, backing = backing, kind = kind }
