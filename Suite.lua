@@ -66,9 +66,13 @@ function Suite.ThemeName()
     return Suite.THEMES[name] and name or Suite.DEFAULT_THEME
 end
 
+-- Every member follows unless the player turned it off (owner, 2026-10-20,
+-- #82): only an opt-out is saved, as false. A true saved before #82 is the
+-- default now, and reads the same.
 function Suite.Following(addon)
+    if not member[addon] then return false end
     local s = saved()
-    return s ~= nil and type(s.follow) == "table" and s.follow[addon] == true
+    return not (s ~= nil and type(s.follow) == "table" and s.follow[addon] == false)
 end
 
 -- The answer as it stands now: preset or nil, reason. Records nothing.
@@ -162,7 +166,7 @@ function Suite.SetFollow(addon, on)
     if not member[addon] or not GUI.db then return false end
     local s = saved() or {}
     s.follow = type(s.follow) == "table" and s.follow or {}
-    s.follow[addon] = on and true or nil
+    if on then s.follow[addon] = nil else s.follow[addon] = false end
     if next(s.follow) == nil then s.follow = nil end
     GUI.db.suite = next(s) and s or nil
     changed()
@@ -410,6 +414,8 @@ Suite.STATE_TEXT = {
     own = "own look",
 }
 
+local NOT_RUNNING = { missing = true, disabled = true, unloaded = true, other = true }
+
 -- One line per family member, for /glassui suite and the settings page.
 function Suite.Line(m)
     local state, pending = Suite.State(m.name)
@@ -420,7 +426,9 @@ function Suite.Line(m)
     elseif state == "failed" and r and r.reason then
         text = text .. ": " .. r.reason
     end
-    if state ~= "missing" and state ~= "other" and Suite.Following(m.name) and state ~= "following" then
+    -- Only for a member running this session: everyone follows by default
+    -- (#82), so it would sit on every disabled one.
+    if not NOT_RUNNING[state] and Suite.Following(m.name) and state ~= "following" then
         text = text .. "; set to follow"
     end
     local look = Suite.LookLine(m.name)
