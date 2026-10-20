@@ -637,18 +637,29 @@ eq(T.seen.RXPFrame, "PLAYER_ENTERING_WORLD", "one there at PLAYER_ENTERING_WORLD
 eq(T.seen.RXPG_ARROW, "PEW+3.5s", "one made later, noted with its delay")
 -- The run's result is the procedure's: a later session with the addons off
 -- again (Restore, then the last /reload) never overwrites it (Codex, PR #65).
-local firstStep
+local firstStep, treeStep
 for _, st in ipairs(FP.procedures["SkinProbe/questing"].steps) do
-    if st.text:find("first appeared", 1, true) then firstStep = st end
+    if st.text:find("first appeared", 1, true) and not firstStep then firstStep = st end
+    if st.text:find("frame trees", 1, true) then treeStep = st end
 end
-eq(firstStep.run(), 3, "the run reads all three")
-eq(SkinProbeDB.results["QS.firstSeen"].RXPG_ARROW, "PEW+3.5s", "and keeps them as the run's result")
+-- Questie's tracker made late in its startup: absent at the step after the
+-- reload, seen by the watcher later, kept by the step after the waits.
+local qframe = rawget(_G, "Questie_BaseFrame")
+rawset(_G, "Questie_BaseFrame", nil)
+T.seen.Questie_BaseFrame = nil
+eq(firstStep.run(), 2, "at login, Questie's tracker isn't there yet")
+eq(SkinProbeDB.results["QS.firstSeen"].Questie_BaseFrame, nil, "so the early copy lacks it")
+rawset(_G, "Questie_BaseFrame", qframe)
+T.lookFor("PEW+9.0s")
+treeStep.run()
+eq(SkinProbeDB.results["QS.firstSeen"].Questie_BaseFrame, "PEW+9.0s", "the step after the waits keeps the late sighting")
+eq(SkinProbeDB.results["QS.firstSeen"].RXPG_ARROW, "PEW+3.5s", "with the others")
 for k in pairs(T.seen) do T.seen[k] = nil end      -- the next session: nothing loaded
 WoW.fire("ADDON_LOADED", "SkinProbe")
 WoW.fire("PLAYER_LOGIN")
 T.lookFor("PLAYER_ENTERING_WORLD")
 eq(SkinProbeDB.results["QS.firstSeen"].RXPG_ARROW, "PEW+3.5s", "a session without them leaves the run's result")
-eq(SkinProbeDB.results["QS.firstSeen"].Questie_BaseFrame, "PLAYER_LOGIN", "all of it")
+eq(SkinProbeDB.results["QS.firstSeen"].Questie_BaseFrame, "PEW+9.0s", "the late sighting included")
 -- Their enable states for this character: saved, switched on, put back.
 WoW.installed.Questie, WoW.installed.QuestieDB, WoW.installed.RXPGuides = 0, 0, 2
 SkinProbeDB.questingWas = nil

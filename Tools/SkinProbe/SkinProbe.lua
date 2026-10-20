@@ -2376,8 +2376,15 @@ Probe:Steps("questing", {
       wait = function() return shownName("RXPFrame"), "RestedXP's window isn't shown" end, timeout = 600 },
     -- Only now: Questie builds its tracker in a staged startup after login, and
     -- RestedXP fills its step frames once a guide is picked (Codex, PR #65).
-    { text = "Logs the frame trees of Questie's tracker, RestedXP's window and its arrow, now that they're built.",
-      auto = true, run = function() return tree("questing", 4) end,
+    { text = "Logs the frame trees of Questie's tracker, RestedXP's window and its arrow, now that they're built, "
+          .. "and keeps when each first appeared (Questie's tracker comes late in its startup).",
+      auto = true, run = function()
+          -- The run's result, final: the waits above let late frames appear
+          -- (Codex, PR #65). The step after the reload kept an early copy.
+          lookFor("now")
+          record("QS.firstSeen", seenCopy())
+          return tree("questing", 4)
+      end,
       check = function()
           local missing = {}
           for _, name in ipairs(TARGETS.questing) do
