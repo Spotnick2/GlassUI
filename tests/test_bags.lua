@@ -71,8 +71,9 @@ GUI.Bags.SetHeaderHeight(26)
 -- The portrait's disc and the close button (the kit's).
 local disc = h.disc
 check(disc ~= nil, "a disc behind the portrait")
-eq(disc:GetWidth(), 62 + 2 * B.DISC_RING, "round the 62 px mask, a ring each side")
-at(disc, "CENTER", CF1.PortraitContainer.CircleMask, "CENTER", 0, 0, "centred on the mask")
+eq(B.DISC_RING, 4, "a 4 px ring for the bags' smaller portrait")
+eq(disc:GetWidth(), 36 + 2 * B.DISC_RING, "round the 36 px portrait, not its mask (BG.1: gigantic circles)")
+at(disc, "CENTER", CF1.PortraitContainer.portrait, "CENTER", 0, 0, "centred on the portrait")
 eq(disc:GetFrameLevel(), CF1.PortraitContainer:GetFrameLevel() - 1, "under the portrait")
 local cb = CF1.CloseButton
 for _, k in ipairs({ "_normal", "_pushed", "_disabled", "_highlight" }) do

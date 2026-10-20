@@ -30,9 +30,11 @@ local WINDOWS = 7
 -- SharedUIPanelTemplates.xml:600), the search row below it from -37
 -- (ContainerFrame.lua:1119). A first guess, tuned from the screenshots.
 local HEADER_H = 26
--- The portrait's disc: its ring, and the portrait's width when it can't be
--- read (62; Forever's mask covers it whole, Camelot\ContainerFrame.lua:1-5).
-local DISC_RING, PORTRAIT_WIDTH = 6, 62
+-- The portrait's disc, round the portrait itself: Blizzard sizes it 36
+-- (SetPortraitTextureSizeAndOffset, ContainerFrame.lua:789), and its mask read
+-- about four times wider (BG.1, 70450: "gigantic circles"). A thinner ring
+-- than the merchant's 6, for the smaller portrait.
+local DISC_RING, PORTRAIT_WIDTH = 4, 36
 -- Each slot's glass round its 37 px button.
 local SLOT_INSETS = { 0, 0, 0, 0 }
 -- The coin box's and the search box's three pieces (ContainerFrame.xml:208,
@@ -167,7 +169,7 @@ GUI.Engine.Register({
         local h = { kit = kit, frame = frame }
         wins[frame] = h
         kit:Header(win, wg, backing, win, "TOP", -HEADER_H, h)
-        h.disc = kit:PortraitDisc(frame, { ring = DISC_RING, width = PORTRAIT_WIDTH })
+        h.disc = kit:PortraitDisc(frame, { ring = DISC_RING, width = PORTRAIT_WIDTH, onPortrait = true })
         kit:CloseButton(tbl(frame.CloseButton), h)
         local m = moneyOf(frame)
         local border = m and tbl(m.Border)

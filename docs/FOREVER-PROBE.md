@@ -54,13 +54,13 @@ memory, the framerate and blocked actions. Saved as `SkinProbeDB.results["BG.<la
 
 | # | Question | Result |
 |---|---|---|
-| BG.1 | Separate bags, all open: every window and slot as above; the look against the merchant's | not run yet |
-| BG.2 | The title band: 20, 26 or 34 | not run yet |
-| BG.3 | A search, an item moved, a sort: the dims follow | not run yet |
-| BG.4 | The backpack opened and an item used in combat, the taint log on: nothing blocked | not run yet |
-| BG.5 | The combined window | not run yet |
-| BG.6 | Off: Blizzard's look; a change; on: re-synced; after a /reload | not run yet |
-| BG.7 | The cost: Glass UI's memory before and after, the framerate with every bag open | not run yet |
+| BG.1 | Separate bags, all open: every window and slot as above; the look against the merchant's | **Run 1 (70450, 2026-10-20): every check passes** (4 windows, 34 slots: glass on all, 17 empty dimmed, 17 filled shown). The owner: "apart from the gigantic circles yes". The portrait discs were about four times too big: the bags shrink the portrait to 36 (`SetPortraitTextureSizeAndOffset`, ContainerFrame.lua:789), and the mask read far wider. The disc is now round the portrait itself (`onPortrait`), with a 4 px ring. |
+| BG.2 | The title band: 20, 26 or 34 | **Run 1: unsure.** The three bands barely differ to the eye: 26 kept. |
+| BG.3 | A search, an item moved, a sort: the dims follow | **Run 1: passes** (search, move, sort). |
+| BG.4 | The backpack opened and an item used in combat, the taint log on: nothing blocked | **Run 1: passes.** Opened and used an item in combat with the taint log on: the item worked (owner: yes), nothing blocked. |
+| BG.5 | The combined window | **Run 1: passes.** Owner: yes. |
+| BG.6 | Off: Blizzard's look; a change; on: re-synced; after a /reload | **Run 1: off and on pass.** The after-`/reload` check FAILed with no bag open: its wait step was moved past by hand before a bag was opened. Not a skin fault. |
+| BG.7 | The cost: Glass UI's memory before and after, the framerate with every bag open | **Run 1:** Glass UI 394 KB before, 757 KB with 4 windows and 34 slots open (combined, 30 slots: 646 KB); about 150 fps throughout. Acceptable: the Section fallback isn't needed. |
 
 ### The merchant's layout (#84, docs/MERCHANT.md section 4)
 

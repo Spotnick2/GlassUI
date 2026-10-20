@@ -596,11 +596,15 @@ end
 -- The disc behind a portrait (#48): round its mask (PortraitContainer's
 -- CircleMask), else the portrait, else the named global; under the portrait
 -- (its container's level - 1), over the window's glass. opts: ring, width
--- (the mask's XML width), global.
+-- (the width when it can't be read), global, and onPortrait: round the
+-- portrait texture itself, for a window that resizes it (the bags' 36 px,
+-- ContainerFrame.lua:789), where the mask read about four times too wide
+-- (BG.1, 70450: "gigantic circles").
 function K:PortraitDisc(frame, opts)
     local pc = type(frame.PortraitContainer) == "table" and frame.PortraitContainer or nil
-    local around = pc and ((type(pc.CircleMask) == "table" and pc.CircleMask)
-        or (type(pc.portrait) == "table" and pc.portrait)) or nil
+    local portrait = pc and type(pc.portrait) == "table" and pc.portrait or nil
+    local mask = pc and type(pc.CircleMask) == "table" and pc.CircleMask or nil
+    local around = opts.onPortrait and portrait or (mask or portrait)
     if not around and opts.global then around = self:Global(opts.global) end
     if not around then return nil end
     local level = (pc and pc:GetFrameLevel() or frame:GetFrameLevel()) - 1

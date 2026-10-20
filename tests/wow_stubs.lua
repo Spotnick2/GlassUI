@@ -1124,10 +1124,12 @@ local function flatWindow(name, parent)
     end
     f.PortraitContainer = blizz("Frame", f)
     f.PortraitContainer._level = 400
+    -- 36 px (SetPortraitTextureSizeAndOffset, ContainerFrame.lua:789); the mask
+    -- read about four times wider in game (BG.1, 70450).
     f.PortraitContainer.portrait = blizz("Texture", f.PortraitContainer, nil, "OVERLAY")
-    f.PortraitContainer.portrait._width, f.PortraitContainer.portrait._height = 62, 62
+    f.PortraitContainer.portrait._width, f.PortraitContainer.portrait._height = 36, 36
     f.PortraitContainer.CircleMask = blizz("MaskTexture", f.PortraitContainer)
-    f.PortraitContainer.CircleMask._width, f.PortraitContainer.CircleMask._height = 62, 62
+    f.PortraitContainer.CircleMask._width, f.PortraitContainer.CircleMask._height = 140, 140
     f.TitleContainer = blizz("Frame", f)
     f.TitleContainer.TitleText = blizz("FontString", f.TitleContainer, nil, "OVERLAY")
     local cb = blizz("Button", f)
