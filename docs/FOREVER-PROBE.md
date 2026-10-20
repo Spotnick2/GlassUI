@@ -55,7 +55,7 @@ tab), the menu's size against its first, and blocked actions (taint log on). Sav
 | # | Question | Result |
 |---|---|---|
 | GM.1 | The first opening of the session in combat, then out of combat; the look against the mockup; the hover glow | **Run 1 (70450, 2026-10-20): passes.** The first opening of the session was in combat, after a /reload, then out of combat: every button on glass, faded and tinted, the title tab, nothing blocked. The owner: the look and the white hover glow, yes. The screenshots match the mockup. |
-| GM.2 | Settings and back (its close button, Esc, in combat); Esc while casting: nothing blocked | **Run 1: passes.** Settings closed by its button, by Esc, and in combat, then Esc while casting: back on the menu each time, nothing blocked (taint log on; owner: no blocked message). |
+| GM.2 | Settings and back (its close button, Esc, in combat); Esc while casting: nothing blocked | **Run 1 doesn't count** (Codex on #91, P2): the three Settings steps' waits were already true when each step began (the menu open, Settings closed), so they passed without a Settings visit. Only Esc while casting was really exercised: nothing blocked. Rev 2's waits accept a return only after seeing Settings open during the step (in combat for the combat one). **Run 2: not run yet.** |
 | GM.3 | Log Out and Exit Game cancelled, Return to Game; AddOns, Edit Mode, Macros: the size held | **Run 1: passes, one procedure FAIL.** The "exits cancelled" check ran with the menu closed (it reads the open menu), with nothing blocked. Return to Game closed it; after AddOns, Edit Mode and Macros the size matched the first. |
 | GM.4 | Off with the menu open, then on | **Run 1: passes.** Off with the menu open: Blizzard's red, nothing of ours. On: as before. |
 

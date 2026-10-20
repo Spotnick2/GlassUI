@@ -1601,8 +1601,34 @@ local function menuShown()
     return m ~= nil and seen(m)
 end
 
+-- Settings and back: a step's wait that accepts the menu shown with Settings
+-- hidden only after it has seen Settings open itself. The menu already open
+-- with Settings closed when the step starts is no return: run 1 passed all
+-- three this way without a Settings visit (Codex on #91, P2). combat: the
+-- visit and the return both in combat. The seen state resets once accepted,
+-- so a step reached again needs its own visit.
+local function settingsReturn(combat)
+    local visited = false
+    return function()
+        local sp = frameByName("SettingsPanel")
+        local open = sp ~= nil and seen(sp)
+        local okC, c = pcall(InCombatLockdown)
+        local fighting = okC and plain(c) == true
+        if open and (fighting or not combat) then visited = true end
+        if not visited then
+            return false, (open and "Settings open, but not in combat") or "waiting for Settings to open"
+        end
+        if open then return false, "waiting for Settings to close" end
+        if combat and not fighting then return false, "waiting for combat" end
+        if not menuShown() then return false, "waiting for the menu" end
+        visited = false
+        return true, "back on the menu after Settings"
+    end
+end
+
 Probe:Steps("gamemenu", {
     title = "Glass UI: the game menu in glass (#90)",
+    rev = 2,
     { text = "Turns on script errors and the taint log, and counts blocked actions from now.", auto = true,
       run = function()
           if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0; SkinProbeDB.gmSize = nil end
@@ -1624,23 +1650,13 @@ Probe:Steps("gamemenu", {
           .. "badge kept? Hover each button: a soft white glow (not red)? Anything off: the Note.", ask = true },
     -- Settings and back: the porting guide's trap is entering ToggleGameMenu from addon code.
     { text = "Click Options, then close Settings with its own close button (top right): you're back on the game "
-          .. "menu. This step goes on by itself.", timeout = 180,
-      wait = function()
-          local sp = frameByName("SettingsPanel")
-          return menuShown() and not (sp and seen(sp)), "waiting for the menu after Settings"
-      end, check = gmOn("settings closed") },
-    { text = "Options again, and this time close Settings with Esc: back on the menu.", timeout = 180,
-      wait = function()
-          local sp = frameByName("SettingsPanel")
-          return menuShown() and not (sp and seen(sp)), "waiting for the menu after Settings"
-      end, check = gmOn("settings esc") },
+          .. "menu. This step goes on by itself once it has seen Settings open and close.", timeout = 180,
+      wait = settingsReturn(false), check = gmOn("settings closed") },
+    { text = "Options again, and this time close Settings with Esc: back on the menu (it waits for Settings to open "
+          .. "first).", timeout = 180, wait = settingsReturn(false), check = gmOn("settings esc") },
     { text = "Close the menu. Get into combat, open the menu, Options, then close Settings (its button): back on the "
-          .. "menu, in combat. This step goes on by itself.", timeout = 240,
-      wait = function()
-          local okC, c = pcall(InCombatLockdown)
-          local sp = frameByName("SettingsPanel")
-          return menuShown() and okC and plain(c) == true and not (sp and seen(sp)), "waiting"
-      end, check = gmOn("settings in combat", { combat = true }) },
+          .. "menu, in combat. This step goes on by itself once it has seen Settings open and close in combat.",
+      timeout = 240, wait = settingsReturn(true), check = gmOn("settings in combat", { combat = true }) },
     { text = "Close the menu. Start a spell with a cast time and press Esc while it casts: Blizzard stops the cast "
           .. "(Esc's first job), then press Esc again to open the menu. Press Next.",
       check = gmOn("esc while casting") },
@@ -1667,7 +1683,7 @@ Probe:Steps("gamemenu", {
     { text = "Type /reload to save the results.", reload = true },
 })
 
-skinChecks.gmState, skinChecks.gmOn = gmState, gmOn
+skinChecks.gmState, skinChecks.gmOn, skinChecks.settingsReturn = gmState, gmOn, settingsReturn
 end
 
 --------------------------------------------------------------------------------
@@ -3550,7 +3566,7 @@ boot:SetScript("OnEvent", function(_, _, name)
     say("loaded (" .. SkinProbeDB.loads .. " loads). /fp skin for the commands, /fp steps skin wave1 to start")
 end)
 
-NS._test = { gmState = skinChecks.gmState, gmOn = skinChecks.gmOn, bagsState = skinChecks.bagsState,
+NS._test = { gmState = skinChecks.gmState, gmOn = skinChecks.gmOn, settingsReturn = skinChecks.settingsReturn, bagsState = skinChecks.bagsState,
     bagsOn = skinChecks.bagsOn, both = both, closeState = closeState, closeOn = closeOn, headerTry = headerTry, layoutState = layoutState, layoutOn = layoutOn, Probe = Probe, state = state, tree = tree, fade = fade, slashOwners = slashOwners,
              gamepad = gamepad, panelsOn = panelsOn, panelsOff = panelsOff, borderFade = borderFade,
              borderRestore = borderRestore, gradientOn = gradientOn, gradientOff = gradientOff,

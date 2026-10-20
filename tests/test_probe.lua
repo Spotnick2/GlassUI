@@ -1037,6 +1037,42 @@ SkinProbeDB.suiteBlocked = 0
 gm:Hide()
 okG, whyG = T.gmOn("t")()
 check(not okG and whyG:find("not shown", 1, true), "the menu hidden fails")
+-- Settings and back (Codex on #91): the menu already open, Settings closed, at the step's start is no return.
+gm:Show()
+local sp = CreateFrame("Frame", "SettingsPanel", UIParent)
+sp:Hide()
+local back = T.settingsReturn(false)
+local okS, whyS = back()
+check(not okS and whyS:find("waiting for Settings to open", 1, true), "entering with the menu open: not accepted")
+sp:Show()
+check(not back(), "Settings open: waiting for it to close")
+gm:Hide()
+sp:Hide()
+okS, whyS = back()
+check(not okS and whyS:find("waiting for the menu", 1, true), "Settings closed, the menu not back yet: waiting")
+gm:Show()
+okS, whyS = back()
+check(okS, "Settings seen, then the menu back: accepted: " .. tostring(whyS))
+check(not back(), "reached again: it needs a visit of its own")
+-- In combat: the visit and the return both.
+local backC = T.settingsReturn(true)
+WoW.combat = false
+sp:Show()
+okS, whyS = backC()
+check(not okS and whyS:find("not in combat", 1, true), "Settings open out of combat doesn't count")
+sp:Hide()
+check(not backC(), "nor its return")
+WoW.combat = true
+sp:Show()
+check(not backC(), "Settings open in combat: waiting for it to close")
+sp:Hide()
+WoW.combat = false
+okS, whyS = backC()
+check(not okS and whyS:find("waiting for combat", 1, true), "the return out of combat: not accepted")
+WoW.combat = true
+check(backC(), "the return in combat: accepted")
+WoW.combat = false
+rawset(_G, "SettingsPanel", nil)
 rawset(_G, "GameMenuFrame", nil)
 rawset(_G, "GlassUI", savedGUI5)
 SkinProbeDB.gmSize = nil

@@ -152,3 +152,13 @@ translucent ... maybe more like the quest tracker".
   - The window's rim drops to the window's own level, from LibGlass's 10 up. So the tab sits over
     it, and the title's text, on Blizzard's header above the tab, stays on top.
 - Tested and mutation-tested (5 mutants, all killed).
+
+## The probe's Settings steps, fixed (Codex on #91, P2)
+
+Run 1's three "Settings and back" steps waited for "the menu shown, Settings hidden". That was
+already true when each began, so they passed on the first poll without a Settings visit; the combat
+one passed once the menu opened in combat. So the path the procedure exists for, the return through
+`ToggleGameMenu`, wasn't exercised. `settingsReturn(combat)` now accepts only after seeing Settings
+open during the step (both the visit and the return in combat, for the combat step), and resets
+once accepted. It's tested, including entering with the menu already open, and mutation-tested (6
+mutants, all killed). The procedure's rev is 2, and the Settings steps need run 2.
