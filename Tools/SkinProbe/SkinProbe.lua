@@ -1225,12 +1225,22 @@ local function layoutOn(label, want)
     end
 end
 
+-- Two checks as one (both must pass).
+local function both(a, b)
+    return function()
+        local okA, whyA = a()
+        local okB, whyB = b()
+        return okA and okB, tostring(whyA) .. "; " .. tostring(whyB)
+    end
+end
+
 -- Run 3, amended (#86, docs/MERCHANT.md section 5, "Amendment: sections
 -- only"): one layout; the panes follow Blizzard's boxes; the tabs, the close
--- button, the page and repair buttons in glass.
+-- button, the page and repair buttons in glass. A MERCHANT_SHOW step checks
+-- nothing: the event comes before Blizzard shows the window (run 3, 70450).
 Probe:Steps("merchantlayout", {
     title = "Glass UI: the merchant, run 3: sections following Blizzard, tabs, close, pages, repair (#86)",
-    rev = 4,
+    rev = 5,
     { text = "Turns on script errors and the taint log; sets the header smoky and the window 93% opaque.",
       auto = true, run = function()
           return setCVar("scriptErrors", "1"), setCVar("taintLog", "1"), headerTry(true), floorRestore()
@@ -1263,17 +1273,18 @@ Probe:Steps("merchantlayout", {
           .. "(then move away before releasing, so the window stays): the X dips 1 px?", ask = true },
     { text = "Now click the close button: the window closes.", event = "MERCHANT_CLOSED" },
     -- A smith.
-    { text = "Talk to a SMITH (a vendor who repairs).", event = "MERCHANT_SHOW",
-      check = closeOn("r3 close reopened", false) },
+    { text = "Talk to a SMITH (a vendor who repairs).", event = "MERCHANT_SHOW" },
     { text = "The repair buttons on the left of the band, in their box, on glass. Press Next for a screenshot.",
-      screenshot = "run 3, smith", check = layoutOn("r3 smith", { tab = 1 }) },
-    { text = "Open the Buyback tab, then the Merchant tab again, then press Next.",
+      screenshot = "run 3, smith",
+      check = both(layoutOn("r3 smith", { tab = 1 }), closeOn("r3 close reopened", false)) },
+    { text = "Open the Buyback tab, then come back to the Merchant tab. Only then press Next.",
       check = layoutOn("r3 smith tabs", { tab = 1 }) },
     { text = "If the vendor has 2 pages: press Next (the page arrow) and come back, then press Next here: the label "
           .. "of the arrow you can't use is dimmed. Skip if one page.", screenshot = "run 3, page 2",
       check = layoutOn("r3 pages", { tab = 1 }) },
-    { text = "Repair one item or everything (if anything needs it), then press Next: the repair buttons as "
-          .. "Blizzard greys them, the box still there.", check = layoutOn("r3 repaired", { tab = 1 }) },
+    { text = "On the Merchant tab, repair one item or everything (if anything needs it; an auto-repair addon may "
+          .. "have done it already), then press Next: the repair buttons as Blizzard greys them, the box still there.",
+      check = layoutOn("r3 repaired", { tab = 1 }) },
     { text = "Do the repair and page buttons read well on glass (Blizzard's icons and arrows kept, no gold rims)? "
           .. "Anything off: the Note.", ask = true },
     -- A currency vendor, and back.
@@ -1283,8 +1294,8 @@ Probe:Steps("merchantlayout", {
       screenshot = "run 3, currency vendor", check = layoutOn("r3 currency", { tab = 1 }) },
     { text = "On the Buyback tab: the currency box as Blizzard shows it.",
       check = layoutOn("r3 currency buyback", { tab = 2 }) },
-    { text = "Talk to an ordinary vendor again (no /reload): the currency box gone.", event = "MERCHANT_SHOW",
-      check = layoutOn("r3 ordinary again", { tab = 1 }) },
+    { text = "Talk to an ordinary vendor again (no /reload).", event = "MERCHANT_SHOW" },
+    { text = "The currency box gone. Press Next.", check = layoutOn("r3 ordinary again", { tab = 1 }) },
     -- Off and on, a change meanwhile.
     { text = "Switches the skin off.", button = "Skin off", run = function() return switch(false) end,
       screenshot = "run 3, skin off",
@@ -1300,8 +1311,8 @@ Probe:Steps("merchantlayout", {
       run = function() return switch(true) end, screenshot = "run 3, on again",
       check = layoutOn("r3 on again", { tab = 1, header = true }) },
     { text = "Type /reload to save the results.", reload = true },
-    { text = "Talk to a vendor once more.", event = "MERCHANT_SHOW",
-      check = layoutOn("r3 after reload", { tab = 1, header = true }) },
+    { text = "Talk to a vendor once more.", event = "MERCHANT_SHOW" },
+    { text = "Press Next.", check = layoutOn("r3 after reload", { tab = 1, header = true }) },
     taintOff(),
     { text = "Type /reload to save the results.", reload = true },
 })
@@ -3186,7 +3197,7 @@ boot:SetScript("OnEvent", function(_, _, name)
     say("loaded (" .. SkinProbeDB.loads .. " loads). /fp skin for the commands, /fp steps skin wave1 to start")
 end)
 
-NS._test = { closeState = closeState, closeOn = closeOn, headerTry = headerTry, layoutState = layoutState, layoutOn = layoutOn, Probe = Probe, state = state, tree = tree, fade = fade, slashOwners = slashOwners,
+NS._test = { both = both, closeState = closeState, closeOn = closeOn, headerTry = headerTry, layoutState = layoutState, layoutOn = layoutOn, Probe = Probe, state = state, tree = tree, fade = fade, slashOwners = slashOwners,
              gamepad = gamepad, panelsOn = panelsOn, panelsOff = panelsOff, borderFade = borderFade,
              borderRestore = borderRestore, gradientOn = gradientOn, gradientOff = gradientOff,
              panels = panels, faded = faded, cardAtlas = cardAtlas, cardOn = cardOn, cardOff = cardOff,

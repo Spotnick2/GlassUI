@@ -553,6 +553,9 @@ because of that".
     (MerchantFrame.lua:413), then the slot's `Show` (:479), then the junk button's `SetShown` (:482),
     last. And Blizzard's standalone repair refresh (`PLAYER_MONEY`/`GUILDBANK_UPDATE_MONEY`, :99-101)
     is now exercised.
+- **Run 3** (70450, 2026-10-20): docs/FOREVER-PROBE.md ML.7. Every pane matched Blizzard's state at
+  an ordinary vendor and a smith, and the owner approved the look. The procedure's own faults are
+  fixed (rev 5): no check on a `MERCHANT_SHOW` step; clearer "back to the Merchant tab".
 
 ## Tests
 

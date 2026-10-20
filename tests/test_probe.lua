@@ -896,6 +896,11 @@ lu.closeDisc:Hide()
 okC, whyC = T.closeOn("c", false)()
 check(not okC and whyC:find("disc false", 1, true), "no disc fails")
 lu.closeDisc:Show()
+-- Two checks as one.
+local yes, no = function() return true, "a" end, function() return false, "b" end
+check(T.both(yes, yes)(), "both pass: pass")
+check(not T.both(yes, no)() and not T.both(no, yes)(), "either failing fails")
+eq(select(2, T.both(yes, no)()), "a; b", "both reasons kept")
 for _, n in ipairs({ "MerchantBuyBackItem", "MerchantFrameTab1", "MerchantFrameTab2", "MerchantExtraCurrencyInset",
                      "MerchantRepairAllButton", "MerchantSellAllJunkButton", "MerchantPrevPageButton" }) do
     rawset(_G, n, nil)
