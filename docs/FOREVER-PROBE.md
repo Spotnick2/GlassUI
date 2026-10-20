@@ -43,7 +43,20 @@ The look is judged from the procedure's screenshots; `Logs\taint.log` is read af
 
 | Skin | Procedure | Result |
 |---|---|---|
-| Merchant (#4) | `/fp steps skin merchant`: the looks side by side (clear at 0.85, 0.6 and 0.35 backing, smoked, class); buy, sell, buyback, repair; skin off and on live; after /reload; in combat (optional) | **70425: passes.** Buy, sell and buyback work; repair not tested (nothing to repair). The screenshots show the gold shell gone, glass under the window and tabs, and the item rows keeping Blizzard's red. Off live: exactly stock (owner: yes); on live: faded again; after /reload: on, faded at the first show. No `ADDON_ACTION_BLOCKED`/`FORBIDDEN` in the three sessions. Combat skipped (a plain, unprotected window). **Looks:** all five read well, and 0.35 looks the most like glass (owner): clear and class now use backing 0.35, smoked keeps 0.92. **Taint pass on 70450 (typed `/console taintLog 1`, buy/sell/buyback, full exit):** the log was on (BugGrabber: the bag-bar error 84 times that session, see the facts below), and `Logs	aint.log` was not rewritten. At level 1 the client writes only when something is blocked, so nothing was. A level-2 pass over every wave-1 skin goes into the v0.1.0 release check (#9). |
+| Merchant (#4) | `/fp steps skin merchant`: the looks side by side (clear at 0.85, 0.6 and 0.35 backing, smoked, class); buy, sell, buyback, repair; skin off and on live; after /reload; in combat (optional) | **70425: passes.** Buy, sell and buyback work; repair not tested (nothing to repair). The screenshots show the gold shell gone, glass under the window and tabs, and the item rows keeping Blizzard's red. Off live: exactly stock (owner: yes); on live: faded again; after /reload: on, faded at the first show. No `ADDON_ACTION_BLOCKED`/`FORBIDDEN` in the three sessions. Combat skipped (a plain, unprotected window). **Looks:** all five read well, and 0.35 looks the most like glass (owner): clear and class now use backing 0.35, smoked keeps 0.92. **Taint pass on 70450 (typed `/console taintLog 1`, buy/sell/buyback, full exit):** the log was on (BugGrabber: the bag-bar error 84 times that session, see the facts below), and `Logs\taint.log` was not rewritten. At level 1 the client writes only when something is blocked, so nothing was. A level-2 pass over every wave-1 skin goes into the v0.1.0 release check (#9). |
+
+### The merchant revisited (#80, #48, docs/MERCHANT.md)
+
+`/fp steps skin merchant`, extended. The checks read our rows' glass against Blizzard's item buttons,
+the red mirrors, the buyback slot's glass, and the disc's centre against the portrait's mask. These
+are saved as `SkinProbeDB.results["MS.<label>"]`.
+
+| # | Question | Result |
+|---|---|---|
+| MS.1 | The window floor over other UI (RestedXP's window or the quest log): 0.6, 0.75 or 0.85, the owner's pick | **Run 1 (70450, 2026-10-20):** RestedXP's text read through all three, dimmed by exactly the floor (63, 40, 23 levels above the background, 0.4 : 0.25 : 0.15). The owner: "0.85 more", then asked to hide what's behind altogether. The floor is now 1 (opaque). Run 2 tries 0.85, 0.95 and 1. |
+| MS.2 | The rows: glass under each item, none on an empty slot, Blizzard's red on the glass; the buyback slot after a sale; the buyback tab's 12 rows | **Run 1:** PASS: 10 rows on the merchant tab, 6 on glass, 4 red, 0 mismatched; the buyback tab's 12 rows, 1 on glass, 0 mismatched; the owner: rows read well. **The buyback slot: not shown.** Its check ran with the Buyback tab open (12 rows read), where Blizzard hides the slot. The step said "under the rows", but the slot is at the bottom right. Run 2 says to stay on the Merchant tab. |
+| MS.3 | The portrait's disc: a ring round the face, centred on the mask, on the NPC's portrait and the buyback tab's | **Run 1:** PASS: seen on both tabs, 70 px (58 + 2 x 6), off-centre 0.00001 px; centred and the right width (the owner). "The ring should probably be pearl/clear": it was dark, with a backing at the window's floor. Now Pearl, clear and without a backing. |
+| MS.4 | Off live: Blizzard's plates, slots and portrait ring back, no glass of ours; on again | **Run 1:** PASS: the border back, 0 rows on glass, no disc; the owner: exactly Blizzard's; on again, faded; after a /reload, still on. The "too many errors" warnings in the screenshots were the taint log's micro menu noise (BugGrabber: `MainMenuBarMicroButtons.lua:2008`, x301), not Glass UI. |
 
 ## The suite theme (#24, docs/SUITE.md)
 
@@ -267,7 +280,7 @@ The results are in `SkinProbeDB.results["DM.<label>"]` and the log.
   pass), and in the pet bar (70374, `PetActionBar.lua:123`, a call to a Blizzard global no addon
   touches: 114 times in Glass Quest Tracker's taint session). Every session with the log on had
   them, none without. BugSack fills up with them: ignore those stacks during a taint pass. `/reload` sets `taintLog` back to 0. On 70425 a level-1 session with nothing blocked
-  leaves `Logs	aint.log` untouched (it kept its old date after a full exit): an old date means "nothing
+  leaves `Logs\taint.log` untouched (it kept its old date after a full exit): an old date means "nothing
   logged", not "logging off". Level 2 also logs every tainted read, so use it to see an addon's taint.
 - A colour texture painted with `SetGradient` ignores a later `SetAlpha`, and `GetAlpha()` keeps
   reading 1 (porting guide section 3, measured twice on 70374).

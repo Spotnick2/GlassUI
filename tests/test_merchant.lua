@@ -16,16 +16,21 @@ local function faded()
     for i = 1, 2 do
         for _, key in ipairs(GUI.Kit.TAB_ART) do list[#list + 1] = _G["MerchantFrameTab" .. i][key] end
     end
+    -- The rows' slots and plates (#80), and the buyback slot's slot.
+    for i = 1, 12 do
+        list[#list + 1] = _G["MerchantItem" .. i].SlotTexture
+        list[#list + 1] = _G["MerchantItem" .. i .. "NameFrame"]
+    end
+    list[#list + 1] = MerchantBuyBackItem.SlotTexture
     return list
 end
 local function stock()
-    local list = { M.PortraitContainer.portrait, M.CloseButton, M.FilterDropdown }
+    local list = { M.PortraitContainer.portrait, M.CloseButton, M.FilterDropdown, MerchantBuyBackItemNameFrame }
     for i = 1, 12 do
         local row = _G["MerchantItem" .. i]
-        list[#list + 1] = row.SlotTexture
-        list[#list + 1] = _G["MerchantItem" .. i .. "NameFrame"]
         list[#list + 1] = row.Name
         list[#list + 1] = row.ItemButton
+        list[#list + 1] = row.ItemButton.icon
     end
     for i = 1, 2 do
         local t = _G["MerchantFrameTab" .. i]
@@ -53,9 +58,9 @@ eq(#ours(M), 0, "and no panel is built yet")
 -- First show: install and style.
 WoW.showMerchant()
 all(faded(), 0, "the shell art is faded")
-all(stock(), 1, "the portrait, buttons, item rows, texts and tab highlights stay stock")
+all(stock(), 1, "the portrait, buttons, icons, texts and tab highlights stay stock")
 local panels = ours(M)
-eq(#panels, 1, "one glass panel under the window")
+eq(#panels, 2, "one glass panel under the window, and the portrait's disc")
 eq(panels[1]:GetFrameLevel(), M:GetFrameLevel() - 1, "one level below the window")
 check(panels[1]._name == nil and not panels[1]:IsMouseEnabled(), "unnamed, mouse off")
 eq(#ours(MerchantFrameTab1) + #ours(MerchantFrameTab2), 2, "one glass panel under each tab")
@@ -71,7 +76,7 @@ WoW.merchantTab(1)
 -- Hidden and shown again: styled again, installed once.
 WoW.hideMerchant()
 WoW.showMerchant()
-eq(#ours(M), 1, "a second show builds nothing new")
+eq(#ours(M), 2, "a second show builds nothing new")
 
 -- Live off: Blizzard's latest alpha back, our glass hidden, no /reload needed.
 WoW.chat = {}
@@ -126,6 +131,149 @@ eq(GlassUIDB.suite.look.tint, "smoked", "the tint is saved as the suite look's (
 eq(rawget(GlassUIDB, "theme"), nil, "not as the old theme")
 GUI._test.slash("theme clear")
 eq(S[1].backing._color[4], 0.35, "clear repaints the backing light")
+-- The merchant is a window over other UI (#80): its own glass at the floor.
+local function surfaceOf(host)
+    for _, x in ipairs(S) do if x.backing and x.backing._parent == host then return x end end
+end
+-- A surface by its glass (the disc has no backing to find it by).
+local function glassOf(host)
+    for _, x in ipairs(S) do if x.g.tint and x.g.tint._parent == host then return x end end
+end
+local win = surfaceOf(panels[1])
+eq(win.backing._color[4], GUI.Theme.WINDOW_BACKING, "clear: the window at the window floor")
+eq(GUI.Theme.WINDOW_BACKING, 1, "opaque: nothing behind a window reads through (owner, MS.1)")
+-- The disc (#48): Pearl clear, no backing, whatever the tint (owner, MS.3).
+local disc = glassOf(panels[2])
+check(disc ~= nil, "the disc is painted by the theme")
+eq(disc.backing, nil, "with no backing: a dark ring otherwise")
+local clearTint = B.clear.tint
+local function isClear(msg)
+    local dc = disc.g.tint._color
+    check(dc and dc[1] == clearTint[1] and dc[4] == clearTint[4], msg)
+end
+isClear("clear on the clear tint")
+GUI._test.slash("theme smoked")
+eq(win.backing._color[4], GUI.Theme.WINDOW_BACKING, "smoked's 0.92 rises to the floor too")
+isClear("the disc stays clear on smoked")
+GUI._test.slash("theme class")
+eq(win.backing._color[4], GUI.Theme.WINDOW_BACKING, "class rises to the floor too")
+isClear("and on class")
+eq(S[1].backing._color[4], 0.35, "while a skin over the world keeps the body's")
+GUI._test.slash("theme clear")
+
+-- The item rows in glass (#80, docs/MERCHANT.md): ours under each row, no
+-- backing (the window's is under it), Blizzard's red mirrored, no glass on
+-- an empty row.
+local R = GUI.Merchant._test
+local function at(frame, point, rel, relPoint, x, y, msg)
+    local a
+    for _, pt in ipairs(frame._points) do if pt[1] == point then a = pt end end
+    check(a and a[2] == rel and a[3] == relPoint and a[4] == x and a[5] == y,
+          msg .. ": " .. point .. " " .. tostring(a and a[4]) .. "," .. tostring(a and a[5]))
+end
+local r1 = R.rows[MerchantItem1]
+check(r1 ~= nil, "row 1 has glass of ours")
+eq(r1.glass:GetParent(), MerchantItem1, "a child of the row: it hides with it (11 and 12 per tab)")
+eq(r1.glass:GetFrameLevel(), MerchantItem1:GetFrameLevel() - 1, "one level under the row")
+check(r1.glass:GetFrameLevel() > panels[1]:GetFrameLevel(), "over the window's glass")
+eq(r1.g.top:GetFrameLevel(), r1.glass:GetFrameLevel(), "its rim there too, under the icon border and text")
+eq(surfaceOf(r1.glass), nil, "no backing of its own")
+local painted = false
+for _, x in ipairs(S) do if x.g == r1.g then painted = true end end
+check(painted, "but painted by the theme")
+local I = R.ROW_INSETS
+at(r1.glass, "TOPLEFT", MerchantItem1, "TOPLEFT", I[1], -I[2], "the row's glass around the row")
+at(r1.glass, "BOTTOMRIGHT", MerchantItem1, "BOTTOMRIGHT", -I[3], I[4], "to its bottom right")
+check(r1.glass:IsShown(), "a filled row shows its glass")
+eq(_G.MerchantItem1NameFrame:GetAlpha(), 0, "the label plate faded")
+eq(MerchantItem1.SlotTexture:GetAlpha(), 0, "the slot faded")
+check(not r1.red:IsShown(), "Blizzard's grey plate: no red")
+WoW.merchantRow(1, "red")
+check(r1.red:IsShown(), "can't use or afford: Blizzard's red mirrored on our glass")
+near(r1.red._color[4], 0.35, "at 0.35")
+eq(r1.red._color[1], 1, "in red")
+check(r1.red._masks and r1.red._masks[1] == r1.g.mask, "inside the row's glass")
+WoW.merchantRow(1, "darkred")
+near(r1.red._color[4], 0.175, "sold out and red: Blizzard's dark red, fainter")
+WoW.merchantRow(1, "normal")
+check(not r1.red:IsShown(), "grey again: no red")
+eq(_G.MerchantItem1NameFrame:GetAlpha(), 0, "the plate stays faded through Blizzard's recolours")
+-- A partial page and back.
+for i = 7, 10 do WoW.merchantRow(i, "empty") end
+check(not R.rows[MerchantItem7].glass:IsShown() and not R.rows[MerchantItem10].glass:IsShown(),
+      "a partial page: the empty rows show no glass")
+check(R.rows[MerchantItem6].glass:IsShown(), "the filled ones keep theirs")
+for i = 7, 10 do WoW.merchantRow(i, "normal") end
+check(R.rows[MerchantItem7].glass:IsShown(), "a full page again: glass back")
+-- The buyback tab's rows 11 and 12.
+WoW.merchantTab(2)
+check(R.rows[MerchantItem11].glass:IsVisible(), "the buyback tab: row 11's glass seen")
+WoW.merchantTab(1)
+check(not R.rows[MerchantItem11].glass:IsVisible(), "the merchant tab: row 11 hidden, its glass with it")
+WoW.merchantTab(2)
+check(R.rows[MerchantItem12].glass:IsVisible(), "and back")
+WoW.merchantTab(1)
+-- The buyback slot: its button never hides, its icon tells.
+local bb = R.rows[MerchantBuyBackItem]
+check(bb ~= nil, "the buyback slot has glass of ours")
+eq(MerchantBuyBackItem.SlotTexture:GetAlpha(), 0, "its slot faded")
+eq(MerchantBuyBackItemNameFrame:GetAlpha(), 1, "its plate left as Blizzard has it")
+check(not bb.glass:IsShown(), "nothing sold yet: no glass")
+WoW.buybackSlot(133784)
+check(bb.glass:IsShown(), "an item sold: its glass shows")
+WoW.buybackSlot(nil)
+check(not bb.glass:IsShown(), "bought back: gone again")
+check(MerchantBuyBackItemItemButton:IsShown(), "with its button shown throughout")
+WoW.asBlizzard(function() MerchantBuyBackItemItemButton.icon:SetAtlas("common-icon-undo") end)
+check(bb.glass:IsShown(), "an icon given as an atlas counts as an item")
+WoW.buybackSlot(133784)
+-- Off: the plates and slots back, our rows hidden; Blizzard changes rows meanwhile.
+WoW.merchantRow(5, "empty")
+GUI._test.slash("skin merchant off")
+WoW.merchantRow(5, "normal")
+check(not R.rows[MerchantItem5].glass:IsShown(), "off: a row filled shows no glass of ours")
+eq(_G.MerchantItem1NameFrame:GetAlpha(), 1, "off: the plate back")
+eq(MerchantBuyBackItem.SlotTexture:GetAlpha(), 1, "the buyback slot's slot back")
+check(not r1.glass:IsShown() and not bb.glass:IsShown(), "our rows hidden")
+check(not panels[2]:IsShown(), "and the disc")
+WoW.merchantRow(3, "red")
+WoW.merchantRow(4, "empty")
+WoW.buybackSlot(nil)
+local r3, r4 = R.rows[MerchantItem3], R.rows[MerchantItem4]
+check(not r3.red:IsShown() and not r3.glass:IsShown(), "off: a recolour touches nothing of ours")
+check(not bb.glass:IsShown(), "nor an emptied buyback slot")
+GUI._test.slash("skin merchant on")
+check(r3.glass:IsShown() and r3.red:IsShown(), "on again: the red set while off shows")
+check(not r4.glass:IsShown(), "the row emptied while off shows no glass")
+check(not bb.glass:IsShown(), "nor the buyback slot emptied while off")
+check(r1.glass:IsShown() and panels[2]:IsShown(), "the rest back")
+eq(R.redAlpha(0.5, 0.5, 0.5), nil, "grey is no red")
+eq(R.redAlpha(nil, 0, 0), nil, "a colour that can't be read is no red")
+WoW.merchantRow(3, "normal"); WoW.merchantRow(4, "normal")
+
+-- The portrait's disc (#48): round its mask, under the portrait, over the glass.
+local disc = panels[2]
+local mask = M.PortraitContainer.CircleMask
+eq(disc:GetWidth(), mask:GetWidth() + 2 * R.DISC_RING, "the mask's width and a 6 px ring each side")
+eq(disc:GetWidth(), disc:GetHeight(), "square, as a disc wants")
+at(disc, "CENTER", mask, "CENTER", 0, 0, "centred on the round mask, not the portrait's rectangle")
+eq(disc:GetFrameLevel(), M.PortraitContainer:GetFrameLevel() - 1, "one level under the portrait")
+eq(glassOf(disc).g.top:GetFrameLevel(), disc:GetFrameLevel(), "its rim too")
+check(disc:GetFrameLevel() > r1.glass:GetFrameLevel(), "over the rows' glass")
+eq(disc._name, nil, "unnamed")
+
+-- Without the mask (another build): round the portrait.
+GUI = loadAddon({ before = function() rawset(MerchantFrame.PortraitContainer, "CircleMask", nil) end })
+WoW.showMerchant()
+local disc2 = ours(MerchantFrame)[2]
+eq(disc2:GetWidth(), 62 + 2 * GUI.Merchant._test.DISC_RING, "no mask: round the portrait")
+at(disc2, "CENTER", MerchantFrame.PortraitContainer.portrait, "CENTER", 0, 0, "centred on it")
+-- A size that can't be read: the mask's XML width.
+GUI = loadAddon({ before = function()
+    MerchantFrame.PortraitContainer.CircleMask._width = 0
+end })
+WoW.showMerchant()
+eq(ours(MerchantFrame)[2]:GetWidth(), 58 + 2 * GUI.Merchant._test.DISC_RING, "unreadable: 58, the XML's")
 
 -- The switch survives a reload.
 GUI = loadAddon({ db = { skins = { merchant = false } } })

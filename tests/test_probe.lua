@@ -208,23 +208,22 @@ eq(SkinProbeDB.themeWas.name, "smoked", "after a reload, a trial keeps the saved
 T.themeRestore()
 eq(current, "smoked", "and Restore gives the player's theme back after a reload")
 eq(presets.clear.backing, 0.85, "with the shipped backing")
--- Each look the merchant procedure shows is the one its button names, whatever
--- clear ships with (the stand-in now ships Glass UI's own 0.35; Codex, PR #22:
--- a trial that fell back to the shipped value showed 0.35 under a 0.85 label).
-presets.clear.backing = 0.35
-SkinProbeDB.themeWas = nil
+-- Each window floor the merchant procedure shows (#80, MS.1) is the one its
+-- button names (Codex, PR #22: a trial must show what its label says).
+local floor = { WINDOW_BACKING = 0.75, Refresh = function() end }
+rawset(_G, "GlassUI", { Theme = floor })
 local shown = 0
 for _, st in ipairs(FP.procedures["SkinProbe/merchant"].steps) do
-    local label = st.button and st.button:match("^Clear (%d%.%d+)$")
+    local label = st.button and st.button:match("^Floor (%d[%.%d]*)$")
     if label then
-        local _, b = st.run()
-        eq(b, tonumber(label), "the step labelled " .. st.button .. " shows backing " .. label)
+        st.run()
+        eq(floor.WINDOW_BACKING, tonumber(label), "the step labelled " .. st.button .. " shows floor " .. label)
         shown = shown + 1
     end
 end
-eq(shown, 3, "three clear trials")
-T.themeRestore()
-eq(presets.clear.backing, 0.35, "and Restore gives the shipped backing back")
+eq(shown, 3, "three floors tried")
+T.floorRestore()
+eq(floor.WINDOW_BACKING, 0.75, "and Restore gives the default back")
 rawset(_G, "GlassUI", nil)
 
 -- #17: Blizzard's card. Without C_Texture (another build), nothing to report;
@@ -712,6 +711,59 @@ check(not okF and whyF:find("no quest", 1, true), "no quest in the log: refused"
 eq(C_QuestLog.GetQuestTimers, realTimers, "and nothing swapped")
 rawset(_G, "C_QuestLog", nil)
 rawset(_G, "QuestTimerFrame", nil)
+
+-- #80, #48: the merchant's rows, buyback slot and disc as the procedure reads
+-- them, and the window floor tried and put back.
+local function rowState(row, filled, red)
+    local st = { glass = CreateFrame("Frame", nil, row), button = CreateFrame("Button", nil, row),
+                 red = row:CreateTexture() }
+    st.button:SetShown(filled); st.glass:SetShown(filled); st.red:SetShown(red)
+    return st
+end
+local mrow1 = CreateFrame("Frame", "MerchantItem1", merchant)
+local mrow2 = CreateFrame("Frame", "MerchantItem2", merchant)
+local mrows = { [mrow1] = rowState(mrow1, true, true), [mrow2] = rowState(mrow2, false, false) }
+merchant.PortraitContainer = CreateFrame("Frame", nil, merchant)
+merchant.PortraitContainer.CircleMask = merchant.PortraitContainer:CreateTexture()
+merchant.PortraitContainer.CircleMask._cx, merchant.PortraitContainer.CircleMask._cy = 40, 500
+local mdisc = CreateFrame("Frame", nil, merchant)
+mdisc._cx, mdisc._cy, mdisc._width = 40, 500, 70
+local refreshed = 0
+local theme = { WINDOW_BACKING = 0.75, Refresh = function() refreshed = refreshed + 1 end }
+rawset(_G, "GlassUI", { Theme = theme, Merchant = { _test = { rows = mrows, discs = { [merchant] = mdisc } } } })
+local okR, whyR = T.rowsOn("t", { red = true })()
+check(okR, "rows matching their items, a red one, the disc centred: pass: " .. tostring(whyR))
+eq(SkinProbeDB.results["MS.t"].discWidth, 70, "the disc's width kept in the results")
+mrows[mrow2].glass:Show()
+okR, whyR = T.rowsOn("t")()
+check(not okR and whyR:find("doesn't match", 1, true), "glass on an empty row fails")
+mrows[mrow2].glass:Hide()
+mrows[mrow1].red:Hide()
+okR, whyR = T.rowsOn("t", { red = true })()
+check(not okR and whyR:find("no red", 1, true), "no red row when one is wanted fails")
+mrows[mrow1].red:Show()
+mdisc._cx = 42
+okR, whyR = T.rowsOn("t")()
+check(not okR and whyR:find("centre", 1, true), "a disc off the mask's centre fails")
+mdisc._cx = 40
+mdisc:Hide()
+okR, whyR = T.rowsOn("t")()
+check(not okR and whyR:find("no disc", 1, true), "no disc seen fails")
+mdisc:Show()
+okR, whyR = T.rowsOn("t", { buyback = true })()
+check(not okR and whyR:find("buyback glass", 1, true), "the buyback slot's glass missing fails")
+local mbb = CreateFrame("Frame", "MerchantBuyBackItem", merchant)
+mrows[mbb] = rowState(mbb, true, false)
+okR, whyR = T.rowsOn("t", { buyback = true })()
+check(okR, "and passes once it's there: " .. tostring(whyR))
+T.floorTry(0.6)
+eq(theme.WINDOW_BACKING, 0.6, "a floor tried live")
+eq(refreshed, 1, "the glass repainted")
+T.floorTry(0.85)
+T.floorRestore()
+eq(theme.WINDOW_BACKING, 0.75, "and the first value back, after two tries")
+eq(refreshed, 3, "repainted again")
+rawset(_G, "MerchantItem1", nil); rawset(_G, "MerchantItem2", nil); rawset(_G, "MerchantBuyBackItem", nil)
 rawset(_G, "GlassUI", savedGUI3)
 
 -- #56 discovery: Questie's tracker and RestedXP's window and arrow.

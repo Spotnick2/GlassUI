@@ -632,8 +632,14 @@ function WoW.makeMerchant()
         f.NineSlice._level = 500
         f.Bg = blizz("Texture", f, "MerchantFrameBg", "BACKGROUND")
         f.TopTileStreaks = blizz("Texture", f, nil, "BORDER")
+        -- PortraitFrameTemplate (SharedUIPanelTemplates.xml:574-596): the
+        -- container at level 400, a 62 px portrait masked by a 58 px circle.
         f.PortraitContainer = blizz("Frame", f)
+        f.PortraitContainer._level = 400
         f.PortraitContainer.portrait = blizz("Texture", f.PortraitContainer, "MerchantFramePortrait", "OVERLAY")
+        f.PortraitContainer.portrait._width, f.PortraitContainer.portrait._height = 62, 62
+        f.PortraitContainer.CircleMask = blizz("MaskTexture", f.PortraitContainer)
+        f.PortraitContainer.CircleMask._width, f.PortraitContainer.CircleMask._height = 58, 58
         f.CloseButton = blizz("Button", f)
         f.Inset = inset(f)
         f.FilterDropdown = blizz("DropdownButton", f)
@@ -643,13 +649,21 @@ function WoW.makeMerchant()
         blizz("Frame", f, "MerchantExtraCurrencyBg")
         blizz("Texture", f, "MerchantFrameBottomLeftBorder", "OVERLAY")
         blizz("Texture", f, "BuybackBG", "BACKGROUND")._shown = false
-        for i = 1, 12 do
-            local row = blizz("Frame", f, "MerchantItem" .. i)
-            row.SlotTexture = blizz("Texture", row, "MerchantItem" .. i .. "SlotTexture", "BACKGROUND")
-            blizz("Texture", row, "MerchantItem" .. i .. "NameFrame", "BACKGROUND")
-            row.Name = blizz("FontString", row, "MerchantItem" .. i .. "Name", "BACKGROUND")
-            row.ItemButton = blizz("Button", row)
+        -- MerchantItemTemplate rows (level 2), and the buyback slot, whose
+        -- NameFrame is hidden in XML. Each ItemButton has its icon.
+        local function itemRow(name)
+            local row = blizz("Frame", f, name)
+            row.SlotTexture = blizz("Texture", row, name .. "SlotTexture", "BACKGROUND")
+            local plate = blizz("Texture", row, name .. "NameFrame", "BACKGROUND")
+            plate._vertex = { 0.5, 0.5, 0.5, 1 }
+            row.Name = blizz("FontString", row, name .. "Name", "BACKGROUND")
+            row.ItemButton = blizz("Button", row, name .. "ItemButton")
+            row.ItemButton.icon = blizz("Texture", row.ItemButton, name .. "ItemButtonIconTexture", "BORDER")
+            return row
         end
+        for i = 1, 12 do itemRow("MerchantItem" .. i) end
+        itemRow("MerchantBuyBackItem")
+        MerchantBuyBackItemNameFrame._shown = false
         tab(f, "MerchantFrameTab1")
         tab(f, "MerchantFrameTab2")
         -- A mixin method, so a call from addon code shows up in WoW.luaCalls.
@@ -673,8 +687,29 @@ function WoW.merchantTab(i)
         end
         BuybackBG:SetShown(i == 2)
         MerchantFrameBottomLeftBorder:SetShown(i == 1)
+        MerchantItem11:SetShown(i == 2); MerchantItem12:SetShown(i == 2)
+        MerchantBuyBackItem:SetShown(i == 1)
         WoW.bset(MerchantFrame, "selectedTab", i)
     end)
+end
+
+-- Blizzard filling merchant row i (MerchantFrame.lua:369-404): "normal",
+-- "red" (can't use or afford), "darkred" (that, sold out) or "empty" (no
+-- item: its button hidden). The plate takes the vertex colour, never an alpha.
+local ROW_PLATE = { normal = { 0.5, 0.5, 0.5 }, red = { 1, 0, 0 }, darkred = { 0.5, 0, 0 }, empty = { 0.5, 0.5, 0.5 } }
+function WoW.merchantRow(i, kind)
+    WoW.asBlizzard(function()
+        local row = _G["MerchantItem" .. i]
+        local c = ROW_PLATE[kind]
+        row.ItemButton:SetShown(kind ~= "empty")
+        _G["MerchantItem" .. i .. "NameFrame"]:SetVertexColor(c[1], c[2], c[3])
+    end)
+end
+
+-- Blizzard's buyback slot (MerchantFrame.lua:415-430): an item's icon, or ""
+-- when empty; its button never hides.
+function WoW.buybackSlot(texture)
+    WoW.asBlizzard(function() MerchantBuyBackItemItemButton.icon:SetTexture(texture or "") end)
 end
 
 -- Blizzard's side writes its own fields through here: the snapshot follows.
