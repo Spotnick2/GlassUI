@@ -141,7 +141,7 @@ local function glassOf(host)
 end
 local win = surfaceOf(panels[1])
 eq(win.backing._color[4], GUI.Theme.WINDOW_BACKING, "clear: the window at the window floor")
-eq(GUI.Theme.WINDOW_BACKING, 1, "opaque: nothing behind a window reads through (owner, MS.1)")
+eq(GUI.Theme.WINDOW_BACKING, 0.85, "a bit less than opaque, as Blizzard's bags (owner, ML run 1)")
 -- The disc (#48): Pearl clear, no backing, whatever the tint (owner, MS.3).
 local disc = glassOf(panels[2])
 check(disc ~= nil, "the disc is painted by the theme")
@@ -153,7 +153,7 @@ local function isClear(msg)
 end
 isClear("clear on the clear tint")
 GUI._test.slash("theme smoked")
-eq(win.backing._color[4], GUI.Theme.WINDOW_BACKING, "smoked's 0.92 rises to the floor too")
+eq(win.backing._color[4], 0.92, "smoked's 0.92 is over the floor: kept")
 isClear("the disc stays clear on smoked")
 GUI._test.slash("theme class")
 eq(win.backing._color[4], GUI.Theme.WINDOW_BACKING, "class rises to the floor too")
@@ -300,7 +300,8 @@ eq(#u.inset.edges, 4, "four edges")
 eq(u.inset.edges[1]:GetHeight(), 1, "1 px")
 local B = GUI.Suite.BODY
 local fc = u.inset.fill._color
-check(fc and fc[1] == GUI.Suite.BACKING[1] and fc[4] == GUI.Kit.SECTION_FILL, "the fill: the backing's colour at SECTION_FILL")
+check(fc and fc[1] == 0 and fc[2] == 0 and fc[3] == 0 and fc[4] == GUI.Kit.SECTION_FILL, "the fill: black at SECTION_FILL")
+eq(GUI.Kit.SECTION_FILL, 0.4, "dark enough to show on the floor (ML run 1)")
 local ec = u.inset.edges[1]._color
 check(ec and ec[1] == 1 and ec[4] == GUI.Kit.SECTION_EDGE, "the edge: white at SECTION_EDGE")
 
@@ -337,6 +338,31 @@ check(hl1:IsShown(), "MiddleActive shown alone lights it (the hook on the instan
 WoW.asBlizzard(function() MerchantFrameTab1.MiddleActive:Hide() end)
 check(not hl1:IsShown(), "and hidden, dims it")
 WoW.merchantTab(1)
+
+-- The tabs hang from the window: their glass tucked TAB_TUCK under it, in the strata below.
+local tg1 = ours(MerchantFrameTab1)[1]
+eq(R.TAB_TUCK, 12, "tucked 12 px")
+at(tg1, "TOPLEFT", MerchantFrameTab1, "TOPLEFT", 6, R.TAB_TUCK, "the tab's glass reaches up under the window")
+eq(MerchantFrame:GetFrameStrata(), "MEDIUM", "the window: a MEDIUM panel")
+eq(tg1:GetFrameStrata(), "LOW", "the tab's glass in the strata below, behind the window's floor")
+eq(R.ui[MerchantFrame].tabGlass[MerchantFrameTab1].g.top:GetFrameStrata(), "LOW", "its rim too")
+eq(ours(MerchantFrameTab2)[1]:GetFrameStrata(), "LOW", "both tabs")
+eq(R.TAB_ACTIVE, 0.2, "the active tab's light, brighter than run 1's 0.10")
+
+-- The header: the window's backing from the item inset's top down, clear Pearl above.
+local L0 = GUI.Merchant
+eq(L0.Header(), true, "the header Pearl by default")
+local bk = u.backing
+eq(#bk._points, 4, "the backing on four points")
+at(bk, "TOP", MerchantFrame.Inset, "TOP", 0, 0, "its top at the item inset's")
+at(bk, "LEFT", u.win, "LEFT", 0, 0, "the window's width")
+at(bk, "RIGHT", u.win, "RIGHT", 0, 0, "to its right")
+at(bk, "BOTTOM", u.win, "BOTTOM", 0, 0, "down to the window's bottom")
+check(L0.SetHeader(false), "the header switched off")
+eq(#bk._points, 1, "the backing whole again")
+eq(bk._points[1][1], "ALL", "on the whole window")
+L0.SetHeader(true)
+at(bk, "TOP", MerchantFrame.Inset, "TOP", 0, 0, "and back")
 
 -- The red: Blizzard's plate in sections, much less in the bar.
 WoW.merchantRow(2, "red")
@@ -387,6 +413,7 @@ eq(u.empty:GetFrameLevel(), MerchantFrame:GetFrameLevel() + 1, "over its glass")
 eq(u.emptyTitle:GetText(), R.EMPTY_TITLE, "No items to buy back")
 eq(u.emptyText:GetText(), R.EMPTY_TEXT, "Items you sell will appear here.")
 eq(u.emptyIcon:GetTexture(), R.BUYBACK_ICON, "the Buyback tab's own icon")
+eq(R.BUYBACK_ICON, "Interface\\MerchantFrame\\UI-BuyBack-Icon", "its path whole (run 1 lost the backslashes)")
 -- A sale on the Buyback tab: Blizzard's first row shows.
 WoW.buybackCount = 1
 WoW.merchantRow(1, "normal")
@@ -424,12 +451,16 @@ check(not u.square.host:IsShown(), "off: Blizzard's changes show nothing of ours
 check(u.label:IsShown(), "and its hooks are no-ops: the label's state untouched by the sale")
 check(not hl1:IsShown() or not ours(MerchantFrameTab1)[1]:IsShown(), "nor light a tab")
 check(L.SetLayout("sections"), "switching while off is kept")
+L.SetHeader(false)
+eq(u.backing._points[1][1], "TOP", "the header switched while off moves nothing")
 near(r2.red._color[4], R.RED.bar, "but repaints nothing while off")
 GUI._test.slash("skin merchant on")
 check(on(u.inset) and on(u.boxLeft) and off(u.bar), "on again: the layout chosen meanwhile")
 check(not u.square.host:IsShown() and not u.empty:IsShown(), "and none of the bar's pieces")
 near(r2.red._color[4], R.RED.sections, "its red")
 check(hl1:IsShown() and not hl2:IsShown(), "the tab lit as Blizzard shows it now")
+eq(u.backing._points[1][1], "ALL", "and the header as set while off")
+L.SetHeader(true)
 L.SetLayout("sections")
 WoW.buybackSlot(nil)
 WoW.buybackCount = nil

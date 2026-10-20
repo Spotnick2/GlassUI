@@ -1079,6 +1079,16 @@ end
 
 local function sectionSeen(sec) return sec ~= nil and seen(sec.fill) end
 
+-- Run 2: the header clear Pearl (on) or the floor whole (off), live.
+local function headerTry(on)
+    local G = glassUI()
+    if not (G and G.Merchant and G.Merchant.SetHeader) then return false, "Glass UI not loaded" end
+    local ok = G.Merchant.SetHeader(on)
+    say("ML header " .. tostring(on) .. ": " .. tostring(ok))
+    record("ML.header", on)
+    return ok, on
+end
+
 -- What our layout shows now, beside what Blizzard shows.
 local function layoutState(label)
     local G = glassUI()
@@ -1113,18 +1123,29 @@ local function layoutState(label)
         local r11 = frameByName("MerchantItem11")
         local okR, rb = call(r11, "GetBottom")
         rec.row11Bottom = okR and plain(rb) or nil
+        -- Run 2: the tabs tucked in the strata below the window's.
+        local okW, ws = call(u.frame, "GetFrameStrata")
+        rec.windowStrata = okW and plain(ws) or nil
+        for _, t in pairs(u.tabGlass or {}) do
+            local okS, ts = call(t.glass, "GetFrameStrata")
+            rec.tabStrata = okS and plain(ts) or nil
+        end
     end
+    if G and G.Merchant and G.Merchant.Header then rec.header = G.Merchant.Header() end
+    rec.floor = G and G.Theme and G.Theme.WINDOW_BACKING or nil
     say("ML " .. label .. ": " .. tostring(rec.layout) .. ", merchant tab " .. tostring(rec.merchantTab)
         .. ", sections " .. tostring(rec.sections) .. ", bar " .. tostring(rec.bar) .. ", square "
         .. tostring(rec.square) .. ", label " .. tostring(rec.label) .. ", empty " .. tostring(rec.empty)
-        .. ", lit " .. tostring(rec.lit) .. ", buyback " .. tostring(rec.buyback))
+        .. ", lit " .. tostring(rec.lit) .. ", buyback " .. tostring(rec.buyback) .. ", header "
+        .. tostring(rec.header) .. ", tabs " .. tostring(rec.tabStrata) .. " under " .. tostring(rec.windowStrata))
     record("ML." .. label, rec)
     return rec
 end
 
 -- A check: the layout's pieces as `want` says ({ layout, tab = 1 | 2, label,
--- empty }); sections shows its 5 (Merchant tab) or 3 (Buyback tab), the bar
--- its bar and line and, on the Merchant tab, its square.
+-- empty, header }); sections shows its 5 (Merchant tab) or 3 (Buyback tab),
+-- the bar its bar and line and, on the Merchant tab, its square. The tabs'
+-- glass, when read, sits in a strata other than the window's (tucked).
 local function layoutOn(label, want)
     return function()
         local r = layoutState(label)
@@ -1134,6 +1155,10 @@ local function layoutOn(label, want)
         local tab1 = want.tab == 1
         want_(r.merchantTab == tab1, "not on the " .. (tab1 and "Merchant" or "Buyback") .. " tab")
         want_(r.lit == (tab1 and "MerchantFrameTab1" or "MerchantFrameTab2"), "tabs lit: " .. tostring(r.lit))
+        if want.header ~= nil then want_(r.header == want.header, "header " .. tostring(r.header)) end
+        if r.tabStrata and r.windowStrata then
+            want_(r.tabStrata ~= r.windowStrata, "the tabs not tucked (" .. r.tabStrata .. ")")
+        end
         if want.layout == "sections" then
             want_(r.sections == (tab1 and 5 or 3), tostring(r.sections) .. " sections")
             want_(not r.bar and not r.line and not r.square and not r.label and not r.empty, "a bar piece shown")
@@ -1151,53 +1176,58 @@ local function layoutOn(label, want)
     end
 end
 
+-- Run 2 (ML run 1's findings, docs/FOREVER-PROBE.md): darker panes, the
+-- tabs tucked under the window, the header clear Pearl, the floor tried.
 Probe:Steps("merchantlayout", {
-    title = "Glass UI: the merchant's layout, sections or bar (#84)",
-    { text = "Turns on script errors, sets the default layout (sections). For the empty Buyback page, nothing "
-          .. "may be sold this session: if your Buyback tab lists items, buy them back first, or log out and in.",
-      auto = true, run = function() return setCVar("scriptErrors", "1"), layoutTry("sections") end },
-    { text = "Talk to a vendor, ideally one with an item you can't use or afford (red).", event = "MERCHANT_SHOW" },
-    -- Sections: Blizzard's structure in glass.
-    { text = "SECTIONS (closer to Blizzard's): the item area, the two boxes of the bottom band and the money boxes, "
-          .. "each a recessed pane. Press Next for a screenshot.", screenshot = "layout, sections",
-      check = layoutOn("sections merchant", { layout = "sections", tab = 1 }) },
-    { text = "Do the panes sit where Blizzard's boxes are (the bottom two especially)? Say what's off in the Note.",
+    title = "Glass UI: the merchant, run 2: panes, tabs, Pearl header, see-through, sections or bar (#84)",
+    rev = 2,
+    { text = "Sets the defaults: sections, the Pearl header, the window 85% opaque.",
+      auto = true, run = function() return setCVar("scriptErrors", "1"), layoutTry("sections"), headerTry(true),
+          floorRestore() end },
+    { text = "Talk to a vendor. Best where something sits behind the window (RestedXP's guide, a damage meter "
+          .. "dragged there), so you can judge the see-through.", event = "MERCHANT_SHOW" },
+    { text = "What changed: the panes are darker (the item area, the two boxes at the bottom, the money); the top, "
+          .. "above the item area, is clear Pearl glass like the portrait's ring; the tabs hang from under the window, "
+          .. "the open one lighter. Press Next for a screenshot.", screenshot = "run 2, defaults",
+      check = layoutOn("r2 defaults", { layout = "sections", tab = 1, header = true }) },
+    { text = "Can you see the darker panes now: the item area, the two boxes at the bottom, the money box?",
       ask = true },
-    { text = "Open the Buyback tab (nothing sold yet). Press Next for a screenshot.", screenshot = "layout, sections buyback",
-      check = layoutOn("sections buyback", { layout = "sections", tab = 2 }) },
-    -- The bar: the mockup.
-    { text = "BAR (the mockup), on the Buyback tab: an empty page should say 'No items to buy back'.",
-      button = "Bar", run = function() return layoutTry("bar") end, screenshot = "layout, bar empty buyback",
-      check = layoutOn("bar empty", { layout = "bar", tab = 2, empty = true }) },
-    { text = "Open the Merchant tab: one footer bar with the buyback slot in a square, labelled 'Buyback', and the "
-          .. "money; less red on red items. Press Next for a screenshot.", screenshot = "layout, bar merchant",
-      check = layoutOn("bar merchant", { layout = "bar", tab = 1, label = true }) },
-    { text = "Sell an item (right-click it in your bags). The slot shows it, with its name instead of the label.",
-      screenshot = "layout, bar sold", check = layoutOn("bar sold", { layout = "bar", tab = 1, label = false }) },
-    { text = "Open the Buyback tab: the item, no empty message.", screenshot = "layout, bar buyback item",
-      check = layoutOn("bar buyback item", { layout = "bar", tab = 2, empty = false }) },
-    { text = "Stay on the Buyback tab and buy that item back (click it): the empty message comes back.",
-      check = layoutOn("bar bought back", { layout = "bar", tab = 2, empty = true }) },
-    { text = "Close the window while on the Buyback tab, then talk to the vendor again.", event = "MERCHANT_SHOW" },
-    { text = "It opens on the Merchant tab: no empty message. Press Next.",
-      check = layoutOn("bar reopened", { layout = "bar", tab = 1 }) },
-    { text = "Optional (Skip if not easy): sell 12 cheap items, open the Buyback tab, press Next: rows 11 and 12 "
-          .. "should sit clear above the bar.", screenshot = "layout, bar buyback full",
-      check = layoutOn("bar buyback full", { layout = "bar", tab = 2, empty = false }) },
-    { text = "Which reads better: SECTIONS or BAR? Say which in the Note, and anything to change.", ask = true },
-    -- Off and on, the layout switched while off.
-    { text = "Open the Merchant tab. Switches the skin off, then the layout to sections while it's off.",
-      button = "Skin off", run = function() return switch(false), layoutTry("sections") end,
-      screenshot = "layout, skin off",
+    { text = "Do the tabs look attached to the window now, and is it clear which one is open? Anything still off: "
+          .. "say it in the Note.", ask = true },
+    -- The header.
+    { text = "For comparison, the top as before: the window's dark floor all the way up.", button = "Header off",
+      run = function() return headerTry(false) end, screenshot = "run 2, header off" },
+    { text = "The Pearl top again: clear glass above the item area.", button = "Header Pearl",
+      run = function() return headerTry(true) end },
+    { text = "Keep the Pearl top? Yes keeps it, No keeps the dark top.", ask = true },
+    -- The see-through.
+    { text = "How much shows through: 80% opaque.", button = "80%", run = function() return floorTry(0.8) end,
+      screenshot = "run 2, floor 0.8" },
+    { text = "90% opaque.", button = "90%", run = function() return floorTry(0.9) end,
+      screenshot = "run 2, floor 0.9" },
+    { text = "85% opaque (the default).", button = "85%", run = function() return floorTry(0.85) end },
+    { text = "Which reads best: 80, 85 or 90% opaque? Press Yes and write the number in the Note.", ask = true },
+    -- Sections or bar.
+    { text = "The other layout, BAR: no boxes; one strip at the bottom with the buyback slot (labelled while empty) "
+          .. "and the money. Press Next for a screenshot.", button = "Bar", run = function() return layoutTry("bar") end,
+      screenshot = "run 2, bar", check = layoutOn("r2 bar", { layout = "bar", tab = 1, header = true }) },
+    { text = "Open the Buyback tab. If nothing is sold this session, it says 'No items to buy back' with the bag "
+          .. "icon. Press Next for a screenshot.", screenshot = "run 2, bar buyback",
+      check = layoutOn("r2 bar buyback", { layout = "bar", tab = 2, header = true }) },
+    { text = "Open the Merchant tab again. Which layout do you prefer? Yes = SECTIONS (the boxes, the first "
+          .. "screenshots), No = BAR (the strip, now).", ask = true },
+    -- Off and on.
+    { text = "Switches the skin off (and the layout back to sections while it's off).", button = "Skin off",
+      run = function() return switch(false), layoutTry("sections") end, screenshot = "run 2, skin off",
       check = function()
-          local r = layoutState("off")
+          local r = layoutState("r2 off")
           local ok = r.sections == 0 and not r.bar and not r.square and not r.empty and r.lit == ""
           return ok, ok and "nothing of ours shown" or "something of ours shown while off"
       end },
-    { text = "Switches the skin on: sections, as set while off.", button = "Skin on",
-      run = function() return switch(true) end, screenshot = "layout, on again",
-      check = layoutOn("on again", { layout = "sections", tab = 1 }) },
-    { text = "Type /reload to save the results (the layout is sections again after it).", reload = true },
+    { text = "Switches the skin on: sections, the Pearl header, the tabs tucked.", button = "Skin on",
+      run = function() return switch(true) end, screenshot = "run 2, on again",
+      check = layoutOn("r2 on again", { layout = "sections", tab = 1, header = true }) },
+    { text = "Type /reload to save the results.", reload = true },
 })
 
 --------------------------------------------------------------------------------
@@ -3080,7 +3110,7 @@ boot:SetScript("OnEvent", function(_, _, name)
     say("loaded (" .. SkinProbeDB.loads .. " loads). /fp skin for the commands, /fp steps skin wave1 to start")
 end)
 
-NS._test = { layoutTry = layoutTry, layoutState = layoutState, layoutOn = layoutOn, Probe = Probe, state = state, tree = tree, fade = fade, slashOwners = slashOwners,
+NS._test = { headerTry = headerTry, layoutTry = layoutTry, layoutState = layoutState, layoutOn = layoutOn, Probe = Probe, state = state, tree = tree, fade = fade, slashOwners = slashOwners,
              gamepad = gamepad, panelsOn = panelsOn, panelsOff = panelsOff, borderFade = borderFade,
              borderRestore = borderRestore, gradientOn = gradientOn, gradientOff = gradientOff,
              panels = panels, faded = faded, cardAtlas = cardAtlas, cardOn = cardOn, cardOff = cardOff,

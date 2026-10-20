@@ -54,11 +54,12 @@ state, the lit tab, the buyback count, and the bar's top against row 11's bottom
 
 | # | Question | Result |
 |---|---|---|
-| ML.1 | Sections: 5 panes on the Merchant tab, 3 on Buyback, where Blizzard's boxes are; the box insets right? | not run yet |
-| ML.2 | Bar: the empty state on an empty Buyback page; the square and label on the Merchant tab; the label gone after a sale, back after buying it back on Buyback; reopened on the Merchant tab; rows 11-12 clear of the bar | not run yet |
-| ML.3 | The active tab lit, in both | not run yet |
-| ML.4 | Off: nothing of ours; the layout switched while off applies when on again | not run yet |
-| ML.5 | The owner's pick: sections or bar | not run yet |
+| ML.1 | Sections: 5 panes on the Merchant tab, 3 on Buyback, where Blizzard's boxes are; the box insets right? | **Run 1 (70450, 2026-10-20): 5 and 3, placed right** (the bottom boxes and the money boxes line up with Blizzard's in the skin-off screenshot), **but invisible:** the fill was the backing's colour over a floor of that colour at 1. Black at 0.4 now. |
+| ML.2 | Bar: the empty state on an empty Buyback page; the square and label on the Merchant tab; the label gone after a sale, back after buying it back on Buyback; reopened on the Merchant tab; rows 11-12 clear of the bar | **Run 1: all pass.** Bar top 667 against row 11's bottom 676 on a full Buyback page. The empty state's icon didn't draw: `"Interface\MerchantFrame\..."` had been written through a shell heredoc, which ate the backslashes (Lua 5.1 read `\M` as `M`). Fixed, and the path is tested literally. |
+| ML.3 | The active tab lit, in both | **Run 1: lit as Blizzard shows it, but not visible at 0.10.** And the owner: "the tabs at the bottom need more work, they feel disconnected". Run 2: 0.2, and the tabs tucked under the window. |
+| ML.4 | Off: nothing of ours; the layout switched while off applies when on again | **Run 1: passes.** |
+| ML.5 | The owner's pick: sections or bar | **Run 1: unsure** ("i honestly have no idea what you are talking about": with the panes invisible, the two looked alike). The owner's ideas then: the top fully Pearl down to the first bar, and the window a bit less than opaque, like the stock bags. Run 2 asks again. |
+| ML.6 | Run 2: the panes visible; the tabs attached; the Pearl header kept; the floor 0.8, 0.85 or 0.9 | not run yet |
 
 ### The merchant revisited (#80, #48, docs/MERCHANT.md)
 

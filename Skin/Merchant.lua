@@ -32,7 +32,9 @@
 -- boxes, the money and currency boxes), or the owner's mockup ("bar": one
 -- footer bar, the buyback slot in a square with a label while empty, an empty
 -- state on the Buyback tab, less red). The probe switches them live
--- (SetLayout) until the owner picks. Either way the active tab is marked.
+-- (SetLayout) until the owner picks. Either way the active tab is marked,
+-- the tabs hang from under the window (TAB_TUCK), and the header above the
+-- item inset is clear Pearl (SetHeader; ML run 1's ideas).
 --
 -- Fades, hooks on instances and our own frames only, so the skin is live:
 -- off and on without a /reload. None of this window's 405 textures ignores
@@ -49,8 +51,15 @@ local Kit = GUI.Kit
 local INSETS = { "MerchantMoneyInset", "MerchantExtraCurrencyInset" }
 local ART = { "MerchantMoneyBg", "MerchantExtraCurrencyBg", "MerchantFrameBottomLeftBorder", "BuybackBG" }
 local TABS = { "MerchantFrameTab1", "MerchantFrameTab2" }
--- Each tab's glass, inside its art's footprint. To be tuned in game.
-local TAB_INSETS = { 6, 2, 6, 6 }
+-- Each tab's glass, inside its art's footprint, its top tucked TAB_TUCK
+-- under the window: in the strata below the window's, its top and corners
+-- hide behind the window's floor, so the tab hangs from the window like
+-- Blizzard's instead of floating under it (the owner, ML run 1: "they feel
+-- disconnected"). The tab's top is 1 px into the window (CENTER at
+-- BOTTOMLEFT 50, -15, height 32: MerchantFrame.xml:585, the template's 932).
+local TAB_TUCK = 12
+local TAB_INSETS = { 6, -TAB_TUCK, 6, 6 }
+local STRATA = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP" }
 -- 12 rows: 10 per merchant page, 12 on the buyback tab (MerchantFrame.lua:1-2).
 local ROWS = 12
 -- Each row's glass, around its icon and name (outward). To be tuned from MS.2's screenshots.
@@ -62,6 +71,10 @@ local DISC_RING, MASK_WIDTH = 6, 58
 local LAYOUTS = { sections = true, bar = true }
 local RED = { sections = 0.35, bar = 0.12 }
 local layoutName = "sections"
+-- The header (the owner, ML run 1): the window's backing starts at the item
+-- inset's top, so above it (the portrait, the title) is clear Pearl glass,
+-- like the portrait's disc; off, the backing covers the whole window.
+local headerPearl = true
 -- The bottom band's two boxes, inside MerchantFrameBottomLeftBorder (334 x 61),
 -- { left, top, right, bottom } inward. Read off MS run 1's skin-off
 -- screenshot (70450); to be tuned.
@@ -71,10 +84,10 @@ local BAR_TOPLEFT = { 5, 12 }
 -- The buyback square round its ItemButton, and the empty state's icon (the
 -- Buyback tab's own portrait, MerchantFrame.lua:533).
 local SQUARE_OUTSET, ICON_OUTSET = 3, 4
-local BUYBACK_ICON = "Interface\MerchantFrame\UI-BuyBack-Icon"
+local BUYBACK_ICON = "Interface\\MerchantFrame\\UI-BuyBack-Icon"
 local EMPTY_TITLE, EMPTY_TEXT = "No items to buy back", "Items you sell will appear here."
--- The active tab's light, over its glass.
-local TAB_ACTIVE = 0.10
+-- The active tab's light, over its glass (0.10 didn't show, ML run 1).
+local TAB_ACTIVE = 0.2
 
 local rows = setmetatable({}, { __mode = "k" })     -- row -> { glass, g, red, plate, button, icon }
 local discs = setmetatable({}, { __mode = "k" })    -- window -> the portrait's disc
@@ -139,8 +152,40 @@ end
 
 -- What the layout shows now, from what Blizzard shows: MerchantBuyBackItem is
 -- shown exactly while the Merchant tab is (MerchantFrame.lua:479, 590).
+-- The window's backing (ours): from the item inset's top down, or all of it.
+local function header(u)
+    local b = u.backing
+    if not b then return end
+    b:ClearAllPoints()
+    if headerPearl and u.insetFrame then
+        b:SetPoint("TOP", u.insetFrame, "TOP", 0, 0)
+        b:SetPoint("LEFT", u.win, "LEFT", 0, 0)
+        b:SetPoint("RIGHT", u.win, "RIGHT", 0, 0)
+        b:SetPoint("BOTTOM", u.win, "BOTTOM", 0, 0)
+    else
+        b:SetAllPoints(u.win)
+    end
+end
+
+-- Each tab's glass in the strata below the window's (TAB_TUCK). A window in
+-- the lowest strata keeps it level, over the window: not met on 70450
+-- (MerchantFrame is a MEDIUM UI panel).
+local function tuck(u)
+    local ok, mine = pcall(u.frame.GetFrameStrata, u.frame)
+    if not ok then return end
+    local want = mine
+    for i, name in ipairs(STRATA) do
+        if name == mine then want = STRATA[math.max(1, i - 1)] end
+    end
+    for _, t in pairs(u.tabGlass) do
+        t.glass:SetFrameStrata(want)
+        if t.g and t.g.top then t.g.top:SetFrameStrata(want) end
+    end
+end
+
 local function layout(u)
     local bar = layoutName == "bar"
+    header(u)
     local merchantTab = shown(u.bb)
     Kit.ShowSection(u.inset, not bar)
     Kit.ShowSection(u.money, not bar)
@@ -245,13 +290,14 @@ end
 -- Our layout's pieces (#84): sections on the window glass's host, the
 -- buyback square and label on a frame of ours in MerchantBuyBackItem, the
 -- empty state on one in the window, each tab's light; hooks gated.
-local function buildLayout(kit, frame, win, tabGlass)
-    local u = { frame = frame, tabs = {} }
+local function buildLayout(kit, frame, win, backing, tabGlass)
+    local u = { frame = frame, tabs = {}, win = win, backing = backing, tabGlass = tabGlass }
     ui[frame] = u
     u.bb = kit:Global("MerchantBuyBackItem")
     u.band = kit:Global("MerchantFrameBottomLeftBorder")
     u.moneyInset, u.currencyInset = kit:Global("MerchantMoneyInset"), kit:Global("MerchantExtraCurrencyInset")
     local inset = tbl(frame.Inset)
+    u.insetFrame = inset
     local function section(a, b, ins)
         if not a then return nil end
         local sec = kit:Section(win)
@@ -351,7 +397,7 @@ GUI.Engine.Register({
     backing = "window",
     frames = function() return rawget(_G, "MerchantFrame") end,
     install = function(kit, frame)
-        local win = kit:Panel(frame)
+        local win, _, backing = kit:Panel(frame)
         local tabGlass = {}
         for _, name in ipairs(TABS) do
             local tab = kit:Global(name)
@@ -373,7 +419,7 @@ GUI.Engine.Register({
             local level = (pc and pc:GetFrameLevel() or frame:GetFrameLevel()) - 1
             discs[frame] = kit:Disc(frame, around, { ring = DISC_RING, width = MASK_WIDTH, level = level })
         end
-        buildLayout(kit, frame, win, tabGlass)
+        buildLayout(kit, frame, win, backing, tabGlass)
     end,
     style = function(kit, frame)
         kit:Shell(frame)
@@ -381,7 +427,10 @@ GUI.Engine.Register({
         for _, name in ipairs(ART) do kit:Fade(kit:Global(name)) end
         for _, name in ipairs(TABS) do kit:Tab(kit:Global(name)) end
         eachRow(function(row) styleRow(kit, row) end)
-        if ui[frame] then layout(ui[frame]) end
+        if ui[frame] then
+            tuck(ui[frame])
+            layout(ui[frame])
+        end
     end,
 })
 
@@ -408,8 +457,18 @@ function GUI.Merchant.SetLayout(name)
     return true
 end
 
+function GUI.Merchant.Header() return headerPearl end
+
+-- The probe's live switch: the header clear Pearl, or the backing whole. Not saved.
+function GUI.Merchant.SetHeader(on)
+    headerPearl = on and true or false
+    if GUI.Engine.Active("merchant") then API.Try("merchant:header", layoutAll) end
+    return true
+end
+
 GUI.Merchant._test = { rows = rows, discs = discs, ui = ui, redAlpha = redAlpha, ROW_INSETS = ROW_INSETS,
                        DISC_RING = DISC_RING, MASK_WIDTH = MASK_WIDTH, RED = RED, BOX_LEFT = BOX_LEFT,
                        BOX_RIGHT = BOX_RIGHT, BAR_TOPLEFT = BAR_TOPLEFT, SQUARE_OUTSET = SQUARE_OUTSET,
                        ICON_OUTSET = ICON_OUTSET, TAB_ACTIVE = TAB_ACTIVE, EMPTY_TITLE = EMPTY_TITLE,
-                       EMPTY_TEXT = EMPTY_TEXT, BUYBACK_ICON = BUYBACK_ICON }
+                       EMPTY_TEXT = EMPTY_TEXT, BUYBACK_ICON = BUYBACK_ICON,
+                       TAB_TUCK = TAB_TUCK }

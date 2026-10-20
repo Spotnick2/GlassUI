@@ -76,9 +76,17 @@ W1.2's tree (70374, account #1's log):
   "0.85 more", then asked to hide what's behind altogether. An opaque backing does that without
   touching RestedXP's frame (another addon's window is never ours to hide or fade). Changing the
   merchant's strata doesn't help either: the merchant already draws over RestedXP, and it was only
-  see-through. The glass is the tint, wash and rim over the backing. The acceptance now tries 0.85,
-  0.95 and 1 live (on Glass UI's own table, then `Theme.Refresh`), a screenshot each.
+  see-through. The glass is the tint, wash and rim over the backing.
+- **Then 0.85, `Theme.WINDOW_BACKING = 0.85`** (ML run 1, 2026-10-20): the owner found opaque too
+  much and pointed at Blizzard's own bags, where a damage meter behind shows "just a bit". ML run 2
+  tries 0.8, 0.85 and 0.9 live (on Glass UI's own table, then `Theme.Refresh`), a screenshot each.
 - **The merchant's tabs:** they get the floor too (same skin).
+- **The Pearl header** (ML run 1, the owner: "the top of the dialog could be fully pearl (with the
+  head and title) until the first bar"): the window's backing, our own texture, starts at the item
+  inset's top (`TOP` on `MerchantFrame.Inset`, `LEFT`/`RIGHT`/`BOTTOM` on the window's glass)
+  instead of covering the whole window. Above it, the portrait, the title and the close button sit
+  on clear Pearl glass (tint, wash, rim), like the portrait's disc. `GUI.Merchant.SetHeader(on)`
+  switches it live for the probe (not saved), re-anchoring through `layout()`, gated.
 
 ## 2. The item rows in glass
 
@@ -202,16 +210,17 @@ Nothing of Blizzard's is moved, resized, retexted or recoloured. Every new piece
 ### The pieces
 
 - **A section:** two textures of ours in the window glass's host:
-  - a fill: ARTWORK, the backing colour at `SECTION_FILL` (0.25);
+  - a fill: ARTWORK, black at `SECTION_FILL` (0.4; run 1's backing colour at 0.25 didn't show);
   - an edge: four 1 px lines on BORDER (no, ARTWORK 1), white at `SECTION_EDGE` (0.12).
   
   The result is a recessed pane with a restrained edge. That is Pearl's "edge highlight", and not
   another LibGlass panel, which would add a second gloss over the items (the GPT critique: "free of
   added reflection overlays"). Each section is anchored to Blizzard regions by `SetPoint` on our
   texture, which never touches theirs.
-  - **The colour** is `Suite.BACKING`, the one backing colour for every tint (only the
-    alpha differs per tint). So nothing needs repainting: the planned Theme surface kind was
-    dropped in the code, because its mutant survived as a no-op.
+  - **The colour** was planned as `Suite.BACKING`, the one backing colour for every tint. Over a
+    window floor of that very colour, near opaque, a pane of it was invisible (ML run 1: the owner
+    couldn't tell the two layouts apart). It is black now, which darkens any tint and needs no
+    repaint either: the planned Theme surface kind was dropped.
 - **The tab state:** `HookScript("OnShow"/"OnHide")` on `MerchantBuyBackItem`, gated, calls
   `layout()`. So does the style pass.
 - **`sections`:**
@@ -252,13 +261,20 @@ Nothing of Blizzard's is moved, resized, retexted or recoloured. Every new piece
     - Blizzard's own red icon tint carries the warning, untouched;
     - in `sections` the red stays 0.35, as Blizzard's plate.
 - **For both, the active tab:**
-  - one texture of ours on each tab's glass host: ARTWORK, white at `TAB_ACTIVE` (0.10), masked by
-    its glass;
+  - one texture of ours on each tab's glass host: ARTWORK, white at `TAB_ACTIVE` (0.2; run 1's
+    0.10 didn't show), masked by its glass;
   - shown while that tab's `MiddleActive` is shown;
   - `hooksecurefunc(tab.MiddleActive, "Show"/"Hide")` on the instance, gated, plus the style
     pass reading `MiddleActive:IsShown()`.
 
   Blizzard's text colours stay.
+- **The tabs hang from the window** (ML run 1, the owner: "the tabs at the bottom need more work,
+  they feel disconnected"). Each tab's glass sat inside the tab's footprint, a rounded pill of its
+  own under the window. Now its top reaches `TAB_TUCK` (12 px) up under the window, and the glass
+  (and its rim frame, `g.top`) sits in the strata below the window's (`MerchantFrame` is a MEDIUM
+  panel, so LOW). The window's floor and rim cover the tab's top and corners, so the tab hangs from
+  the window's edge as Blizzard's do. Our own frames' strata only; the tab is never touched. Set in
+  the style pass, from the window's strata at that time.
 - **The switch:**
   - `GUI.Merchant.SetLayout("sections" | "bar")`: live, it repaints through `layout()` and the red
     mirrors;
@@ -291,8 +307,9 @@ Nothing of Blizzard's is moved, resized, retexted or recoloured. Every new piece
 - The red: 0.35 in sections, 0.12 in bar, and repainted live by the switch.
 - The active tab: following MiddleActive's Show/Hide, and gated.
 - Off: nothing of ours shown, every hook a no-op. On: re-synced.
-- A section's fill is the backing colour at `SECTION_FILL`, and its edges are white at
-  `SECTION_EDGE`, 1 px.
+- A section's fill is black at `SECTION_FILL`, and its edges are white at `SECTION_EDGE`, 1 px.
+- Run 2: the header's backing anchors and its live switch (gated while off); the tabs' glass
+  tucked and a strata below; the empty state's icon path whole.
 
 ### In game (`/fp steps skin merchantlayout`)
 
@@ -304,6 +321,12 @@ On a vendor with an unusable item, both layouts, live, a screenshot each:
 - off and on.
 
 The owner picks a layout, and the box insets get tuned from the screenshots.
+
+**Run 1** (2026-10-20, 70450): every check passed, but the owner couldn't tell the layouts apart (the
+panes didn't show), the tabs felt disconnected, and the empty state's icon was missing (its path had
+lost its backslashes). The box insets match Blizzard's boxes in the skin-off screenshot: no tuning.
+**Run 2** asks plainly: the panes, the tabs, the Pearl header (on and off), the floor at 0.8, 0.85
+and 0.9, then sections or bar (Yes / No).
 
 ## Tests
 

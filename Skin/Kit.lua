@@ -255,7 +255,7 @@ function K:Panel(window, size, insets, anchor, opts)
     local backing = (not opts or opts.backing ~= false) and self:Backing(panel, g) or nil
     GUI.Theme.Register(g, backing, self.backing)
     self.panels[#self.panels + 1] = panel
-    return panel, g
+    return panel, g, backing
 end
 
 -- The opaque backing (Glass Quest Tracker's): above the shadow (-8), under
@@ -291,18 +291,18 @@ function K:Disc(parent, around, opts)
     return host, g
 end
 
--- A recessed pane (#84): a fill on the host's ARTWORK 0, in the backing's
--- colour at SECTION_FILL (Suite.BACKING: one colour for every tint, so
--- nothing to repaint), and four 1 px edges on
--- ARTWORK 1 at SECTION_EDGE, anchored to the fill. In a glass host that is
--- over its body (BACKGROUND) and under its rim (g.top). The caller anchors
--- the fill and shows it (Kit.ShowSection); it starts hidden.
-Kit.SECTION_FILL, Kit.SECTION_EDGE = 0.25, 0.12
+-- A recessed pane (#84): a black fill on the host's ARTWORK 0 at
+-- SECTION_FILL, and four 1 px edges on ARTWORK 1 at SECTION_EDGE, anchored
+-- to the fill. In a glass host that is over its body (BACKGROUND) and under
+-- its rim (g.top). Black, not the backing's colour: over a window's
+-- near-opaque floor of that colour a pane of it didn't show (ML run 1,
+-- 70450). The caller anchors the fill and shows it (Kit.ShowSection); it
+-- starts hidden.
+Kit.SECTION_FILL, Kit.SECTION_EDGE = 0.4, 0.12
 local SIDES = { "TOP", "BOTTOM", "LEFT", "RIGHT" }
 function K:Section(host)
     local fill = host:CreateTexture(nil, "ARTWORK", nil, 0)
-    local c = GUI.Suite.BACKING
-    fill:SetColorTexture(c[1], c[2], c[3], Kit.SECTION_FILL)
+    fill:SetColorTexture(0, 0, 0, Kit.SECTION_FILL)
     local edges = {}
     for i, side in ipairs(SIDES) do
         local e = host:CreateTexture(nil, "ARTWORK", nil, 1)

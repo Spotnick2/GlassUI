@@ -840,6 +840,25 @@ okL, whyL = T.layoutOn("t", { layout = "bar", tab = 1, label = false })()
 check(not okL and whyL:find("label true", 1, true), "a label beside a sold item fails")
 okL, whyL = T.layoutOn("t", { layout = "bar", tab = 2 })()
 check(not okL and whyL:find("Buyback tab", 1, true), "the wrong tab fails")
+-- Run 2: the header and the tabs tucked under the window.
+local GM, hdr = rawget(_G, "GlassUI").Merchant, true
+GM.Header = function() return hdr end
+GM.SetHeader = function(on) hdr = on; return true end
+local tglass = CreateFrame("Frame", nil, tab1)
+tglass:SetFrameStrata("LOW")
+lu.tabGlass = { [tab1] = { glass = tglass } }
+okL, whyL = T.layoutOn("t", { layout = "bar", tab = 1, header = true })()
+check(okL, "the header Pearl, the tabs a strata under the window: pass: " .. tostring(whyL))
+eq(SkinProbeDB.results["ML.t"].tabStrata, "LOW", "the tabs' strata recorded")
+eq(SkinProbeDB.results["ML.t"].windowStrata, "MEDIUM", "and the window's")
+eq(select(1, T.headerTry(false)), true, "the header switched through Glass UI")
+eq(hdr, false, "off")
+okL, whyL = T.layoutOn("t", { layout = "bar", tab = 1, header = true })()
+check(not okL and whyL:find("header false", 1, true), "the header off when wanted on fails")
+T.headerTry(true)
+tglass:SetFrameStrata("MEDIUM")
+okL, whyL = T.layoutOn("t", { layout = "bar", tab = 1, header = true })()
+check(not okL and whyL:find("not tucked", 1, true), "the tabs in the window's strata fail")
 rawset(_G, "MerchantBuyBackItem", nil); rawset(_G, "MerchantFrameTab1", nil); rawset(_G, "MerchantFrameTab2", nil)
 rawset(_G, "MerchantItem11", nil)
 rawset(_G, "GlassUI", savedGUI3)
