@@ -1317,6 +1317,10 @@ Probe:Steps("merchantlayout", {
     { text = "Type /reload to save the results.", reload = true },
 })
 
+-- The checks of the blocks below, each in its own scope (Lua 5.1 allows 200
+-- locals in the main chunk), for the tests.
+local skinChecks = {}
+
 --------------------------------------------------------------------------------
 -- The bags (#88, docs/BAGS.md): each open bag window and its slots against
 -- what Blizzard shows; the header band tried live; the item use path in
@@ -1324,6 +1328,7 @@ Probe:Steps("merchantlayout", {
 -- Saved as BG.<label>.
 --------------------------------------------------------------------------------
 
+do
 local BAG_WINDOWS = { "ContainerFrame1", "ContainerFrame2", "ContainerFrame3", "ContainerFrame4",
                       "ContainerFrame5", "ContainerFrame6", "ContainerFrame7", "ContainerFrameCombinedBags" }
 
@@ -1502,6 +1507,168 @@ Probe:Steps("bags", {
     taintOff(),
     { text = "Type /reload to save the results.", reload = true },
 })
+
+skinChecks.bagsState, skinChecks.bagsOn = bagsState, bagsOn
+end
+
+--------------------------------------------------------------------------------
+-- The game menu (#90, docs/GAME-MENU.md): the menu and its buttons against
+-- what Blizzard shows, the paths through the taint-sensitive Esc chain under
+-- the taint log (its first opening in combat, Settings and back, Esc while
+-- casting, Log Out and Exit cancelled), the menu's size held, off and on.
+-- Saved as GM.<label>.
+--------------------------------------------------------------------------------
+
+do
+local function gmState(label)
+    local G = glassUI()
+    local T = G and G.GameMenu and G.GameMenu._test
+    local m = frameByName("GameMenuFrame")
+    local rec = { buttons = 0, glass = 0, slicesFaded = 0, glowTinted = 0 }
+    rec.shown = m ~= nil and seen(m)
+    local okC, c = pcall(InCombatLockdown)
+    rec.combat = okC and plain(c) == true
+    if m then
+        local okW, w = call(m, "GetWidth")
+        local okH, h = call(m, "GetHeight")
+        rec.width, rec.height = okW and plain(w) or nil, okH and plain(h) or nil
+        local okB, ba = call(m.Border, "GetAlpha")
+        rec.border = okB and plain(ba) or nil
+        local okA, ha = call(m.Header and m.Header.CenterBG, "GetAlpha")
+        rec.headerArt = okA and plain(ha) or nil
+        rec.headerGlass = T and T.menus[m] and seen(T.menus[m].header) or false
+        for _, b in ipairs({ m:GetChildren() }) do
+            if type(b.Left) == "table" and type(b.Right) == "table" and type(b.Center) == "table" and seen(b) then
+                rec.buttons = rec.buttons + 1
+                local s = T and T.buttons[b]
+                if s and seen(s.glass) then rec.glass = rec.glass + 1 end
+                local okL, la = call(b.Left, "GetAlpha")
+                local okR, ra = call(b.Center, "GetAlpha")
+                if okL and okR and plain(la) == 0 and plain(ra) == 0 then rec.slicesFaded = rec.slicesFaded + 1 end
+                local okG, hl = call(b, "GetHighlightTexture")
+                local okD, desat = call(okG and hl or nil, "IsDesaturated")
+                if okD and plain(desat) == true then rec.glowTinted = rec.glowTinted + 1 end
+            end
+        end
+    end
+    rec.blocked = type(SkinProbeDB) == "table" and SkinProbeDB.suiteBlocked or 0
+    say("GM " .. label .. ": shown " .. tostring(rec.shown) .. ", combat " .. tostring(rec.combat) .. ", "
+        .. rec.buttons .. " buttons, glass " .. rec.glass .. ", faded " .. rec.slicesFaded .. ", glow "
+        .. rec.glowTinted .. ", size " .. tostring(rec.width) .. " x " .. tostring(rec.height) .. ", blocked "
+        .. rec.blocked)
+    record("GM." .. label, rec)
+    return rec
+end
+
+-- A check: the menu shown, every button on glass with its slices faded and
+-- its glow tinted, the border and header art faded, the header's glass; the
+-- size the first check saw (SkinProbeDB.gmSize); nothing blocked.
+local function gmOn(label, want)
+    want = want or {}
+    return function()
+        local r = gmState(label)
+        local bad = {}
+        local function want_(cond, why) if not cond then bad[#bad + 1] = why end end
+        want_(r.shown, "the menu not shown")
+        if want.combat ~= nil then want_(r.combat == want.combat, "combat " .. tostring(r.combat)) end
+        want_(r.buttons > 0 and r.glass == r.buttons, "glass on " .. r.glass .. " of " .. r.buttons .. " buttons")
+        want_(r.slicesFaded == r.buttons, "slices faded on " .. r.slicesFaded .. " of " .. r.buttons)
+        want_(r.glowTinted == r.buttons, "glow tinted on " .. r.glowTinted .. " of " .. r.buttons)
+        want_(r.border == 0 and r.headerArt == 0, "border " .. tostring(r.border) .. ", header art " .. tostring(r.headerArt))
+        want_(r.headerGlass, "no title tab glass")
+        want_(r.blocked == 0, r.blocked .. " blocked")
+        if type(SkinProbeDB) == "table" and r.width and r.height then
+            local first = SkinProbeDB.gmSize
+            if not first then
+                SkinProbeDB.gmSize = { r.width, r.height }
+            else
+                want_(math.abs(first[1] - r.width) < 0.5 and math.abs(first[2] - r.height) < 0.5,
+                    "size " .. r.width .. " x " .. r.height .. ", first " .. first[1] .. " x " .. first[2])
+            end
+        end
+        return #bad == 0, #bad == 0 and "as Blizzard shows it" or table.concat(bad, "; ")
+    end
+end
+
+local function gmSwitch(on)
+    local G = glassUI()
+    if not (G and G.Engine) then return false, "Glass UI not loaded" end
+    return G.Engine.SetEnabled("gamemenu", on)
+end
+
+local function menuShown()
+    local m = frameByName("GameMenuFrame")
+    return m ~= nil and seen(m)
+end
+
+Probe:Steps("gamemenu", {
+    title = "Glass UI: the game menu in glass (#90)",
+    { text = "Turns on script errors and the taint log, and counts blocked actions from now.", auto = true,
+      run = function()
+          if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0; SkinProbeDB.gmSize = nil end
+          return setCVar("scriptErrors", "1"), setCVar("taintLog", "1")
+      end },
+    { text = "Type /reload now, WITHOUT opening the game menu before the next step: its first opening this "
+          .. "session has to happen in combat.", reload = true },
+    { text = "Get into combat (a mob or a training dummy), then press Esc to open the game menu. This step goes on "
+          .. "by itself once the menu is open in combat; a screenshot is taken.", timeout = 180,
+      screenshot = "game menu, first opening in combat",
+      wait = function()
+          local okC, c = pcall(InCombatLockdown)
+          local fighting = okC and plain(c) == true
+          return menuShown() and fighting, fighting and "waiting for the menu" or "waiting for combat"
+      end, check = gmOn("first in combat", { combat = true }) },
+    { text = "Close the menu (Esc), finish the fight. Out of combat, open it again (Esc), then press Next for a "
+          .. "screenshot.", screenshot = "game menu", check = gmOn("out of combat", { combat = false }) },
+    { text = "Does it read as the mockup: dark glass, the title on a glass tab, each entry a glass bar, the NEW "
+          .. "badge kept? Hover each button: a soft white glow (not red)? Anything off: the Note.", ask = true },
+    -- Settings and back: the porting guide's trap is entering ToggleGameMenu from addon code.
+    { text = "Click Options, then close Settings with its own close button (top right): you're back on the game "
+          .. "menu. This step goes on by itself.", timeout = 180,
+      wait = function()
+          local sp = frameByName("SettingsPanel")
+          return menuShown() and not (sp and seen(sp)), "waiting for the menu after Settings"
+      end, check = gmOn("settings closed") },
+    { text = "Options again, and this time close Settings with Esc: back on the menu.", timeout = 180,
+      wait = function()
+          local sp = frameByName("SettingsPanel")
+          return menuShown() and not (sp and seen(sp)), "waiting for the menu after Settings"
+      end, check = gmOn("settings esc") },
+    { text = "Close the menu. Get into combat, open the menu, Options, then close Settings (its button): back on the "
+          .. "menu, in combat. This step goes on by itself.", timeout = 240,
+      wait = function()
+          local okC, c = pcall(InCombatLockdown)
+          local sp = frameByName("SettingsPanel")
+          return menuShown() and okC and plain(c) == true and not (sp and seen(sp)), "waiting"
+      end, check = gmOn("settings in combat", { combat = true }) },
+    { text = "Close the menu. Start a spell with a cast time and press Esc while it casts: Blizzard stops the cast "
+          .. "(Esc's first job), then press Esc again to open the menu. Press Next.",
+      check = gmOn("esc while casting") },
+    { text = "Did every step so far go without a 'blocked' or 'interface action failed' message?", ask = true },
+    -- The exits, cancelled.
+    { text = "Click Log Out, then Cancel on its countdown. Open the menu again. Click Exit Game, then Cancel. Open the "
+          .. "menu again and press Next.", check = gmOn("exits cancelled") },
+    { text = "Click Return to Game: the menu closes. This step goes on by itself.", timeout = 120,
+      wait = function() return not menuShown(), "waiting for the menu to close" end },
+    { text = "Open the menu, then AddOns, close it; the menu again, Edit Mode, close it; the menu again, Macros, "
+          .. "close it. Open the menu and press Next: its size as at the start.", check = gmOn("after the panels") },
+    -- Off and on, the menu open.
+    { text = "With the menu open: switches the skin off (Blizzard's look).", button = "Skin off",
+      run = function() return gmSwitch(false) end, screenshot = "game menu, skin off",
+      check = function()
+          local r = gmState("off")
+          local ok = r.shown and r.glass == 0 and r.slicesFaded == 0 and r.glowTinted == 0 and r.border == 1
+              and not r.headerGlass
+          return ok, ok and "Blizzard's look, nothing of ours" or "something of ours while off"
+      end },
+    { text = "Close and reopen the menu, then switch the skin on.", button = "Skin on",
+      run = function() return gmSwitch(true) end, screenshot = "game menu, on again", check = gmOn("on again") },
+    taintOff(),
+    { text = "Type /reload to save the results.", reload = true },
+})
+
+skinChecks.gmState, skinChecks.gmOn = gmState, gmOn
+end
 
 --------------------------------------------------------------------------------
 -- The suite theme (#24, docs/SUITE.md "In-game validation", S.1-S.8): Glass
@@ -3383,7 +3550,8 @@ boot:SetScript("OnEvent", function(_, _, name)
     say("loaded (" .. SkinProbeDB.loads .. " loads). /fp skin for the commands, /fp steps skin wave1 to start")
 end)
 
-NS._test = { bagsState = bagsState, bagsOn = bagsOn, both = both, closeState = closeState, closeOn = closeOn, headerTry = headerTry, layoutState = layoutState, layoutOn = layoutOn, Probe = Probe, state = state, tree = tree, fade = fade, slashOwners = slashOwners,
+NS._test = { gmState = skinChecks.gmState, gmOn = skinChecks.gmOn, bagsState = skinChecks.bagsState,
+    bagsOn = skinChecks.bagsOn, both = both, closeState = closeState, closeOn = closeOn, headerTry = headerTry, layoutState = layoutState, layoutOn = layoutOn, Probe = Probe, state = state, tree = tree, fade = fade, slashOwners = slashOwners,
              gamepad = gamepad, panelsOn = panelsOn, panelsOff = panelsOff, borderFade = borderFade,
              borderRestore = borderRestore, gradientOn = gradientOn, gradientOff = gradientOff,
              panels = panels, faded = faded, cardAtlas = cardAtlas, cardOn = cardOn, cardOff = cardOff,

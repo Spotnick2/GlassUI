@@ -974,6 +974,73 @@ SkinProbeDB.suiteBlocked = 0
 rawset(_G, "ContainerFrame1", nil)
 rawset(_G, "GlassUI", savedGUI4)
 
+-- #90: the game menu as the procedure reads it.
+local savedGUI5 = rawget(_G, "GlassUI")
+local gm = CreateFrame("Frame", "GameMenuFrame", UIParent)
+gm:SetSize(260, 400)
+gm.Border = CreateFrame("Frame", nil, gm)
+gm.Border:SetAlpha(0)
+gm.Header = CreateFrame("Frame", nil, gm)
+gm.Header.CenterBG = gm.Header:CreateTexture()
+gm.Header.CenterBG:SetAlpha(0)
+local gmButtons, gmMenus = {}, {}
+gmMenus[gm] = { header = CreateFrame("Frame", nil, gm.Header) }
+local function gmButton()
+    local b = CreateFrame("Button", nil, gm)
+    for _, k in ipairs({ "Left", "Right", "Center" }) do b[k] = b:CreateTexture(); b[k]:SetAlpha(0) end
+    b._highlight = b:CreateTexture()
+    b._highlight:SetDesaturated(true)
+    gmButtons[b] = { glass = CreateFrame("Frame", nil, b) }
+    return b
+end
+local gb1, gb2 = gmButton(), gmButton()
+rawset(_G, "GlassUI", { GameMenu = { _test = { buttons = gmButtons, menus = gmMenus } } })
+SkinProbeDB.suiteBlocked, SkinProbeDB.gmSize = 0, nil
+local okG, whyG = T.gmOn("t")()
+check(okG, "the menu on glass, its buttons faded and tinted: pass: " .. tostring(whyG))
+eq(SkinProbeDB.results["GM.t"].buttons, 2, "two buttons counted")
+check(SkinProbeDB.gmSize and SkinProbeDB.gmSize[1] == 260, "the first size kept")
+okG, whyG = T.gmOn("t", { combat = true })()
+check(not okG and whyG:find("combat false", 1, true), "combat wanted, not in combat: fails")
+gmButtons[gb2].glass:Hide()
+okG, whyG = T.gmOn("t")()
+check(not okG and whyG:find("glass on 1 of 2", 1, true), "a button without glass fails")
+gmButtons[gb2].glass:Show()
+gb2.Center:SetAlpha(1)
+okG, whyG = T.gmOn("t")()
+check(not okG and whyG:find("slices faded on 1 of 2", 1, true), "a slice left fails")
+gb2.Center:SetAlpha(0)
+gb1._highlight:SetDesaturated(false)
+okG, whyG = T.gmOn("t")()
+check(not okG and whyG:find("glow tinted on 1 of 2", 1, true), "a red glow left fails")
+gb1._highlight:SetDesaturated(true)
+gm.Border:SetAlpha(1)
+okG, whyG = T.gmOn("t")()
+check(not okG and whyG:find("border 1", 1, true), "the border left fails")
+gm.Border:SetAlpha(0)
+gm.Header.CenterBG:SetAlpha(1)
+okG, whyG = T.gmOn("t")()
+check(not okG and whyG:find("header art 1", 1, true), "the header art left fails")
+gm.Header.CenterBG:SetAlpha(0)
+gmMenus[gm].header:Hide()
+okG, whyG = T.gmOn("t")()
+check(not okG and whyG:find("no title tab", 1, true), "no title tab glass fails")
+gmMenus[gm].header:Show()
+gm:SetSize(260, 420)
+okG, whyG = T.gmOn("t")()
+check(not okG and whyG:find("first 260 x 400", 1, true), "the menu's size changed fails")
+gm:SetSize(260, 400)
+SkinProbeDB.suiteBlocked = 2
+okG, whyG = T.gmOn("t")()
+check(not okG and whyG:find("2 blocked", 1, true), "a blocked action fails")
+SkinProbeDB.suiteBlocked = 0
+gm:Hide()
+okG, whyG = T.gmOn("t")()
+check(not okG and whyG:find("not shown", 1, true), "the menu hidden fails")
+rawset(_G, "GameMenuFrame", nil)
+rawset(_G, "GlassUI", savedGUI5)
+SkinProbeDB.gmSize = nil
+
 -- #56 discovery: Questie's tracker and RestedXP's window and arrow.
 -- When each frame first exists: the first place it was seen is kept.
 local qbase = CreateFrame("Frame", "Questie_BaseFrame", UIParent)
