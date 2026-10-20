@@ -16,8 +16,8 @@ local ALLOWED = { SetAlpha = true, SetVertexColor = true, SetDesaturated = true,
                   SetTextColor = true }   -- only on the audited titles: checked below
 
 -- The audited titles (docs/PLAN.md, "The accent on Blizzard's titles", #71),
--- found by structure, never by what a kit registered: the tracker's headers
--- and each meter window's title.
+-- found by structure, never by what a kit registered: the tracker's headers,
+-- the quest timers' title (#73) and each meter window's title.
 local function audited()
     local set = {}
     local t = rawget(_G, "ObjectiveTrackerFrame")
@@ -25,6 +25,8 @@ local function audited()
     for _, m in ipairs(t and t.modules or {}) do
         if m.Header then set[m.Header.Text] = true end
     end
+    local q = rawget(_G, "QuestTimerFrame")
+    if q then set[q.Header.Text] = true end
     for i = 1, 3 do
         local w = rawget(_G, "DamageMeterSessionWindow" .. i)
         if w then set[w.DamageMeterTypeDropdown.TypeName] = true end
@@ -78,6 +80,9 @@ WoW.collapse(false)
 WoW.editMode(true)
 WoW.editMode(false)
 WoW.asBlizzard(function() ObjectiveTrackerFrame.NineSlice:SetAlpha(0.6) end)
+-- The quest timers (#73): shown, grown, recoloured below, gone.
+WoW.questTimers(1)
+WoW.questTimers(2)
 for _, cmd in ipairs({ "skin tracker off", "skin tracker on" }) do GUI._test.slash(cmd) end
 -- The accent and the tint changed live, in combat too (#52, #67).
 WoW.combat = true
@@ -87,6 +92,7 @@ WoW.combat = false
 GUI._test.slash("look accent gold")
 GUI._test.slash("look tint clear")
 WoW.layout("QuestObjectiveTracker", { blocks = 1, items = 2 })
+WoW.questTimers(0)
 for _, cmd in ipairs({ "skin merchant off", "skin merchant on", "skin meter off", "off", "on", "theme smoked",
                        "theme class", "theme clear", "skins", "skin held off" }) do
     GUI._test.slash(cmd)
@@ -159,5 +165,10 @@ WoW.textColorCalls = {}
 local kit = GUI.Engine.byKey.tracker.kit
 kit:TextColor(line, 1, 0, 0)
 eq(#unaudited(), 1, "and one passed through the kit")
+-- A quest timer's countdown is no title.
+WoW.textColorCalls = {}
+WoW.questTimers(1)
+kit:TextColor(QuestTimerFrame.activeElements[1].Name, 1, 0, 0)
+eq(#unaudited(), 1, "nor a timer's countdown")
 
 done("test_contract")
