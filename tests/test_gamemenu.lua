@@ -52,7 +52,13 @@ local hg = G.menus[M].header
 check(hg ~= nil and hg:GetParent() == M.Header, "the title tab: glass on the header")
 eq(hg:GetFrameLevel(), M.Header:GetFrameLevel() - 1, "under it")
 eq(ours(M.Header)[1], hg, "one glass on the header")
-eq(backingOf(hg), nil, "the title tab: no backing")
+local hb = backingOf(hg)
+check(hb ~= nil, "the title tab: a backing of its own")
+near(hb._color[4], GUI.Theme.WINDOW_BACKING, "as dense as a button: the window doesn't show through it")
+local wg = G.menus[M].wg
+eq(wg.top:GetFrameLevel(), win:GetFrameLevel(), "the window's rim at its own level")
+check(hg:GetFrameLevel() > wg.top:GetFrameLevel(), "the title tab over the window's rim, not under")
+check(M.Header:GetFrameLevel() > hg:GetFrameLevel(), "the title's text over the tab")
 eq(M.NewOptionsFrame:GetAlpha(), 1, "the NEW badge left")
 
 -- The buttons: styled at the first show by the style pass.

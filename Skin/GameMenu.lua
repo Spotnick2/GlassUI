@@ -14,7 +14,8 @@
 -- The window glass in the suite's Pearl body, as the quest tracker (the
 -- owner, GM run 1: "a bit more pearl except for the buttons, since the stock
 -- ui was already translucent"; the dialog border faded); the title on a glass
--- tab (the header's diamond-metal art faded, its text Blizzard's); each button
+-- tab as dense as a button, over the window's rim (the header's diamond-metal
+-- art faded, its text Blizzard's); each button
 -- on small glass with the window floor's backing, as dense as before, its red
 -- slices faded, Blizzard's own hover glow tinted white. Our glass has no layoutIndex, so the menu's vertical layout
 -- leaves it out (LayoutFrame.lua:22-39).
@@ -75,9 +76,15 @@ GUI.Engine.Register({
     -- was translucent already.
     frames = function() return rawget(_G, "GameMenuFrame") end,
     install = function(kit, frame)
-        kit:Panel(frame)
+        local win, wg = kit:Panel(frame)
+        -- The window's rim at the window's own level, not LibGlass's 10 up:
+        -- the title tab sits over it, not under (the owner, after run 1).
+        if wg and wg.top then wg.top:SetFrameLevel(win:GetFrameLevel()) end
         local header = tbl(frame.Header)
-        menus[frame] = { header = header and (glassUnder(kit, header, HEADER_INSETS, { backing = false })) or nil }
+        -- The title tab as dense as a button: nothing of the window shows
+        -- through it.
+        menus[frame] = { win = win, wg = wg,
+                         header = header and (glassUnder(kit, header, HEADER_INSETS, { kind = "window" })) or nil }
         -- Blizzard rebuilds the buttons on every show and on a store or trial
         -- event (GameMenuFrame.lua:69-102); the first show's ran before this.
         hooksecurefunc(frame, "InitButtons", function(f)

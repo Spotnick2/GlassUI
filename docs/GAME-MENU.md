@@ -146,5 +146,9 @@ translucent ... maybe more like the quest tracker".
 - **The buttons** keep their density: each button's glass gets its own backing at the window floor.
   That's `kit:Panel`'s new `opts.kind`, a panel's backing kind when it isn't its skin's. It stacks
   with the window's to about 0.95 (before: 0.93 under unbacked glass).
-- **The title tab:** still no backing.
+- **The title tab**, then, the owner: "a bit more opaque so we don't see the other frame out of it ...
+  right now it looks under instead of over".
+  - It gets the window floor's backing, as a button does.
+  - The window's rim drops to the window's own level, from LibGlass's 10 up. So the tab sits over
+    it, and the title's text, on Blizzard's header above the tab, stays on top.
 - Tested and mutation-tested (5 mutants, all killed).
