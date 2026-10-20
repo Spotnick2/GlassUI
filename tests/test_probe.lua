@@ -683,6 +683,34 @@ GlassUI.QuestTracker._test.pills[tracker] = tpill
 tband._top = 713
 okTm, whyTm = T.timerOn("t", true)()
 check(not okTm and whyTm:find("back at the top", 1, true), "the band left down fails")
+-- Fake timers (no timed quests to take): the getter swapped, a quest of the
+-- log lending its ID, Blizzard's put back.
+check(not T.fakeOn(1), "no C_QuestLog: refused, nothing thrown")
+local realTimers = function() return {} end
+local entries = { { isHeader = true, questID = 99 }, { questID = 812 }, { questID = 813 } }
+rawset(_G, "C_QuestLog", { GetQuestTimers = realTimers, GetNumQuestLogEntries = function() return #entries end,
+                           GetInfo = function(i) return entries[i] end })
+local nudged = 0
+rawset(qtimer, "UpdateIfNeeded", function() nudged = nudged + 1 end)
+check((T.fakeOn(1)), "one fake timer on")
+check(C_QuestLog.GetQuestTimers ~= realTimers, "the getter swapped")
+eq(nudged, 1, "and Blizzard's timers redrawn at once")
+local fakeList = C_QuestLog.GetQuestTimers()
+eq(#fakeList, 1, "one timer")
+eq(fakeList[1].questID, 812, "on the log's first quest, its header skipped")
+eq(fakeList[1].questTimer, 300, "five minutes from now")
+T.fakeOn(2)
+fakeList = C_QuestLog.GetQuestTimers()
+eq(#fakeList, 2, "two timers")
+eq(fakeList[2].questID, 813, "the second on the next quest")
+T.fakeOff()
+eq(C_QuestLog.GetQuestTimers, realTimers, "Blizzard's getter back, after two fakes")
+eq(nudged, 3, "and the timers redrawn")
+entries = { { isHeader = true, questID = 0 } }
+local okF, whyF = T.fakeOn(1)
+check(not okF and whyF:find("no quest", 1, true), "no quest in the log: refused")
+eq(C_QuestLog.GetQuestTimers, realTimers, "and nothing swapped")
+rawset(_G, "C_QuestLog", nil)
 rawset(_G, "QuestTimerFrame", nil)
 rawset(_G, "GlassUI", savedGUI3)
 
