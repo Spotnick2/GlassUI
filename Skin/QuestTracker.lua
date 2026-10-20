@@ -24,8 +24,8 @@
 --            pass B, 70374).
 --
 -- Text keeps Blizzard's colours and fonts (difficulty colours carry
--- information), except the headers' titles ("All Objectives", "Quests"...),
--- which wear the accent: the owner's audited exception (#71, docs/PLAN.md
+-- information), except the headers' titles ("All Objectives", "Quests"...,
+-- and "Quest Timers"), which wear the accent: the owner's audited exception (#71, docs/PLAN.md
 -- "The accent on Blizzard's titles"). Blizzard only sets their text, their
 -- gold is ObjectiveTrackerHeaderFont's. The POI buttons and auto-quest popups
 -- stay stock.
@@ -34,13 +34,20 @@
 -- panel put the minimize buttons on its rim): a small band over the "All
 -- Objectives" header, and the body under it. Both are placed by state, never
 -- by reading a position, after every layout, collapse and Edit Mode exit:
---   the band             always, from the NineSlice's top to the Header's bottom
+--   the band             always, from the Header's top to its bottom
 --   populated            the body under the band, to the NineSlice's bottom,
 --                        which Blizzard anchors under the last module after
 --                        every layout (Container.lua:117)
 --   collapsed or empty   the band alone: collapsed, the NineSlice keeps its old
 --                        full size (70374), and empty (Edit Mode only) it has
 --                        top anchors only.
+--
+-- The quest timers (#73): QuestTimerFrame, the tracker's child in strata
+-- BACKGROUND (Blizzard_QuestTimer, Mainline), pads the tracker's top while
+-- shown: the Header moves down by its height + 18 (UpdateHeaderPosition), the
+-- NineSlice's top doesn't. So the band hangs from the Header, which leaves the
+-- timer clear, and the timer gets a pill of its own: its dialog border and
+-- header art faded, its title in the accent.
 
 local GUI = GlassUI
 local API = GUI.API
@@ -65,15 +72,26 @@ local function accent() return GUI.Suite.Accent() or FALLBACK end
 -- tracker (beside the action bars it merged with their glass), which put them
 -- on the rim (70450). The band's right is the Header's, which is the
 -- tracker's, plus 5 for the same edge. GAP: between the band and the body.
+-- NINE_LEFT: the NineSlice's left from the tracker's, which is the Header's
+-- (Blizzard_ObjectiveTrackerContainer.xml:77), for the band hung from the Header.
 local LEFT, RIGHT, BOTTOM = 16, 0, 0
+local NINE_LEFT = -30
 local HEADER_RIGHT, HEADER_BOTTOM = 5, -4
 local GAP = 2
+
+-- The pill around the quest timers, in px inward: 6 above the frame (the
+-- title's top is 2 under it: Header TOP +11, its Text TOP -13), 8 off its
+-- bottom (the last row's text ends about 19 above it).
+local TIMER_INSETS = { 0, -6, 0, 8 }
 
 local panels = setmetatable({}, { __mode = "k" })   -- tracker -> the body panel
 local bands = setmetatable({}, { __mode = "k" })    -- tracker -> the header band
 local glass = setmetatable({}, { __mode = "k" })    -- tracker -> the body's LibGlass regions
 local bandGlass = setmetatable({}, { __mode = "k" }) -- tracker -> the band's
 local hooked = setmetatable({}, { __mode = "k" })   -- module or header -> true
+local timers = setmetatable({}, { __mode = "k" })   -- tracker -> QuestTimerFrame
+local pills = setmetatable({}, { __mode = "k" })    -- tracker -> the timers' pill
+local pillGlass = setmetatable({}, { __mode = "k" }) -- tracker -> the pill's
 local QT = { state = nil }                          -- "populated" | "header", after the last place
 
 local function tbl(v) return type(v) == "table" and v or nil end
@@ -108,7 +126,7 @@ local function place(t)
     local body, band, nine, header = panels[t], bands[t], tbl(t.NineSlice), tbl(t.Header)
     if not (body and band and nine and header) then return end
     band:ClearAllPoints()
-    band:SetPoint("TOPLEFT", nine, "TOPLEFT", LEFT, 0)
+    band:SetPoint("TOPLEFT", header, "TOPLEFT", NINE_LEFT + LEFT, 0)
     band:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", HEADER_RIGHT, HEADER_BOTTOM)
     body:ClearAllPoints()
     body:SetPoint("TOPLEFT", band, "BOTTOMLEFT", 0, -GAP)
@@ -157,6 +175,8 @@ local function recolour(kit, t)
             title(kit, mh)
         end
     end
+    local qh = timers[t] and tbl(timers[t].Header)
+    if qh then title(kit, qh) end
 end
 
 -- A button's frame art; its icon, count and cooldown are other regions.
@@ -198,6 +218,17 @@ local function module(kit, m)
             end
         end
     end
+end
+
+-- The quest timers' dialog art: the Border frame (its pieces and Bg with it)
+-- and the Header's three pieces, never the Header frame, which holds the
+-- title. Their rows are text only.
+local function timer(kit, q)
+    kit:Fade(kit:Child(q, "Border"))
+    local h = kit:Child(q, "Header")
+    if not h then return end
+    for _, key in ipairs({ "LeftBG", "RightBG", "CenterBG" }) do kit:Fade(kit:Child(h, key)) end
+    title(kit, h)
 end
 
 -- hooksecurefunc on that instance; a missing hook point (another build) is
@@ -246,6 +277,15 @@ GUI.Engine.Register({
         for _, x in ipairs({ g, gb }) do
             if x and x.top then x.top:SetFrameLevel(t:GetFrameLevel()) end
         end
+        -- The timers' pill: our child of theirs, so it shows, hides and grows
+        -- with them, in their strata. Its rim at their level, under their
+        -- Header and rows (LibGlass makes it 10 up).
+        local q = kit:Global("QuestTimerFrame")
+        if tbl(q) then
+            local pill, gp = kit:Panel(q, "small", TIMER_INSETS)
+            timers[t], pills[t], pillGlass[t] = q, pill, gp
+            if gp and gp.top then gp.top:SetFrameLevel(q:GetFrameLevel()) end
+        end
         -- Collapsing the container lays out no module: placed from here.
         hook("collapse:container", tbl(t.Header), "SetCollapsed", function()
             if not GUI.Engine.Active("tracker") then return end
@@ -274,10 +314,12 @@ GUI.Engine.Register({
         hookModules(kit, t)
         container(kit, t)
         for _, m in ipairs(modules(t)) do module(kit, m) end
+        if timers[t] then timer(kit, timers[t]) end
         place(t)
     end,
 })
 
 GUI.QuestTracker = QT
-QT._test = { panels = panels, bands = bands, glass = glass, bandGlass = bandGlass, offsets = { LEFT = LEFT, RIGHT = RIGHT, BOTTOM = BOTTOM,
-             HEADER_RIGHT = HEADER_RIGHT, HEADER_BOTTOM = HEADER_BOTTOM, GAP = GAP }, accent = accent }
+QT._test = { panels = panels, bands = bands, glass = glass, bandGlass = bandGlass, pills = pills, pillGlass = pillGlass,
+             offsets = { LEFT = LEFT, RIGHT = RIGHT, BOTTOM = BOTTOM, NINE_LEFT = NINE_LEFT, HEADER_RIGHT = HEADER_RIGHT,
+             HEADER_BOTTOM = HEADER_BOTTOM, GAP = GAP, TIMER_INSETS = TIMER_INSETS }, accent = accent }

@@ -90,6 +90,7 @@ function loadAddon(opts)
     if not opts.noMerchant then WoW.makeMerchant() end
     if not opts.noMeter then WoW.makeMeter() end
     if not opts.noTracker then WoW.makeTracker() end
+    if not (opts.noTracker or opts.noTimer) then WoW.makeQuestTimer() end
     local ns = {}
     for _, line in ipairs(tocLines()) do
         local files

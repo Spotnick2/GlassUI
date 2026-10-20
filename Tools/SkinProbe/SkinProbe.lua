@@ -23,6 +23,7 @@
 --   #54 Glass UI's own skins on Pearl                         /fp steps skin pearl
 --   #55 the quest tracker                                      /fp steps skin tracker
 --   #71 the accent on the yellow titles                        /fp steps skin accent
+--   #73 the quest timers on a pill                             /fp steps skin timer
 --
 -- Discovery for #56, Questie and RestedXP:                    /fp steps skin questing
 -- And Blizzard's own glass, the login ruleset card beside ours (#17): /fp steps skin card
@@ -1899,6 +1900,161 @@ Probe:Steps("accent", {
 Probe:Command("accent", function() accentState("now") end, "#71: the titles' colours against the suite accent")
 
 --------------------------------------------------------------------------------
+-- Acceptance: the quest timers on a pill (#73, docs/QUEST-TRACKER.md "The
+-- quest timers"): their dialog art faded, their title in the accent, our pill
+-- around them and the band below them; collapse, a row's tooltip and click
+-- under the taint log, off and on, and the band back at the top once they go.
+--------------------------------------------------------------------------------
+
+local function topOf(f)
+    local ok, v = call(f, "GetTop")
+    return ok and plain(v) or nil
+end
+local function bottomOf(f)
+    local ok, v = call(f, "GetBottom")
+    return ok and plain(v) or nil
+end
+local function visible(f)
+    local ok, v = call(f, "IsVisible")
+    return ok and plain(v) == true
+end
+local function alphaNum(r)
+    local ok, a = call(r, "GetAlpha")
+    a = ok and plain(a) or nil
+    return type(a) == "number" and a or nil
+end
+
+-- The timers, our pill and band, read from the client: logged, and saved as TM.<label>.
+local function timerState(label)
+    local G = glassUI()
+    local t = frameByName("ObjectiveTrackerFrame")
+    local q = frameByName("QuestTimerFrame")
+    local h = t and rawget(t, "Header")
+    local qh = q and rawget(q, "Header")
+    local QT = G and G.QuestTracker and G.QuestTracker._test
+    local pill = QT and t and QT.pills[t]
+    local band = QT and t and QT.bands[t]
+    local rec = {
+        status = G and G.Engine and G.Engine.Status("tracker") or "Glass UI not loaded",
+        shown = visible(q),
+        timers = q and plain(rawget(q, "numTimers")) or nil,
+        border = alphaNum(q and rawget(q, "Border")),
+        pieces = 0,
+        title = titleColour(qh and rawget(qh, "Text")),
+        want = G and G.Suite and G.Suite.Accent and G.Suite.Accent() or nil,
+        pill = visible(pill),
+        pillTop = topOf(pill), pillBottom = bottomOf(pill),
+        timerTop = topOf(q), timerBottom = bottomOf(q),
+        bandTop = topOf(band), headerTop = topOf(h), trackerTop = topOf(t),
+        collapsed = t ~= nil and plain(rawget(t, "isCollapsed")) == true,
+        combat = InCombatLockdown() == true,
+    }
+    for _, key in ipairs({ "LeftBG", "RightBG", "CenterBG" }) do
+        rec.pieces = math.max(rec.pieces, alphaNum(qh and rawget(qh, key)) or 1)
+    end
+    local failures = 0
+    for _ in pairs(G and G.failures or {}) do failures = failures + 1 end
+    rec.failures = failures
+    local function str(c) return c and (num(c[1]) .. "," .. num(c[2]) .. "," .. num(c[3])) or "?" end
+    say("TM " .. label .. ": " .. rec.status .. "; timers " .. (rec.shown and show(rec.timers) or "hidden")
+        .. " border=" .. num(rec.border) .. " pieces=" .. num(rec.pieces) .. " title " .. str(rec.title)
+        .. " pill=" .. tostring(rec.pill) .. " " .. num(rec.pillTop) .. ".." .. num(rec.pillBottom)
+        .. " timer " .. num(rec.timerTop) .. ".." .. num(rec.timerBottom) .. " band top " .. num(rec.bandTop)
+        .. " header top " .. num(rec.headerTop) .. " tracker top " .. num(rec.trackerTop)
+        .. " collapsed=" .. tostring(rec.collapsed) .. " failures=" .. failures)
+    record("TM." .. label, rec)
+    return rec
+end
+
+local function close(a, b) return type(a) == "number" and type(b) == "number" and math.abs(a - b) < 0.5 end
+
+-- A check: the skin on, the art faded, the title in the accent, and, with the
+-- timers up, the pill around them and the band hanging from the Header below
+-- them; `gone`: no timers, the band back at the tracker's top.
+local function timerOn(label, gone)
+    return function()
+        local rec = timerState(label)
+        local bad = {}
+        if rec.status ~= "on" then bad[#bad + 1] = "status " .. rec.status end
+        if rec.border ~= 0 then bad[#bad + 1] = "border alpha " .. num(rec.border) end
+        if rec.pieces ~= 0 then bad[#bad + 1] = "header art alpha " .. num(rec.pieces) end
+        if not near3(rec.title, rec.want) then bad[#bad + 1] = "title not in the accent" end
+        if rec.failures > 0 then bad[#bad + 1] = rec.failures .. " failure(s): /glassui failures" end
+        if not close(rec.bandTop, rec.headerTop) then bad[#bad + 1] = "the band's top isn't the Header's" end
+        if gone then
+            if rec.shown then bad[#bad + 1] = "the timers are still up" end
+            if rec.pill then bad[#bad + 1] = "the pill is still seen" end
+            if not close(rec.bandTop, rec.trackerTop) then bad[#bad + 1] = "the band isn't back at the top" end
+        else
+            if not rec.shown then bad[#bad + 1] = "no timers up" end
+            if not rec.pill then bad[#bad + 1] = "no pill seen" end
+            if not (rec.pillTop and rec.timerTop and rec.pillTop > rec.timerTop) then
+                bad[#bad + 1] = "the pill doesn't rise above the timers"
+            end
+            if not (rec.bandTop and rec.timerBottom and rec.bandTop < rec.timerBottom) then
+                bad[#bad + 1] = "the band overlaps the timers"
+            end
+        end
+        return #bad == 0, #bad == 0 and "as wanted" or table.concat(bad, "; ")
+    end
+end
+
+Probe:Steps("timer", {
+    title = "Glass UI: the quest timers on a pill (#73)",
+    { text = "Turns on script errors and the taint log (Logs\\taint.log), and reads the timers. Have the tracker "
+          .. "expanded and the tracker skin on.", auto = true,
+      run = function()
+          if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
+          return setCVar("scriptErrors", "1"), setCVar("taintLog", "1"), timerState("start").status
+      end },
+    { text = "Accept a timed quest, or have one up already: the 'Quest Timers' box shows above the tracker.",
+      wait = function() return timerState("waiting").shown, "no quest timer up yet" end, timeout = 900,
+      check = timerOn("shown"), screenshot = "timer, shown" },
+    { text = "Does the timer sit on a glass pill of its own, clear of the 'All Objectives' band, title and "
+          .. "countdown easy to read? Say what you'd change in the Note.", ask = true },
+    { text = "Collapse the whole tracker: click the '-' beside 'All Objectives'.",
+      wait = function() return timerState("waiting").collapsed, "not collapsed yet" end, timeout = 300,
+      check = timerOn("collapsed"), screenshot = "timer, collapsed" },
+    { text = "Expand the tracker.",
+      wait = function() return not timerState("waiting").collapsed, "still collapsed" end, timeout = 300,
+      check = timerOn("expanded") },
+    { text = "Hover the countdown: does its tooltip show the quest? Then click it: does the quest log open on "
+          .. "that quest? Close the log.", ask = true },
+    { text = "Optional, Skip if it isn't easy: in combat, hover and click the countdown, then press Measure "
+          .. "while still fighting.", button = "Measure", run = function() return timerState("combat").combat end,
+      check = function()
+          local ok, why = timerOn("combat")()
+          return ok and InCombatLockdown(), why
+      end },
+    { text = "Switches the tracker skin off, live: Blizzard's dialog box back, in gold.", button = "Skin off",
+      screenshot = "timer, skin off",
+      run = function() return trackerSwitch(false), timerState("off").status end,
+      check = function()
+          local rec = timerState("off check")
+          local ok = rec.status == "off" and (rec.border or 0) > 0.99 and rec.pieces > 0.99 and not rec.pill
+              and near3(rec.title, GOLD)
+          return ok, ok and "Blizzard's own" or "status " .. rec.status .. ", border " .. num(rec.border)
+              .. ", header art " .. num(rec.pieces) .. ", pill " .. tostring(rec.pill)
+      end },
+    { text = "Switches it on again.", button = "Skin on", screenshot = "timer, on again",
+      run = function() return trackerSwitch(true), timerState("on again").status end,
+      check = timerOn("on again") },
+    { text = "Turn the quest in (or let the timer run out): the box goes and the band goes back to the top.",
+      wait = function() return not timerState("waiting").shown, "the timer is still up" end, timeout = 1800,
+      check = timerOn("gone", true), screenshot = "timer, gone" },
+    { text = "Reads what was blocked this session (it should be nothing).", auto = true,
+      run = function() return type(SkinProbeDB) == "table" and SkinProbeDB.suiteBlocked or 0 end,
+      check = function()
+          local n = type(SkinProbeDB) == "table" and SkinProbeDB.suiteBlocked or 0
+          return n == 0, n .. " blocked"
+      end },
+    { text = "Did you see any error, or a 'blocked' or 'interface action failed' message?", ask = true },
+    { text = "Type /reload to save the results (and turn the taint log off).", reload = true },
+})
+
+Probe:Command("timer", function() timerState("now") end, "#73: the quest timers, their pill and the band")
+
+--------------------------------------------------------------------------------
 -- Blizzard's own glass (#17): the ruleset screen's card at login
 -- (Blizzard_GlueXML\Mainline\SuperDistrict.xml:8) beside our panels
 --------------------------------------------------------------------------------
@@ -2564,4 +2720,5 @@ NS._test = { Probe = Probe, state = state, tree = tree, fade = fade, slashOwners
              panelCheck = panelCheck, panelFollow = panelFollow, panelRestore = panelRestore, ownGlass = ownGlass,
              trackerState = trackerState, trackerOn = trackerOn, questingEnable = questingEnable,
              questingRestore = questingRestore, holdOn = holdOn, holdCheck = holdCheck, holdOff = holdOff,
-             coexist = coexist, arrowState = arrowState, seen = seen, lookFor = lookFor, accentState = accentState }
+             coexist = coexist, arrowState = arrowState, seen = seen, lookFor = lookFor, accentState = accentState,
+             timerState = timerState, timerOn = timerOn }

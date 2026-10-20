@@ -138,6 +138,8 @@ lines in each TOC are the authoritative list of Forever-only variants (FV below)
   files:
   - the objective tracker's container and module headers (`ObjectiveTrackerFrame.Header.Text`, each
     module's `Header.Text`);
+  - the quest timers' title (`QuestTimerFrame.Header.Text`, #73: a `DialogHeaderTemplate`'s Text in
+    GameFontNormal; Blizzard only sets its text, `DialogTemplates.lua:10-12`), never its countdowns;
   - the damage meter's window titles (`DamageMeterTypeDropdown.TypeName`).
 
   The rules:

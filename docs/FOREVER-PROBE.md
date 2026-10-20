@@ -185,6 +185,25 @@ so Next alone can't pass them.
 | QT.4 | Off live: exactly Blizzard's; collapsed while off, on again: placed on the header | **70450: off passes** (Quests header bar back, the owner: exactly Blizzard's). Collapsed while off, then on: not exercised. The tracker was collapsed while off (logged), but expanded again before Skin on was pressed (the screenshot shows it expanded and glassed), so the check FAILed on `collapsed`. The skin never collapses or expands it. The offline test covers the case (test_tracker). |
 | QT.5 | After a /reload; in combat; a quest routine under `taintLog 1`: nothing blocked, no error | **70450: partly.** After the /reload and in combat: on, `populated`. Nothing blocked, and no Glass UI failure. BugSack's only error was Blizzard's `BagsBar.lua:125` taint-log noise (50 times), as on the merchant's pass. **The quest routine (accept, progress, turn in) is still to do** (owner: later). |
 
+### The quest timers on a pill (#73)
+
+`/fp steps skin timer`, with a timed quest to take (or one up). Each check reads `QuestTimerFrame`:
+- its Border's and Header pieces' alpha;
+- its title's colour against `Suite.Accent()`;
+- our pill (seen, and rising above the timers);
+- the band's top against the Header's (below the timers' bottom), and against the tracker's once
+  they're gone.
+
+These are saved as `SkinProbeDB.results["TM.<label>"]`, and `/fp skin timer` prints the same.
+
+| # | Question | Result |
+|---|---|---|
+| TM.1 | A timer up: its dialog art faded, its title in the accent, on a pill of its own, the band below it, readable | not run yet |
+| TM.2 | The tracker collapsed and expanded with a timer up: the same | not run yet |
+| TM.3 | A row's tooltip and click (the quest log), out of combat and in, under `taintLog 1`: nothing blocked | not run yet |
+| TM.4 | Off live: Blizzard's dialog box and gold title back, no pill; on again: the same as TM.1 | not run yet |
+| TM.5 | The timer gone (turned in or expired): no pill, the band back at the tracker's top | not run yet |
+
 ## The damage meter (#49)
 
 Discovery before the skin's plan. `Blizzard_DamageMeter` (`origin/forever` @70450) loads on Forever.

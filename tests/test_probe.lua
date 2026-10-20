@@ -629,6 +629,61 @@ local acRec = T.accentState("t")
 eq(acRec.accent, "ice", "the accent read")
 check(acRec.tracker and math.abs(acRec.tracker[3] - 0.905) < 0.001, "the tracker title's colour read")
 eq(acRec.meter, nil, "no meter window: nothing read, no error")
+
+-- #73: the quest timers, their pill and the band, as the procedure reads them.
+local ice = { 0.65, 0.835, 0.905 }
+local qtimer = CreateFrame("Frame", "QuestTimerFrame", tracker)
+qtimer.Border = CreateFrame("Frame", nil, qtimer)
+qtimer.Header = CreateFrame("Frame", nil, qtimer)
+for _, k in ipairs({ "LeftBG", "RightBG", "CenterBG" }) do
+    qtimer.Header[k] = qtimer.Header:CreateTexture()
+    qtimer.Header[k]:SetAlpha(0)
+end
+qtimer.Header.Text = qtimer.Header:CreateFontString()
+qtimer.Header.Text:SetTextColor(ice[1], ice[2], ice[3])
+qtimer.Border:SetAlpha(0)
+local tpill, tband = CreateFrame("Frame", nil, qtimer), CreateFrame("Frame", nil, tracker)
+-- The tracker's top 800, the timers 790..731, the pill 6 above them, the
+-- band and Header from 713.
+tracker._top, qtimer._top, qtimer._bottom, tpill._top, tpill._bottom = 800, 790, 731, 796, 739
+tband._top, tracker.Header._top = 713, 713
+rawset(_G, "GlassUI", { failures = {}, Engine = { Status = function() return "on" end },
+                        Suite = { Accent = function() return ice end },
+                        QuestTracker = { _test = { pills = { [tracker] = tpill }, bands = { [tracker] = tband } } } })
+local okTm, whyTm = T.timerOn("t")()
+check(okTm, "the timers on their pill, the band below, pass: " .. tostring(whyTm))
+eq(SkinProbeDB.results["TM.t"].timerBottom, 731, "the places are kept in the results")
+tband._top = 735
+okTm, whyTm = T.timerOn("t")()
+check(not okTm and whyTm:find("overlaps", 1, true), "a band over the timers fails")
+tband._top = 713
+tpill._top = 788
+okTm, whyTm = T.timerOn("t")()
+check(not okTm and whyTm:find("rise above", 1, true), "a pill not above them fails")
+tpill._top = 796
+qtimer.Header.CenterBG:SetAlpha(1)
+okTm, whyTm = T.timerOn("t")()
+check(not okTm and whyTm:find("header art", 1, true), "a header piece showing fails")
+qtimer.Header.CenterBG:SetAlpha(0)
+qtimer.Header.Text:SetTextColor(1, 0.82, 0)
+okTm, whyTm = T.timerOn("t")()
+check(not okTm and whyTm:find("accent", 1, true), "the title not in the accent fails")
+qtimer.Header.Text:SetTextColor(ice[1], ice[2], ice[3])
+okTm, whyTm = T.timerOn("t", true)()
+check(not okTm and whyTm:find("still up", 1, true), "gone, with the timers still up, fails")
+qtimer:Hide()
+tband._top, tracker.Header._top = 800, 800
+okTm, whyTm = T.timerOn("t", true)()
+check(okTm, "gone: no pill seen, the band back at the top: " .. tostring(whyTm))
+local strayPill = CreateFrame("Frame", nil, tracker)    -- a pill not on the timers
+GlassUI.QuestTracker._test.pills[tracker] = strayPill
+okTm, whyTm = T.timerOn("t", true)()
+check(not okTm and whyTm:find("pill is still seen", 1, true), "a pill left showing without the timers fails")
+GlassUI.QuestTracker._test.pills[tracker] = tpill
+tband._top = 713
+okTm, whyTm = T.timerOn("t", true)()
+check(not okTm and whyTm:find("back at the top", 1, true), "the band left down fails")
+rawset(_G, "QuestTimerFrame", nil)
 rawset(_G, "GlassUI", savedGUI3)
 
 -- #56 discovery: Questie's tracker and RestedXP's window and arrow.

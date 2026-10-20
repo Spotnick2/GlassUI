@@ -174,6 +174,85 @@ What comes over from GQT is measured: taint passes A and B clean on 70374, the l
 
   No settings migrate (the owner is the only user).
 
+### The quest timers (#73)
+
+Codex `gpt-6-astra` review: consensus in round 2, 2026-10-19.
+
+The owner, 2026-10-19, with a timed quest up: Blizzard's **Quest Timers** box keeps its diamond-metal
+header and border above the skinned tracker and looks dimmed, "it should probably be on a pill".
+
+**What it is** (wow-ui-source, forever; Forever loads the Mainline family, as the screenshot's
+diamond-metal header shows):
+- `QuestTimerFrame` (`Blizzard_QuestTimer\Mainline\Blizzard_QuestTimer.xml`) is the tracker's child.
+  - It is in strata BACKGROUND, under the tracker's LOW.
+  - It is anchored TOP to the tracker's TOP at y -10, 158 wide and `43 + 16 x timers` tall.
+  - Its `Border` is a `DialogBorderTemplate`: a NineSlice in the Dialog layout, with a `Bg`.
+  - Its `Header` is a `DialogHeaderTemplate`: `LeftBG`, `RightBG` and `CenterBG`, and `Text` in
+    GameFontNormal gold. Blizzard only sets the text (`DialogHeaderMixin:Setup`).
+  - Its rows are pooled `QuestTimerButtonTemplate` buttons, text only.
+- **It pads the tracker's top:** `GetTopPadding` is its height + 18 while shown.
+  `UpdateHeaderPosition` moves the tracker's Header down by that, and the modules follow the Header
+  (`topModulePadding`). The NineSlice's top stays at the tracker's top. Our band runs from the
+  NineSlice's top, so it covers the timer, and the band, in strata LOW, draws over it: that's the dimming.
+
+**The change, all in the tracker skin** (the timer is part of the tracker's layout; one switch):
+- **The band starts at the Header's top,** not the NineSlice's: `TOPLEFT` to the Header's `TOPLEFT` at
+  x `LEFT - 30`. The NineSlice runs 30 px left of the tracker
+  (`Blizzard_ObjectiveTrackerContainer.xml:77`), and the Header's left is the tracker's
+  (`UpdateHeaderPosition`). With no timer, the Header's top is the tracker's, so nothing moves.
+  With one, the band follows the Header down, live, through its anchor.
+- **The timer's art faded:** the `Border` frame (its pieces and `Bg` with it), and the Header's
+  `LeftBG`, `RightBG` and `CenterBG`. These are `SetAlpha` with read-back, as everywhere else. The
+  Header frame isn't faded, since it holds the title.
+- **Its title in the accent:** `QuestTimerFrame.Header.Text` joins the audited titles (#71). It is the same
+  kind of string, a yellow title whose colour is its font object's. It is recoloured live with the
+  others and given back by Restore.
+- **The pill:** `kit:Panel(QuestTimerFrame, "small", insets)`, made once in `install`. It is our unnamed
+  child of the timer, so it shows, hides and grows with it. It sits one level under it, in the
+  timer's strata (BACKGROUND, inherited; LibGlass doesn't change it), and its rim goes at the
+  timer's level (LibGlass makes it at +10). That's under the Header and the rows (one level up);
+  the Border shares the timer's level (`useParentLevel`), which doesn't matter once it's faded. Its
+  insets `{ 0, -6, 0, 8 }`:
+  - the title's top is 2 px under the frame's top (Header `TOP` +11, Text `TOP` -13), so the pill
+    goes 6 px above the frame;
+  - the last row's button ends 13 px above the frame's bottom (`43 + 16n - (30 + 16n)`), and its
+    text, at the row's top, about 19 px above it. So the pill stops 8 px above it, and the screenshot
+    judges the clearance.
+  - It stays the frame's own width (158), centred, which is the "pill" the owner asked for. The band
+    and body keep the NineSlice's width.
+- **Found by structure** (`QuestTimerFrame`, a global, read with `rawget`; `Border` and `Header` by
+  key). The fades and the title are in every `style` pass (the engine reruns it when the skin comes
+  back on) and the title in `recolour`. Its rows have no art, so nothing to hook. A build without
+  it records the miss and the tracker goes on. `Blizzard_QuestTimer` isn't load-on-demand
+  (its TOC), so the frame exists before the engine's `PLAYER_LOGIN` pass.
+- Off: the fades and the title given back, the pill hidden with the other panels (`Restore`).
+- **Not changed, already there before this:** `ObjectiveTrackerFrameMixin:Update` hides only the
+  Header when no module is registered or the game rule disables the tracker
+  (`Blizzard_ObjectiveTracker.lua:42-65`), before moving it. If the tracker itself stays shown, our band
+  stays too. Neither happens on Forever in play, so it's noted, not handled.
+
+**Tests:** a stubbed `QuestTimerFrame` (Border, Header pieces, Text in gold, rows' text, parented to the
+tracker):
+- the band's new anchor;
+- the fades and the title;
+- the pill's parent, insets and level, and its rim's level;
+- the timer hidden, shown, grown and hidden again, the pill following (by its anchors);
+- the accent changed to ice while on: the timer's title follows;
+- off and on, and the handover to GQT hiding the pill;
+- a build without it;
+- the title in `test_contract`'s audited list (with the session touching it), the rows' text not.
+
+All mutation-checked. The stubs don't model strata, so the drawing order is the screenshot's to judge.
+
+**In game:** `/fp steps skin timer`. It waits for a timed quest's timer, then checks:
+- the band below it, the fades, the title and the pill;
+- a screenshot;
+- the tracker collapsed and expanded with the timer up;
+- hovering a row (its tooltip) and clicking one (it opens the quest log), out of combat and in
+  combat, with `taintLog 1`;
+- off and on;
+- the timer gone at the turn-in (or its expiry), the band back at the top.
+
 ## Part 3: Questie's tracker and RestedXP's guide window and arrow (#56)
 
 **Optional by construction.**

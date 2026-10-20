@@ -839,6 +839,56 @@ function WoW.makeTracker()
     return ObjectiveTrackerFrame
 end
 
+-- Blizzard's quest timers (Blizzard_QuestTimer, Mainline): the tracker's
+-- child, hidden until a timed quest. Its Border is a DialogBorderTemplate
+-- (a NineSlice at its level, useParentLevel, with a Bg), its Header a
+-- DialogHeaderTemplate (three pieces and a Text in GameFontNormal's gold),
+-- its rows pooled buttons with a Name.
+function WoW.makeQuestTimer()
+    WoW.asBlizzard(function()
+        local q = blizz("Frame", ObjectiveTrackerFrame, "QuestTimerFrame")
+        q._shown = false
+        q._width, q._height = 158, 72
+        q.Border = nineSlice(q)
+        q.Border._level = q._level
+        q.Border.Bg = blizz("Texture", q.Border, nil, "BACKGROUND")
+        q.Header = blizz("Frame", q)
+        for _, k in ipairs({ "LeftBG", "RightBG", "CenterBG" }) do q.Header[k] = blizz("Texture", q.Header, nil, "ARTWORK") end
+        q.Header.Text = blizz("FontString", q.Header)
+        q.Header.Text._textColor = { 1, 0.82, 0, 1 }
+        q.activeElements = {}
+        WoW.snapshot()
+    end)
+    return QuestTimerFrame
+end
+
+-- n quest timers (0: none), as UpdateQuestTimers drives them, then the
+-- tracker's Header moved down by the timer's padding, its height + 18 while
+-- shown (UpdateHeaderPosition).
+function WoW.questTimers(n)
+    local q, t = QuestTimerFrame, ObjectiveTrackerFrame
+    WoW.asBlizzard(function()
+        for i = 1, n do
+            if not q.activeElements[i] then
+                local b = blizz("Button", q)
+                b.Name = blizz("FontString", b)
+                b.Name._textColor = { 1, 1, 1, 1 }
+                q.activeElements[i] = b
+            end
+        end
+        for i = n + 1, #q.activeElements do q.activeElements[i] = nil end
+        if n > 0 then
+            q:SetHeight(43 + 16 * n)
+            q:Show()
+        else
+            q:Hide()
+        end
+        t.Header:ClearAllPoints()
+        t.Header:SetPoint("TOPLEFT", t, "TOPLEFT", 0, q:IsShown() and -(43 + 16 * n + 18) or 0)
+        WoW.snapshot()
+    end)
+end
+
 -- One layout of module `name` (a global name, or the module), the way the
 -- container drives it: the pools this layout uses (spec.items item buttons,
 -- spec.groups find-group buttons, spec.bars progress bars), shown when it has
