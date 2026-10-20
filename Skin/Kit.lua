@@ -269,7 +269,9 @@ end
 -- right, bottom } in px, inward. size: LibGlass's, default "large". anchor:
 -- the region it covers, when not the whole window (still the window's child).
 -- opts.backing = false: no backing, for glass that sits on another panel's
--- (two would stack into a darker plate than the window, #80).
+-- (two would stack into a darker plate than the window, #80). opts.kind: this
+-- panel's backing kind when it isn't the skin's (#90: the game menu's buttons
+-- keep the window floor on a lighter Pearl window).
 function K:Panel(window, size, insets, anchor, opts)
     local panel = CreateFrame("Frame", nil, window)
     anchor = anchor or window
@@ -285,7 +287,7 @@ function K:Panel(window, size, insets, anchor, opts)
     if not GUI.Glass then API.Fail("kit:" .. self.key .. ":early", "a panel before the glass was built") end
     local g = GUI.BuildGlass().Apply(panel, size or "large")
     local backing = (not opts or opts.backing ~= false) and self:Backing(panel, g) or nil
-    GUI.Theme.Register(g, backing, self.backing)
+    GUI.Theme.Register(g, backing, (opts and opts.kind) or self.backing)
     self.panels[#self.panels + 1] = panel
     return panel, g, backing
 end

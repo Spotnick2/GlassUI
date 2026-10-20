@@ -1232,6 +1232,62 @@ function WoW.bagUpdate(frame, contents)
     WoW.asBlizzard(function() frame:UpdateItems() end)
 end
 function WoW.closeBag(frame) WoW.asBlizzard(function() frame:Hide() end) end
+
+-- The Escape menu (#90, Blizzard_GameMenu, MainMenuFrameTemplate on Forever,
+-- origin/forever 70450): its Border (DialogBorderTemplate: the NineSlice frame
+-- itself, its tiled Bg), its Header (three diamond-metal pieces and Text),
+-- and a button pool. InitButtons releases every button and acquires one per
+-- entry in WoW.gameMenuEntries, calling SetScript on each as Blizzard's
+-- AddButton does (MainMenuFrameTemplates.lua:13-60). Hidden.
+WoW.gameMenuEntries = { "Options", "AddOns", "Edit Mode", "Support", "Macros", "Log Out", "Exit Game",
+                        "Return to Game" }
+local function menuButton(menu)
+    local b = blizz("Button", menu)
+    b._width, b._height = 200, 36
+    for _, k in ipairs({ "Left", "Right", "Center" }) do b[k] = blizz("Texture", b, nil, "BACKGROUND") end
+    b._highlight = blizz("Texture", b, nil, "HIGHLIGHT")
+    b._highlight._atlas = "128-RedButton-Highlight"
+    return b
+end
+
+function WoW.makeGameMenu()
+    WoW.asBlizzard(function()
+        local m = blizz("Frame", UIParent, "GameMenuFrame")
+        m._shown, m._level, m._strata = false, 1, "DIALOG"
+        m._width, m._height = 260, 400
+        m.Border = nineSlice(m)
+        m.Border.Bg = blizz("Texture", m.Border, nil, "BACKGROUND")
+        m.Header = blizz("Frame", m)
+        m.Header._level = 2
+        for _, k in ipairs({ "LeftBG", "RightBG", "CenterBG" }) do m.Header[k] = blizz("Texture", m.Header, nil, "ARTWORK") end
+        m.Header.Text = blizz("FontString", m.Header, nil, "ARTWORK")
+        m.NewOptionsFrame = blizz("Frame", m)
+        local pool = {}
+        WoW.gameMenuPool = pool
+        luaMethod(m, "InitButtons", function(self)
+            for _, b in ipairs(pool) do b:Hide() end              -- Reset: ReleaseAll
+            for i, text in ipairs(WoW.gameMenuEntries) do
+                local b = pool[i]
+                if not b then b = menuButton(self); pool[i] = b end   -- Acquire
+                b:SetText(text)
+                b:SetScript("OnClick", function() end)
+                b:SetScript("OnEnter", nil)
+                b:SetScript("OnLeave", nil)
+                b:SetEnabled(text ~= "Support" or not WoW.gameMenuSupportOff)
+                b:Show()
+            end
+        end)
+        -- OnShow runs InitButtons first (GameMenuFrame.lua:69-84): the
+        -- engine's hook comes after it.
+        m:SetScript("OnShow", function(self) self:InitButtons() end)
+        WoW.snapshot()
+    end)
+end
+
+function WoW.showGameMenu() WoW.asBlizzard(function() GameMenuFrame:Show() end) end
+function WoW.hideGameMenu() WoW.asBlizzard(function() GameMenuFrame:Hide() end) end
+-- A store or trial event while it's open (GameMenuFrame.lua:96-102).
+function WoW.gameMenuRefresh() WoW.asBlizzard(function() GameMenuFrame:InitButtons() end) end
 function WoW.hideMerchant() WoW.asBlizzard(function() MerchantFrame:Hide() end) end
 
 --------------------------------------------------------------------------------

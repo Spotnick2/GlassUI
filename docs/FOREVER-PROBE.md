@@ -45,6 +45,20 @@ The look is judged from the procedure's screenshots; `Logs\taint.log` is read af
 |---|---|---|
 | Merchant (#4) | `/fp steps skin merchant`: the looks side by side (clear at 0.85, 0.6 and 0.35 backing, smoked, class); buy, sell, buyback, repair; skin off and on live; after /reload; in combat (optional) | **70425: passes.** Buy, sell and buyback work; repair not tested (nothing to repair). The screenshots show the gold shell gone, glass under the window and tabs, and the item rows keeping Blizzard's red. Off live: exactly stock (owner: yes); on live: faded again; after /reload: on, faded at the first show. No `ADDON_ACTION_BLOCKED`/`FORBIDDEN` in the three sessions. Combat skipped (a plain, unprotected window). **Looks:** all five read well, and 0.35 looks the most like glass (owner): clear and class now use backing 0.35, smoked keeps 0.92. **Taint pass on 70450 (typed `/console taintLog 1`, buy/sell/buyback, full exit):** the log was on (BugGrabber: the bag-bar error 84 times that session, see the facts below), and `Logs\taint.log` was not rewritten. At level 1 the client writes only when something is blocked, so nothing was. A level-2 pass over every wave-1 skin goes into the v0.1.0 release check (#9). |
 
+### The game menu (#90, docs/GAME-MENU.md)
+
+`/fp steps skin gamemenu`. Each check reads the menu and its shown buttons against what Blizzard shows
+(glass on each, the slices faded, the hover glow tinted, the border and header art faded, the title
+tab), the menu's size against its first, and blocked actions (taint log on). Saved as
+`SkinProbeDB.results["GM.<label>"]`.
+
+| # | Question | Result |
+|---|---|---|
+| GM.1 | The first opening of the session in combat, then out of combat; the look against the mockup; the hover glow | **Run 1 (70450, 2026-10-20): passes.** The first opening of the session was in combat, after a /reload, then out of combat: every button on glass, faded and tinted, the title tab, nothing blocked. The owner: the look and the white hover glow, yes. The screenshots match the mockup. |
+| GM.2 | Settings and back (its close button, Esc, in combat); Esc while casting: nothing blocked | **Run 1 doesn't count** (Codex on #91, P2): the three Settings steps' waits were already true when each step began (the menu open, Settings closed), so they passed without a Settings visit. Only Esc while casting was really exercised: nothing blocked. Rev 2's waits accept a return only after seeing Settings open during the step (in combat for the combat one). **Run 2: not run yet.** |
+| GM.3 | Log Out and Exit Game cancelled, Return to Game; AddOns, Edit Mode, Macros: the size held | **Run 1: passes, one procedure FAIL.** The "exits cancelled" check ran with the menu closed (it reads the open menu), with nothing blocked. Return to Game closed it; after AddOns, Edit Mode and Macros the size matched the first. |
+| GM.4 | Off with the menu open, then on | **Run 1: passes.** Off with the menu open: Blizzard's red, nothing of ours. On: as before. |
+
 ### The bags (#88, docs/BAGS.md)
 
 `/fp steps skin bags`. Each check reads every open bag window and its shown item buttons against what

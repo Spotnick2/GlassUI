@@ -80,6 +80,17 @@ GUI._test.slash("skin bags off")
 WoW.bagUpdate(ContainerFrameCombinedBags, { 134400, "empty", "empty" })
 GUI._test.slash("skin bags on")
 WoW.closeBag(ContainerFrameCombinedBags)
+-- The game menu (#90): its first opening in combat, a refresh while open, off and on.
+WoW.combat = true
+WoW.showGameMenu()
+WoW.flushTimers(0)
+WoW.combat = false
+WoW.gameMenuRefresh()
+WoW.hideGameMenu()
+GUI._test.slash("skin gamemenu off")
+WoW.showGameMenu()
+GUI._test.slash("skin gamemenu on")
+WoW.hideGameMenu()
 -- The damage meter (#49): shown, its Background changed, a window added,
 -- minimized, its breakdown, and one made while the skin is off.
 WoW.showMeter()

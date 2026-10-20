@@ -974,6 +974,109 @@ SkinProbeDB.suiteBlocked = 0
 rawset(_G, "ContainerFrame1", nil)
 rawset(_G, "GlassUI", savedGUI4)
 
+-- #90: the game menu as the procedure reads it.
+local savedGUI5 = rawget(_G, "GlassUI")
+local gm = CreateFrame("Frame", "GameMenuFrame", UIParent)
+gm:SetSize(260, 400)
+gm.Border = CreateFrame("Frame", nil, gm)
+gm.Border:SetAlpha(0)
+gm.Header = CreateFrame("Frame", nil, gm)
+gm.Header.CenterBG = gm.Header:CreateTexture()
+gm.Header.CenterBG:SetAlpha(0)
+local gmButtons, gmMenus = {}, {}
+gmMenus[gm] = { header = CreateFrame("Frame", nil, gm.Header) }
+local function gmButton()
+    local b = CreateFrame("Button", nil, gm)
+    for _, k in ipairs({ "Left", "Right", "Center" }) do b[k] = b:CreateTexture(); b[k]:SetAlpha(0) end
+    b._highlight = b:CreateTexture()
+    b._highlight:SetDesaturated(true)
+    gmButtons[b] = { glass = CreateFrame("Frame", nil, b) }
+    return b
+end
+local gb1, gb2 = gmButton(), gmButton()
+rawset(_G, "GlassUI", { GameMenu = { _test = { buttons = gmButtons, menus = gmMenus } } })
+SkinProbeDB.suiteBlocked, SkinProbeDB.gmSize = 0, nil
+local okG, whyG = T.gmOn("t")()
+check(okG, "the menu on glass, its buttons faded and tinted: pass: " .. tostring(whyG))
+eq(SkinProbeDB.results["GM.t"].buttons, 2, "two buttons counted")
+check(SkinProbeDB.gmSize and SkinProbeDB.gmSize[1] == 260, "the first size kept")
+okG, whyG = T.gmOn("t", { combat = true })()
+check(not okG and whyG:find("combat false", 1, true), "combat wanted, not in combat: fails")
+gmButtons[gb2].glass:Hide()
+okG, whyG = T.gmOn("t")()
+check(not okG and whyG:find("glass on 1 of 2", 1, true), "a button without glass fails")
+gmButtons[gb2].glass:Show()
+gb2.Center:SetAlpha(1)
+okG, whyG = T.gmOn("t")()
+check(not okG and whyG:find("slices faded on 1 of 2", 1, true), "a slice left fails")
+gb2.Center:SetAlpha(0)
+gb1._highlight:SetDesaturated(false)
+okG, whyG = T.gmOn("t")()
+check(not okG and whyG:find("glow tinted on 1 of 2", 1, true), "a red glow left fails")
+gb1._highlight:SetDesaturated(true)
+gm.Border:SetAlpha(1)
+okG, whyG = T.gmOn("t")()
+check(not okG and whyG:find("border 1", 1, true), "the border left fails")
+gm.Border:SetAlpha(0)
+gm.Header.CenterBG:SetAlpha(1)
+okG, whyG = T.gmOn("t")()
+check(not okG and whyG:find("header art 1", 1, true), "the header art left fails")
+gm.Header.CenterBG:SetAlpha(0)
+gmMenus[gm].header:Hide()
+okG, whyG = T.gmOn("t")()
+check(not okG and whyG:find("no title tab", 1, true), "no title tab glass fails")
+gmMenus[gm].header:Show()
+gm:SetSize(260, 420)
+okG, whyG = T.gmOn("t")()
+check(not okG and whyG:find("first 260 x 400", 1, true), "the menu's size changed fails")
+gm:SetSize(260, 400)
+SkinProbeDB.suiteBlocked = 2
+okG, whyG = T.gmOn("t")()
+check(not okG and whyG:find("2 blocked", 1, true), "a blocked action fails")
+SkinProbeDB.suiteBlocked = 0
+gm:Hide()
+okG, whyG = T.gmOn("t")()
+check(not okG and whyG:find("not shown", 1, true), "the menu hidden fails")
+-- Settings and back (Codex on #91): the menu already open, Settings closed, at the step's start is no return.
+gm:Show()
+local sp = CreateFrame("Frame", "SettingsPanel", UIParent)
+sp:Hide()
+local back = T.settingsReturn(false)
+local okS, whyS = back()
+check(not okS and whyS:find("waiting for Settings to open", 1, true), "entering with the menu open: not accepted")
+sp:Show()
+check(not back(), "Settings open: waiting for it to close")
+gm:Hide()
+sp:Hide()
+okS, whyS = back()
+check(not okS and whyS:find("waiting for the menu", 1, true), "Settings closed, the menu not back yet: waiting")
+gm:Show()
+okS, whyS = back()
+check(okS, "Settings seen, then the menu back: accepted: " .. tostring(whyS))
+check(not back(), "reached again: it needs a visit of its own")
+-- In combat: the visit and the return both.
+local backC = T.settingsReturn(true)
+WoW.combat = false
+sp:Show()
+okS, whyS = backC()
+check(not okS and whyS:find("not in combat", 1, true), "Settings open out of combat doesn't count")
+sp:Hide()
+check(not backC(), "nor its return")
+WoW.combat = true
+sp:Show()
+check(not backC(), "Settings open in combat: waiting for it to close")
+sp:Hide()
+WoW.combat = false
+okS, whyS = backC()
+check(not okS and whyS:find("waiting for combat", 1, true), "the return out of combat: not accepted")
+WoW.combat = true
+check(backC(), "the return in combat: accepted")
+WoW.combat = false
+rawset(_G, "SettingsPanel", nil)
+rawset(_G, "GameMenuFrame", nil)
+rawset(_G, "GlassUI", savedGUI5)
+SkinProbeDB.gmSize = nil
+
 -- #56 discovery: Questie's tracker and RestedXP's window and arrow.
 -- When each frame first exists: the first place it was seen is kept.
 local qbase = CreateFrame("Frame", "Questie_BaseFrame", UIParent)
