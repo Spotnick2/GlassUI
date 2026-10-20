@@ -280,6 +280,32 @@ eq(f21.Atlas:GetAtlas(), nil, "back on: blanked again")
 check(f21.Button:IsDesaturated(), "and tinted again")
 GUI.Engine.SetEnabled("u", false)
 eq(f21.Atlas:GetAtlas(), "ui-questtracker-objfx-shine", "a second off gives back the same atlas, not the blank")
+-- TextColor (#71): held like a fade, Blizzard's latest RGBA given back.
+local f24 = window("TestX")
+f24.Title = f24:CreateFontString()
+f24.Title:SetTextColor(1, 0.82, 0, 0.9)
+local want24 = { 0.65, 0.835, 0.905 }
+local d24 = skin("x", f24, { style = function(kit, frame) kit:TextColor(frame.Title, want24[1], want24[2], want24[3]) end })
+GUI = session({ d24 })
+f24:Show()
+local r24, g24, b24, a24 = f24.Title:GetTextColor()
+check(r24 == 0.65 and b24 == 0.905, "the title in our colour")
+eq(a24, 0.9, "with Blizzard's alpha")
+f24.Title:SetTextColor(0.5, 0.5, 0.5, 1)          -- Blizzard writes its own meanwhile
+eq((f24.Title:GetTextColor()), 0.65, "ours put back at once")
+want24 = { 1, 0, 0 }
+f24:Hide(); f24:Show()                             -- a second pass, another colour
+eq((f24.Title:GetTextColor()), 1, "recoloured")
+GUI.Engine.SetEnabled("x", false)
+local r, g, b, a = f24.Title:GetTextColor()
+check(r == 0.5 and g == 0.5 and b == 0.5 and a == 1, "off: Blizzard's latest colour back, RGBA, not the first")
+f24.Title:SetTextColor(0.2, 0.3, 0.4, 1)
+eq((f24.Title:GetTextColor()), 0.2, "off: Blizzard's writes stand")
+GUI.Engine.SetEnabled("x", true)
+eq((f24.Title:GetTextColor()), 1, "on again: ours")
+GUI.Engine.SetEnabled("x", false)
+eq((f24.Title:GetTextColor()), 0.2, "and off gives back the colour captured afresh")
+
 -- Each skin gives back only its own.
 local f22, f23 = window("TestV"), window("TestW")
 f22.Art:SetAtlas("one"); f23.Art:SetAtlas("two")

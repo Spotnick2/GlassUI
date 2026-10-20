@@ -11,7 +11,10 @@
 -- window keeps; and the breakdown, under SourceWindow (strata HIGH). Their
 -- art is faded: the header bar, the background, the breakdown's background.
 -- The bars, the buttons, the resize handle, the scroll bars and every font stay
--- stock (the owner, 2026-10-19; the titles' colour is #52).
+-- stock (the owner, 2026-10-19), except each window's title ("Damage Done"),
+-- which wears the suite accent: the owner's audited exception (#71,
+-- docs/PLAN.md "The accent on Blizzard's titles"). Blizzard only sets its text
+-- (DamageMeterSessionWindow.lua:804); its gold is GameFontNormalMed1's.
 --
 -- Windows are found by the names Blizzard gives them, on every style pass, so
 -- one made while the skin was off is skinned when it comes back on. Calling
@@ -54,10 +57,20 @@ local function build(kit, w)
     panels[w] = p
 end
 
+-- The window's title in the accent (#71): TypeName only, never a bar's name.
+local function title(kit, w)
+    local dd = kit:Child(w, "DamageMeterTypeDropdown")
+    local fs = dd and kit:Child(dd, "TypeName")
+    if not fs then return end
+    local c = GUI.Suite.Accent() or { 1, 0.82, 0 }
+    kit:TextColor(fs, c[1], c[2], c[3])
+end
+
 local function styleWindow(kit, w)
     if not panels[w] then build(kit, w) end
     local body = panels[w].body
     kit:Fade(kit:Child(w, "Header"))
+    title(kit, w)
     local mc = kit:Child(w, "MinimizeContainer")
     if not mc then return end
     kit:Fade(kit:Child(mc, "Background"), function(alpha)
@@ -83,6 +96,14 @@ GUI.Engine.Register({
         hooksecurefunc(meter, "SetupSessionWindow", function()
             if GUI.Engine.Active("meter") then GUI.Engine.Run(kit.skin, "window", styleAll, kit) end
         end)
+        -- The accent changed (#71): every window's title, live, in combat too
+        -- (nothing here is protected, SkinProbe DM.1).
+        EventRegistry:RegisterCallback(GUI.Suite.LOOK_EVENT, function()
+            if not GUI.Engine.Active("meter") then return end
+            GUI.Engine.Run(kit.skin, "accent", function()
+                for _, w in ipairs(windows()) do title(kit, w) end
+            end)
+        end, {})
     end,
     style = function(kit) styleAll(kit) end,
 })

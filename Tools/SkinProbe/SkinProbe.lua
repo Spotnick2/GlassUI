@@ -22,6 +22,7 @@
 --   #58 Glass Panel in the suite: Pearl, its options, its edge /fp steps skin suitepanel
 --   #54 Glass UI's own skins on Pearl                         /fp steps skin pearl
 --   #55 the quest tracker                                      /fp steps skin tracker
+--   #71 the accent on the yellow titles                        /fp steps skin accent
 --
 -- Discovery for #56, Questie and RestedXP:                    /fp steps skin questing
 -- And Blizzard's own glass, the login ruleset card beside ours (#17): /fp steps skin card
@@ -1800,6 +1801,104 @@ Probe:Steps("tracker", {
 Probe:Command("tracker", function() trackerState("now") end, "the quest tracker skin: its switch, panel and regions")
 
 --------------------------------------------------------------------------------
+-- Acceptance: the accent on Blizzard's titles (#71, docs/PLAN.md "The accent
+-- on Blizzard's titles"): the tracker's "All Objectives" and the meter's
+-- window title, live, through Edit Mode's Text Size, off and on, in combat.
+--------------------------------------------------------------------------------
+
+local function titleColour(fs)
+    local ok, r, g, b = call(fs, "GetTextColor")
+    if not ok then return nil end
+    r, g, b = plain(r), plain(g), plain(b)
+    return type(r) == "number" and { r, g, b } or nil
+end
+
+-- The two titles' colours against the suite's accent: logged, and saved as AC.<label>.
+local function accentState(label)
+    local G = glassUI()
+    local t = frameByName("ObjectiveTrackerFrame")
+    local h = t and rawget(t, "Header")
+    local w = frameByName("DamageMeterSessionWindow1")
+    local dd = w and rawget(w, "DamageMeterTypeDropdown")
+    local want = G and G.Suite and G.Suite.Accent and G.Suite.Accent() or nil
+    local rec = { accent = G and G.Suite and G.Suite.Look and (G.Suite.Look() or {}).accent,
+                  tracker = titleColour(h and rawget(h, "Text")), meter = titleColour(dd and rawget(dd, "TypeName")),
+                  want = want, combat = InCombatLockdown() == true }
+    local function str(c) return c and (num(c[1]) .. "," .. num(c[2]) .. "," .. num(c[3])) or "?" end
+    say("AC " .. label .. ": accent " .. show(rec.accent) .. " (" .. str(want) .. "); tracker title " .. str(rec.tracker)
+        .. "; meter title " .. str(rec.meter) .. " combat=" .. tostring(rec.combat))
+    record("AC." .. label, rec)
+    return rec
+end
+
+local function near3(a, b)
+    if not (a and b) then return false end
+    for i = 1, 3 do if math.abs(a[i] - b[i]) > 0.01 then return false end end
+    return true
+end
+local GOLD = { 1, 0.82, 0 }
+
+-- A check: both titles in `want` (the current accent when nil).
+local function titlesAre(label, want)
+    return function()
+        local rec = accentState(label)
+        local w = want or rec.want
+        local ok = near3(rec.tracker, w) and near3(rec.meter, w)
+        return ok, ok and "both titles as wanted" or "tracker or meter title not in the wanted colour"
+    end
+end
+
+local function setAccent(name)
+    local G = glassUI()
+    if not (G and G.Suite and G.Suite.SetLook) then return false, "Glass UI not loaded" end
+    return G.Suite.SetLook("accent", name), name
+end
+
+Probe:Steps("accent", {
+    title = "Glass UI: the accent on the yellow titles (#71)",
+    { text = "Have the quest tracker and the damage meter on screen. Reads both titles.", auto = true,
+      run = function() return accentState("start").accent end },
+    { text = "Ice: 'All Objectives', the section titles and 'Damage Done' turn ice blue.", button = "Ice",
+      run = function() return setAccent("ice") end, check = titlesAre("ice"), screenshot = "accent, ice" },
+    { text = "In Edit Mode, change the tracker's Text Size, then close Edit Mode.",
+      wait = function() return not editMode(), "Edit Mode is still open" end, timeout = 600,
+      check = titlesAre("ice, after Text Size"), screenshot = "accent, after Text Size" },
+    { text = "Gold, Blizzard's own.", button = "Gold", run = function() return setAccent("gold") end,
+      check = titlesAre("gold"), screenshot = "accent, gold" },
+    { text = "Ice again, then the tracker skin and the meter skin off: both titles back in Blizzard's gold.",
+      button = "Skins off", screenshot = "accent, skins off",
+      run = function()
+          setAccent("ice")
+          local G = glassUI()
+          if not (G and G.Engine) then return false, "Glass UI not loaded" end
+          G.Engine.SetEnabled("tracker", false)
+          G.Engine.SetEnabled("meter", false)
+          return true
+      end, check = titlesAre("skins off", GOLD) },
+    { text = "With the skins off, change the tracker's Text Size in Edit Mode again, then close it.",
+      wait = function() return not editMode(), "Edit Mode is still open" end, timeout = 600,
+      check = titlesAre("off, after Text Size", GOLD) },
+    { text = "Both skins on again: the titles take the current accent.", button = "Skins on",
+      run = function()
+          local G = glassUI()
+          if not (G and G.Engine) then return false, "Glass UI not loaded" end
+          G.Engine.SetEnabled("tracker", true)
+          G.Engine.SetEnabled("meter", true)
+          return true
+      end, check = titlesAre("skins on") },
+    { text = "Optional, Skip if it isn't easy: get into combat, then press Gold while fighting.", button = "Gold",
+      run = function() return setAccent("gold") end,
+      check = function()
+          local ok, why = titlesAre("combat gold")()
+          return ok and InCombatLockdown(), why
+      end },
+    { text = "Do the titles read well in both colours? Which do you prefer? Say it in the Note.", ask = true },
+    { text = "Type /reload to save the results.", reload = true },
+})
+
+Probe:Command("accent", function() accentState("now") end, "#71: the titles' colours against the suite accent")
+
+--------------------------------------------------------------------------------
 -- Blizzard's own glass (#17): the ruleset screen's card at login
 -- (Blizzard_GlueXML\Mainline\SuperDistrict.xml:8) beside our panels
 --------------------------------------------------------------------------------
@@ -2465,4 +2564,4 @@ NS._test = { Probe = Probe, state = state, tree = tree, fade = fade, slashOwners
              panelCheck = panelCheck, panelFollow = panelFollow, panelRestore = panelRestore, ownGlass = ownGlass,
              trackerState = trackerState, trackerOn = trackerOn, questingEnable = questingEnable,
              questingRestore = questingRestore, holdOn = holdOn, holdCheck = holdCheck, holdOff = holdOff,
-             coexist = coexist, arrowState = arrowState, seen = seen, lookFor = lookFor }
+             coexist = coexist, arrowState = arrowState, seen = seen, lookFor = lookFor, accentState = accentState }

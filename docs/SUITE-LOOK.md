@@ -283,8 +283,11 @@ keep their own clear/smoked/class for now") ends here.
     first, like every hook, and recolours through `kit:Tint`, which keeps the first snapshot. So any
     number of recolours restores Blizzard's own colour and desaturation, and leaves the current
     atlas.
-  - **The damage meter's header titles are not part of this:** colouring Blizzard's text needs
-    `SetTextColor`, which the skin contract forbids. That's an owner exception, decided separately.
+  - **Blizzard's yellow titles** (the owner's exception, 2026-10-19, #71; docs/PLAN.md, "The accent
+    on Blizzard's titles"): the tracker's "All Objectives" and section headers, and the meter's
+    window titles, through `kit:TextColor`.
+  - **Glass Panel's text** (the owner: "probably the next on GlassPanel"): its own repo, following
+    `Suite.Accent` like GlassChat.
 - The "Suite look" subpage gains an Accent radio (Gold / Ice), and `/glassui look accent gold|ice`.
 
 ### Tests

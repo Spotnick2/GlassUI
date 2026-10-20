@@ -43,11 +43,12 @@ audited exceptions and the reasons are in docs/PLAN.md, "The skin contract". In 
   `SetShadowOffset`/`SetShadowColor`, `SetTexture(nil)` and restoring the value we captured,
   getters, `HookScript`, `hooksecurefunc` on a specific instance.
 - **Never:** `Show`/`Hide`/`SetShown`/`SetPoint`/`SetParent`/`SetSize`/`SetScale`/`SetText`/
-  `SetFont*`/`SetTextColor`, mixin methods, `UIFrameFade*`, field writes on Blizzard tables,
-  reassigning a Blizzard global, opening or closing Blizzard windows from our code.
+  `SetFont*`/`SetTextColor` (except the audited title accent, docs/PLAN.md, #71), mixin methods,
+  `UIFrameFade*`, field writes on Blizzard tables, reassigning a Blizzard global, opening or closing
+  Blizzard windows from our code.
 - Art is found by structure, never by texture path (`GetTexture` returns file IDs here).
 - Our glass is our own unnamed frame. Our state lives in our own weak tables. Text keeps
-  Blizzard's fonts and colours.
+  Blizzard's fonts and colours, except the audited titles that wear the suite accent (#71).
 - **Every callback checks `Engine.Active(key)` first:** hooks can't be removed.
 
 ## Layout
@@ -58,7 +59,7 @@ audited exceptions and the reasons are in docs/PLAN.md, "The skin contract". In 
 | `Glass.lua` | our LibGlass instance, built at `ADDON_LOADED` on the suite theme (Pearl; clean below LibGlass r11, #54) |
 | `Theme.lua` | clear / smoked / class, the suite look's tint (#67): paints `Suite.Body`'s tint, wash (`SetWash`, a factor of the material's) and opaque backing, repainted live |
 | `Skin\Engine.lua` | `Register`, `Active`, owners/yields/handover, the switches, deferral and the combat wait, gamepad and suite stand-downs, `Status` |
-| `Skin\Kit.lua` | per-skin touches (`Fade` with read-back; `Blank`/`Tint`, given back by `Restore`; `Shade` for `live = false`), `Panel`, widget kinds (`Shell`, `Inset`, `Tab`) |
+| `Skin\Kit.lua` | per-skin touches (`Fade` with read-back; `Blank`/`Tint`, given back by `Restore`; `TextColor` for the audited titles only, #71; `Shade` for `live = false`), `Panel`, widget kinds (`Shell`, `Inset`, `Tab`) |
 | `Skin\Merchant.lua` | the merchant window (live) |
 | `Skin\DamageMeter.lua` | Blizzard's damage meter (live, #49, docs/DAMAGE-METER.md): the windows in glass, the bars stock |
 | `Skin\QuestTracker.lua` | the objective tracker (live, #55, docs/QUEST-TRACKER.md): Glass Quest Tracker's look on the suite theme, the panel placed by state; GQT loaded owns it |
@@ -68,7 +69,7 @@ audited exceptions and the reasons are in docs/PLAN.md, "The skin contract". In 
 
 Planned, per docs/PLAN.md: `Skin\<Window>.lua` for the rest, `Hub.lua`.
 `Tools\SkinProbe\` is the ForeverProbe module (never shipped): `/fp skin`, the measurements
-`/fp steps skin wave1|map|gradient|meter|questing`, each skin's acceptance (`/fp steps skin merchant|meterskin|tracker`),
+`/fp steps skin wave1|map|gradient|meter|questing`, each skin's acceptance (`/fp steps skin merchant|meterskin|tracker|accent`),
 the meter's glass bars preview (`/fp steps skin meterbars`), the suite's (`/fp steps skin suite`,
 #24) and Glass Panel's place in it (`/fp steps skin suitepanel`, #58), Glass UI's own skins on Pearl
 (`/fp steps skin pearl`, #54);
