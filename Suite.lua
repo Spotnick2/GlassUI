@@ -340,7 +340,10 @@ function Suite.LookLine(addon)
     local own = {}
     for _, k in ipairs(Suite.LOOK_KEYS) do
         if r.own and r.own[k] and r.look and r.look[k] then
-            own[#own + 1] = Suite.LOOK_LABELS[k]:lower() .. " " .. (Suite.LOOK_LABELS[r.look[k]] or r.look[k])
+            -- A value of the follower's own (GlassChat's charcoal tint, "chat")
+            -- isn't ours to name: just "its own tint".
+            local v = Suite.LookValid(k, r.look[k]) and Suite.LOOK_LABELS[r.look[k]] or nil
+            own[#own + 1] = Suite.LOOK_LABELS[k]:lower() .. (v and (" " .. v) or "")
         end
     end
     if r.own and r.own.backing then own[#own + 1] = "backing" end

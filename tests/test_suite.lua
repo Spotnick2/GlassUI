@@ -605,6 +605,11 @@ Suite.Report("GlassChat", { api = 1, built = "pearl", own = { backing = true, sp
 eq(Suite.ReportOf("GlassChat").own.backing, true, "own.backing is copied")
 eq(Suite.ReportOf("GlassChat").own.sparkle, nil, "an unknown key isn't")
 eq(Suite.LookLine("GlassChat"), "suite look, its own backing", "the look line names it, with no look keys reported")
+Suite.Report("GlassChat", { api = 1, built = "pearl", look = { tint = "chat", accent = "ice" },
+                            own = { tint = true, accent = true } })
+eq(Suite.LookLine("GlassChat"), "suite look, its own tint, accent Ice",
+   "a value of its own (GlassChat's charcoal) reads as its own tint, never the raw name")
+Suite.Report("GlassChat", { api = 1, built = "pearl", own = { backing = true } })
 GUI._test.slash("suite")
 check(chat():find("its own backing", 1, true), "/glassui suite names it")
 GUI.Options._test.panel:Show()
