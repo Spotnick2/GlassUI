@@ -54,10 +54,10 @@ tab), the menu's size against its first, and blocked actions (taint log on). Sav
 
 | # | Question | Result |
 |---|---|---|
-| GM.1 | The first opening of the session in combat, then out of combat; the look against the mockup; the hover glow | not run yet |
-| GM.2 | Settings and back (its close button, Esc, in combat); Esc while casting: nothing blocked | not run yet |
-| GM.3 | Log Out and Exit Game cancelled, Return to Game; AddOns, Edit Mode, Macros: the size held | not run yet |
-| GM.4 | Off with the menu open, then on | not run yet |
+| GM.1 | The first opening of the session in combat, then out of combat; the look against the mockup; the hover glow | **Run 1 (70450, 2026-10-20): passes.** The first opening of the session was in combat, after a /reload, then out of combat: every button on glass, faded and tinted, the title tab, nothing blocked. The owner: the look and the white hover glow, yes. The screenshots match the mockup. |
+| GM.2 | Settings and back (its close button, Esc, in combat); Esc while casting: nothing blocked | **Run 1: passes.** Settings closed by its button, by Esc, and in combat, then Esc while casting: back on the menu each time, nothing blocked (taint log on; owner: no blocked message). |
+| GM.3 | Log Out and Exit Game cancelled, Return to Game; AddOns, Edit Mode, Macros: the size held | **Run 1: passes, one procedure FAIL.** The "exits cancelled" check ran with the menu closed (it reads the open menu), with nothing blocked. Return to Game closed it; after AddOns, Edit Mode and Macros the size matched the first. |
+| GM.4 | Off with the menu open, then on | **Run 1: passes.** Off with the menu open: Blizzard's red, nothing of ours. On: as before. |
 
 ### The bags (#88, docs/BAGS.md)
 
