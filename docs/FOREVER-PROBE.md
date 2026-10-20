@@ -207,11 +207,11 @@ the same checks on fake timers:
 
 | # | Question | Result |
 |---|---|---|
-| TM.1 | A timer up: its dialog art faded, its title in the accent, on a pill of its own, the band below it, readable | not run yet |
-| TM.2 | The tracker collapsed and expanded with a timer up: the same | not run yet |
-| TM.3 | A row's tooltip and click (the quest log), out of combat and in, under `taintLog 1`: nothing blocked | not run yet |
-| TM.4 | Off live: Blizzard's dialog box and gold title back, no pill; on again: the same as TM.1 | not run yet |
-| TM.5 | The timer gone (turned in or expired): no pill, the band back at the tracker's top | not run yet |
+| TM.1 | A timer up: its dialog art faded, its title in the accent, on a pill of its own, the band below it, readable | **70450: passes** (`timerfake`, second account, 2026-10-20). One timer: the timer box 875..816, the pill 881..824 (6 above, 8 off its bottom), the band and Header from 808 (77 below the tracker's top, the box's 59 + 18). Two timers: the box down to 800, the pill to 808, the band from 792. Border and header art at 0, the title in the accent (gold). The owner: on a pill of its own, readable. |
+| TM.2 | The tracker collapsed and expanded with a timer up: the same | **70450: passes** (`timerfake`): collapsed and expanded, the same places, the band alone under the pill when collapsed. |
+| TM.3 | A row's tooltip and click (the quest log), out of combat and in, under `taintLog 1`: nothing blocked | **70450: out of combat, on fake timers, the tooltip and the click work** (the owner). The taint part still needs a real timed quest: the fake taints that path. |
+| TM.4 | Off live: Blizzard's dialog box and gold title back, no pill; on again: the same as TM.1 | **70450: passes** (`timerfake`): off, the border and header art at 1, the title in Blizzard's gold (1, 0.8235, 0), no pill, and the diamond-metal box back (screenshot). On again: as TM.1. |
+| TM.5 | The timer gone (turned in or expired): no pill, the band back at the tracker's top | **70450: passes** (`timerfake`, End timers): no timers, no pill, the band and Header back at the tracker's top (885). |
 
 ## The damage meter (#49)
 
