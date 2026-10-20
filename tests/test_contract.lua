@@ -108,6 +108,19 @@ WoW.guildMode("ROSTER")
 GUI._test.slash("skin guild on")
 WoW.hideGuild()
 eq(#WoW.rosterHooks, 0, "no script hook on any roster frame (#92)")
+-- The character window (#94): opened in combat, modes, the stats scrolled,
+-- off and on; nothing touches the currency pane.
+WoW.combat = true
+WoW.showCharacter()
+WoW.flushTimers(0)
+WoW.combat = false
+WoW.characterMode(5)
+WoW.characterMode(1)
+WoW.asBlizzard(function() CharacterStatsPaneScrollBox.ScrollBox:Update() end)
+GUI._test.slash("skin character off")
+GUI._test.slash("skin character on")
+WoW.hideCharacter()
+eq(#WoW.currencyTouches, 0, "nothing touches the currency pane (#94)")
 -- The damage meter (#49): shown, its Background changed, a window added,
 -- minimized, its breakdown, and one made while the skin is off.
 WoW.showMeter()

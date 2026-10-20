@@ -92,6 +92,7 @@ function loadAddon(opts)
     if not opts.noBags then WoW.makeBags() end
     if not opts.noGameMenu then WoW.makeGameMenu() end
     if not opts.noGuild then WoW.makeCommunities() end
+    if not opts.noCharacter then WoW.makeCharacter() end
     if not opts.noTracker then WoW.makeTracker() end
     if not (opts.noTracker or opts.noTimer) then WoW.makeQuestTimer() end
     local ns = {}
