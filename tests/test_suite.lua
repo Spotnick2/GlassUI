@@ -36,10 +36,11 @@ eq(early.why, "not-ready", "the reason is not-ready")
 eq(Suite.Ready(), true, "ready after Glass UI's ADDON_LOADED")
 eq(Suite.AnswerOf("GlassUnitFrames").ready, false, "the early answer is recorded as given before ready")
 
--- Nobody follows by default.
+-- Everyone follows by default (owner, 2026-10-20, #82).
 local t, why = ask("GlassRaidFrames")
-eq(t, nil, "no theme for an addon that doesn't follow")
-eq(why, "not-following", "the reason is not-following")
+check(type(t) == "table" and t.name == "pearl" and t.preset == "pearl", "a member follows by default: { name = pearl, preset = pearl }")
+eq(why, nil, "and no reason")
+eq(Suite.Following("GlassRaidFrames"), true, "Following says so")
 eq(next(GlassUIDB), nil, "nothing saved by asking")
 
 -- Anything outside the roster, and junk, gets "unknown" and isn't recorded.
@@ -54,20 +55,28 @@ eq(why, "unknown", "a table as addon")
 eq(Suite.AnswerOf("Bagnon"), nil, "an unknown addon isn't recorded")
 
 -- Following: a fresh table each call, never ours.
-check(Suite.SetFollow("GlassRaidFrames", true), "SetFollow on a roster member")
 t = ask("GlassRaidFrames")
-check(type(t) == "table" and t.name == "pearl" and t.preset == "pearl", "a follower gets { name = pearl, preset = pearl }")
 t.preset = "junk"
 local t2 = ask("GlassRaidFrames")
 eq(t2.preset, "pearl", "the answer is a fresh table: changing one doesn't change the next")
-eq(Suite.AnswerOf("GlassRaidFrames").preset, nil, "the recorded answer is the first one (built with), not a later one")
-check(GlassUIDB.suite and GlassUIDB.suite.follow and GlassUIDB.suite.follow.GlassRaidFrames == true,
-      "the switch is saved in GlassUIDB.suite.follow")
+check(Suite.SetFollow("GlassRaidFrames", true), "SetFollow on a roster member")
+eq(GlassUIDB.suite, nil, "following, the default, saves nothing")
+-- Turned off: only the opt-out is saved.
+check(Suite.SetFollow("GlassRaidFrames", false), "SetFollow off")
+t, why = ask("GlassRaidFrames")
+eq(t, nil, "no theme for an addon turned off")
+eq(why, "not-following", "the reason is not-following")
+eq(Suite.Following("GlassRaidFrames"), false, "Following says so")
+eq(Suite.Following("GlassUnitFrames"), true, "the others still follow")
+eq(Suite.AnswerOf("GlassRaidFrames").preset, "pearl", "the recorded answer is the first one (built with), not a later one")
+check(GlassUIDB.suite and GlassUIDB.suite.follow and GlassUIDB.suite.follow.GlassRaidFrames == false,
+      "the opt-out is saved in GlassUIDB.suite.follow, as false")
 eq(GlassUIDB.suite.theme, nil, "the default theme isn't saved")
-Suite.SetFollow("GlassRaidFrames", false)
-eq(GlassUIDB.suite, nil, "unfollowing the last addon leaves nothing saved")
-eq(Suite.SetFollow("Bagnon", true), false, "SetFollow refuses an addon outside the roster")
+Suite.SetFollow("GlassRaidFrames", true)
+eq(GlassUIDB.suite, nil, "following again leaves nothing saved")
+eq(Suite.SetFollow("Bagnon", false), false, "SetFollow refuses an addon outside the roster")
 eq(GlassUIDB.suite, nil, "and saves nothing for it")
+eq(Suite.Following("Bagnon"), false, "and an addon outside the roster never follows")
 
 -- A reload with a saved follower: the answer is Pearl at once.
 GUI = loadAddon({ db = { suite = { follow = { GlassUnitFrames = true } } } })
@@ -76,17 +85,26 @@ t = ask("GlassUnitFrames")
 eq(t and t.preset, "pearl", "a saved follower gets Pearl after a reload")
 eq(Suite.AnswerOf("GlassUnitFrames").ready, true, "asked after ready")
 eq(Suite.AnswerOf("GlassUnitFrames").preset, "pearl", "the answer it built with is recorded")
+-- A saved opt-out, after a reload.
+GUI = loadAddon({ db = { suite = { follow = { GlassUnitFrames = false } } } })
+t, why = ask("GlassUnitFrames")
+eq(why, "not-following", "a saved opt-out gets its own look after a reload")
+t = ask("GlassRaidFrames")
+eq(t and t.preset, "pearl", "and the others Pearl")
 
 -- An unknown saved theme falls back to Pearl; a junk saved suite answers nothing.
 GUI = loadAddon({ db = { suite = { theme = "gold", follow = { GlassUnitFrames = true } } } })
 t = ask("GlassUnitFrames")
 eq(t and t.name, "pearl", "an unknown saved theme falls back to Pearl")
 GUI = loadAddon({ db = { suite = "junk" } })
-t, why = ask("GlassUnitFrames")
-eq(why, "not-following", "a junk saved suite is not following, and no error")
+t = ask("GlassUnitFrames")
+eq(t and t.preset, "pearl", "a junk saved suite is the default, following, and no error")
 GUI = loadAddon({ db = { suite = { follow = "junk" } } })
-t, why = ask("GlassUnitFrames")
-eq(why, "not-following", "a junk follow table is not following")
+t = ask("GlassUnitFrames")
+eq(t and t.preset, "pearl", "a junk follow table is the default")
+GUI = loadAddon({ db = { suite = { follow = { GlassUnitFrames = "no" } } } })
+t = ask("GlassUnitFrames")
+eq(t and t.preset, "pearl", "only false opts out, not any other junk")
 
 -- Report copies plain values only, and keeps the functions.
 GUI = loadAddon()
@@ -125,7 +143,7 @@ local function setup(db)
     WoW.installed = { GlassUnitFrames = 2, GlassRaidFrames = 2, GlassChat = 2, GlassMail = 0, GlassPanel = 2 }
     WoW.loaded.GlassUnitFrames, WoW.loaded.GlassRaidFrames, WoW.loaded.GlassChat = true, true, true
 end
-setup()
+setup({ suite = { follow = { GlassUnitFrames = false } } })
 eq(Suite.State("GlassActionBars"), "missing", "not installed")
 eq(Suite.State("GlassMail"), "disabled", "installed, disabled for this character")
 eq(WoW.enableAskedFor, WoW.GUID, "the enable state is asked for the character's GUID, never a name")
@@ -150,6 +168,9 @@ check(out:find("Glass Chat: not yet integrated", 1, true), "/glassui suite: not 
 check(out:find("Glass Action Bars: not installed", 1, true), "/glassui suite: not installed")
 check(out:find("suite theme: Pearl", 1, true), "/glassui suite: the theme")
 check(not out:find("click-casting", 1, true), "no click-casting line without GRF's report")
+check(out:find("Glass Mail: disabled", 1, true) and not out:find("Glass Mail: disabled;", 1, true),
+      "a disabled member following by default: no \"set to follow\" on it")
+check(not out:find("not yet integrated; set to follow", 1, true), "nor on one not yet integrated")
 
 -- A follower that built Pearl, and one that failed.
 setup({ suite = { follow = { GlassUnitFrames = true, GlassRaidFrames = true } } })
@@ -186,14 +207,14 @@ eq(pending, true, "a reload would change it")
 
 -- /glassui suite follow.
 setup()
-GUI._test.slash("suite follow glassunitframes on")
-eq(Suite.Following("GlassUnitFrames"), true, "/glassui suite follow <name> on")
-check(chat():find("Glass Unit Frames:", 1, true), "it prints the member's line")
 GUI._test.slash("suite follow GlassUnitFrames off")
 eq(Suite.Following("GlassUnitFrames"), false, "/glassui suite follow <name> off (any case)")
+check(chat():find("Glass Unit Frames:", 1, true), "it prints the member's line")
+GUI._test.slash("suite follow glassunitframes on")
+eq(Suite.Following("GlassUnitFrames"), true, "/glassui suite follow <name> on")
 chat()
 GUI._test.slash("suite follow glassraidframes maybe")
-eq(Suite.Following("GlassRaidFrames"), false, "a bad on/off changes nothing")
+eq(Suite.Following("GlassRaidFrames"), true, "a bad on/off changes nothing")
 check(chat():find("/glassui suite follow <addon> on|off", 1, true), "and prints the usage")
 GUI._test.slash("suite follow bagnon on")
 check(chat():find("/glassui suite follow <addon> on|off", 1, true), "an addon outside the roster prints the usage")
@@ -202,7 +223,7 @@ eq(GlassUIDB.suite, nil, "and saves nothing")
 -- The settings page (the owner's mockup): registered at login, built on the
 -- first show; a card per member that speaks the API, the rest folded under
 -- "Theme sync unavailable"; click-casting; the reload footer.
-setup({ suite = { follow = { GlassUnitFrames = true } } })
+setup({ suite = { follow = { GlassUnitFrames = true, GlassRaidFrames = false } } })
 check(WoW.settingsCategory and WoW.settingsCategory.name == "Glass UI", "the page is registered at login")
 ask("GlassUnitFrames")
 local optsOpened, ccOpened = 0, 0
@@ -482,7 +503,7 @@ check(chat():find("Glass Action Bars: following Glass UI (Pearl); suite look - /
       "/glassui suite agrees with itself while leaving")
 O.lookPanel:Hide()
 -- Follow turned on before a /reload: GAB keeps its own look until then.
-setup()
+setup({ suite = { follow = { GlassActionBars = false } } })
 WoW.installed.GlassActionBars, WoW.loaded.GlassActionBars = 2, true
 ask("GlassActionBars")
 Suite.Report("GlassActionBars", { api = 1,

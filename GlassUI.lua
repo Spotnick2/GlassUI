@@ -12,7 +12,7 @@ local say = API.Print
 -- (GlassMail's rule).
 --   enabled  the master switch (false: every skin off)
 --   skins    { [key] = false } for each skin switched off (Engine.SetEnabled)
---   suite    { theme = Suite.THEMES key, follow = { [addon] = true },
+--   suite    { theme = Suite.THEMES key, follow = { [addon] = false } (an opt-out, #82),
 --              look = { [key] = value } }, or nil when nothing differs
 --              (Suite keeps it sparse). The skins' tint is look.tint (#67).
 local DEFAULTS = { enabled = true }

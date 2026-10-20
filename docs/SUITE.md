@@ -121,9 +121,12 @@ GlassUI.Suite.Open()                --> bool   (added within API 1)
   - `minor`: LibGlass's MINOR at the build attempt;
   - `options`: a function opening its options, called under `pcall`;
   - GRF only, `clickCast = { open = fn, others = bool }`.
-- **Saved:** `GlassUIDB.suite = { theme = "pearl", follow = { [addon] = true } }`. Nobody follows by
-  default, so every look stays as it is until the player opts in. Saved only when it differs from
-  `DEFAULTS` (the existing rule).
+- **Saved:** `GlassUIDB.suite = { theme = "pearl", follow = { [addon] = false } }`. **Every member
+  follows by default** (owner, 2026-10-20, #82: "by default, the integration should be activated for
+  every addon"), so only an opt-out is saved, as `false`. Saved only when it differs from the
+  default (the existing rule). A `true` saved before #82 is the default now and reads the same; any
+  other junk value is the default too. Without Glass UI loaded nothing changes: each addon keeps
+  its own look.
 - **`Open()`** opens Glass UI's settings page and returns true when it did. It never errors. It is
   for an addon's "set in Glass UI" button next to its suspended look controls (the owner, for GRF and
   GUF). It was added after the first version, which is additive, so `API` stays 1. An addon checks
