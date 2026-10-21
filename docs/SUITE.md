@@ -172,7 +172,7 @@ that applies.
 
 **Dynamic members (#101).** A roster entry with `dynamic = true` is listed (its card, the page's
 fold, `/glassui suite`) only while it is loaded, never as "not installed". The owner asked for this
-for AltStable: "dynamically add you to the list if added only". `Theme`, `Report` and `SetFollow`
+for AltStable: "dynamically add you to the list if added only". Portal Roulette joined the same way (#106). `Theme`, `Report` and `SetFollow`
 treat it as any member, and it follows by default (#82). `Suite.Listed(m)` decides.
 
 **Non-live followers (#101).** A follower that builds its look once and can't repaint reports
