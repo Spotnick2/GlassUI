@@ -2036,13 +2036,18 @@ Probe:Steps("character", {
 -- The list panes' headers in the tracker's look (the owner, run 1).
 Probe:Steps("characterlists", {
     title = "Glass UI: the character window's list headers (#94)",
+    rev = 2,
     { text = "Counts blocked actions from now, with the taint log on.", auto = true,
       run = function()
           if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
           return setCVar("scriptErrors", "1"), setCVar("taintLog", "1")
       end },
-    { text = "Press C, then the Reputation tab. Press Next.", screenshot = "character lists, reputation",
-      check = chOn("lists reputation", { lists = true }) },
+    { text = "Press C, then the Reputation tab. This step goes on by itself once the pane is open.", timeout = 180,
+      screenshot = "character lists, reputation",
+      wait = function()
+          local rep = frameByName("ReputationFrame")
+          return rep ~= nil and seen(rep), "waiting for the Reputation pane"
+      end, check = chOn("lists reputation", { lists = true }) },
     { text = "Collapse a header (click it) and expand it again; hover over one. Press Next.",
       check = chOn("lists collapse", { lists = true }) },
     { text = "The Skills tab. Press Next.", screenshot = "character lists, skills",

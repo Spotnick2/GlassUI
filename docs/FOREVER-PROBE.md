@@ -67,8 +67,8 @@ statistics' sub-categories and a scroll, and off and on.
 
 | # | Question | Result |
 |---|---|---|
-| CL.1 | Every list header in glass on each pane, after a collapse and a scroll; nothing blocked; the look (the tracker's) | not run yet |
-| CL.2 | Off: Blizzard's headers; on: ours again without a Blizzard update | not run yet |
+| CL.1 | Every list header in glass on each pane, after a collapse and a scroll; nothing blocked; the look (the tracker's) | **Pass** (2026-10-20, run 1). Reputation after a collapse 2/2, skills 4/4, statistics 1/1 with its sub-categories expanded and scrolled; 0 blocked. The look: yes (gold names and +/-, the glass bar, the sub-categories' squares gold, not red). The first step read the paper doll (Next pressed before the tab): rev 2 waits for the Reputation pane. The grey bars on statistics' sub-categories are Blizzard's hover highlight (`BackgroundHighlight` at 0.10, `StatisticsFrame.lua:281`), not ours |
+| CL.2 | Off: Blizzard's headers; on: ours again without a Blizzard update | **Pass**: off, Blizzard's shell and headers (0 of 1 ours); on, 1/1 again |
 
 ### Guild & Communities (#92, docs/GUILD.md)
 
