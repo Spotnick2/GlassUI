@@ -116,6 +116,16 @@ local function applyPanel(kit, host, p)
     if not p.applied then tellPanel(host, p, true) end
 end
 
+-- A tint, an accent or a floor changed (Theme.Refresh): each applied tenant
+-- panel hears onSkin(true) again with the fresh backing (#96: a repaint; the
+-- owner's onSkin is idempotent, docs/SUITE.md). Off, nothing is applied.
+GUI.Theme.OnRefresh(function()
+    if not GUI.Engine.Active("guild") then return end
+    for host, p in pairs(GUI.Tenants.panels) do
+        if p.applied then tellPanel(host, p, true) end
+    end
+end)
+
 -- Handed over by Suite.SkinTab / SkinPanel: applied now if the skin is
 -- installed and on; a panel not applied hears onSkin(false) at once.
 local tenants = GUI.Tenants

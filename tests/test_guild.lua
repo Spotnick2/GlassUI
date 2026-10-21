@@ -200,6 +200,25 @@ eq(calls[6] and calls[6].on, true, "master on: onSkin(true)")
 GUI._test.slash("look accent ice")
 check(rimOf(rosterTab)[2] == Suite.ACCENTS.ice[2], "the selected rim in ice")
 GUI._test.slash("look accent gold")
+-- A theme refresh while on (#96): each applied panel hears onSkin(true) again,
+-- with the fresh backing; a panel never applied hears nothing.
+local n0, off0 = #calls, #offc
+GUI._test.slash("look tint smoked")
+check(#calls > n0, "a tint change: the applied panel told again")
+local last = calls[#calls]
+eq(last.on, true, "onSkin(true): a repaint")
+local br, bg, bb = GUI.Theme.Backing("window")
+check(last.look.backing[1] == br and last.look.backing[2] == bg and last.look.backing[3] == bb,
+      "with the fresh backing")
+eq(offc[#offc], true, "the other applied panel too")
+check(#offc > off0, "told again")
+-- Off: a refresh tells nobody.
+GUI._test.slash("skin guild off")
+local n1 = #calls
+GUI._test.slash("look tint clear")
+eq(#calls, n1, "off: a tint change tells no tenant")
+GUI._test.slash("skin guild on")
+eq(calls[#calls].on, true, "on again: applied")
 -- A throwing onSkin: recorded under its owner, the skin unharmed.
 local bad = CreateFrame("Frame", nil, CF)
 bad:SetFrameLevel(1300)
