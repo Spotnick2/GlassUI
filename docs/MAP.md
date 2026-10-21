@@ -368,7 +368,7 @@ NodeRadar's `SuperTrackedFrame` noise under the taint log.
 - **The look:** "close enough".
 - **The scroll bar's colour:** an open question; the bar is left stock in v1.
 - **A header "auto expands after a collapse":** Blizzard's `QuestMapFrame_ResetFilters` on every
-  refresh, and pin hovers.
+  refresh, and pin hovers. The owner confirmed it with addons turned off.
 
 **The tracker case and the in-combat minimise** moved to `/fp steps skin maptracker`. A
 mid-run redeploy had stopped `mapglass` at its last reload.
