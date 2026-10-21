@@ -20,6 +20,7 @@ Skin\Bags.lua
 Skin\GameMenu.lua
 Skin\Guild.lua
 Skin\Character.lua
+Skin\Map.lua
 Skin\DamageMeter.lua
 Skin\QuestTracker.lua
 Options.lua

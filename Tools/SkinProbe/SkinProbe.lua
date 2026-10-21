@@ -2073,6 +2073,230 @@ skinChecks.chState, skinChecks.chOn = chState, chOn
 end
 
 --------------------------------------------------------------------------------
+-- The world map and quest log in glass (#99, docs/MAP.md): styled a frame
+-- after the show and after each hooked call; the shell, the disc following
+-- the book's texture, the glyph buttons, the crumbs (the overflow kept), the
+-- quest log's art, pills and zone headers; the hooks' methods present on
+-- 70450; IsProtected on ours; blocked and forbidden actions. Saved as
+-- MP.<label>.
+--------------------------------------------------------------------------------
+
+do
+local function mpState(label)
+    local G = glassUI()
+    local T = G and G.Map and G.Map._test
+    local wm = frameByName("WorldMapFrame")
+    local rec = { crumbs = 0, crumbsFaded = 0, headers = 0, headersRight = 0, glyphs = 0, glyphsShown = 0,
+                  protected = 0 }
+    rec.shown = wm ~= nil and seen(wm)
+    local okC, c = pcall(InCombatLockdown)
+    rec.combat = okC and plain(c) == true
+    local h = T and wm and T.wins[wm]
+    rec.installed = h ~= nil
+    local bf = wm and type(wm.BorderFrame) == "table" and wm.BorderFrame
+    if bf then
+        local okA, a = call(bf.NineSlice, "GetAlpha")
+        rec.shell = okA and plain(a) or nil
+        local pc = type(bf.PortraitContainer) == "table" and bf.PortraitContainer
+        local okP, ps = call(pc and pc.portrait, "IsShown")
+        rec.portrait = okP and plain(ps) == true
+        local okT, title = call(bf.TitleContainer and bf.TitleContainer.TitleText, "GetText")
+        rec.title = okT and plain(title) or nil
+        local mm = type(bf.MaximizeMinimizeFrame) == "table" and bf.MaximizeMinimizeFrame
+        rec.maximized = mm and seen(mm.MinimizeButton) or false
+        for _, b in ipairs(mm and { mm.MaximizeButton, mm.MinimizeButton } or {}) do
+            if seen(b) then
+                rec.glyphs = rec.glyphs + 1
+                local st = h and h.glyphs and h.glyphs[b]
+                if st and seen(st.frame) then rec.glyphsShown = rec.glyphsShown + 1 end
+            end
+        end
+    end
+    rec.disc = h and h.disc and h.disc:IsShown() or false
+    local nav = wm and type(wm.NavBar) == "table" and wm.NavBar
+    if nav then
+        local list = { nav.homeButton }
+        for _, b in ipairs(type(nav.navList) == "table" and nav.navList or {}) do list[#list + 1] = b end
+        local done = {}
+        for _, b in ipairs(list) do
+            if type(b) == "table" and not done[b] and seen(b) then
+                done[b] = true
+                rec.crumbs = rec.crumbs + 1
+                local okN, n = call(b, "GetNormalTexture")
+                local okA, a = call(okN and n or nil, "GetAlpha")
+                if okA and plain(a) == 0 then rec.crumbsFaded = rec.crumbsFaded + 1 end
+            end
+        end
+        local ob = nav.overflowButton
+        rec.overflowShown = seen(ob)
+        local okN, n = call(ob, "GetNormalTexture")
+        local okA, a = call(okN and n or nil, "GetAlpha")
+        rec.overflowAlpha = okA and plain(a) or nil
+        rec.navRefresh = type(rawget(nav, "Refresh")) == "function"   -- a mixin method: copied onto the frame
+    end
+    local qsf = frameByName("QuestScrollFrame")
+    rec.updateBackground = qsf ~= nil and type(rawget(qsf, "UpdateBackground")) == "function"
+    rec.log = qsf ~= nil and seen(qsf)
+    if rec.log then
+        local okB, b = call(qsf.Background, "GetAlpha")
+        rec.logBg = okB and plain(b) or nil
+        local sh = type(qsf.BorderFrame) == "table" and qsf.BorderFrame.Shadow
+        local okS, atlas = call(sh, "GetAtlas")
+        local okX, tex = call(sh, "GetTexture")
+        rec.shadowBlank = (not okS or plain(atlas) == nil) and (not okX or plain(tex) == nil)
+        local contents = type(qsf.Contents) == "table" and qsf.Contents
+        for _, row in ipairs(contents and { contents:GetChildren() } or {}) do
+            if T and T.isHeader(row) and seen(row) then
+                rec.headers = rec.headers + 1
+                local okN, n = call(row, "GetNormalTexture")
+                local okA, a = call(okN and n or nil, "GetAlpha")
+                local okD, d = call(row.CollapseButton.Icon, "IsDesaturated")
+                local st = T.headers[row]
+                if okA and plain(a) == 0 and okD and plain(d) == true and st and seen(st.glass) then
+                    rec.headersRight = rec.headersRight + 1
+                end
+            end
+        end
+    end
+    for _, f in ipairs(h and { h.disc, h.navHost, h.logHost } or {}) do
+        local okP, pr = call(f, "IsProtected")
+        if okP and plain(pr) then rec.protected = rec.protected + 1 end
+    end
+    rec.blocked = type(SkinProbeDB) == "table" and SkinProbeDB.suiteBlocked or 0
+    say("MP " .. label .. ": shown " .. tostring(rec.shown) .. ", combat " .. tostring(rec.combat) .. ", installed "
+        .. tostring(rec.installed) .. ", maximized " .. tostring(rec.maximized) .. ", shell " .. tostring(rec.shell)
+        .. ", disc " .. tostring(rec.disc) .. "/portrait " .. tostring(rec.portrait) .. ", glyphs " .. rec.glyphsShown
+        .. "/" .. rec.glyphs .. ", crumbs " .. rec.crumbsFaded .. "/" .. rec.crumbs .. ", overflow "
+        .. tostring(rec.overflowShown) .. " " .. tostring(rec.overflowAlpha) .. ", headers " .. rec.headersRight .. "/"
+        .. rec.headers .. ", log bg " .. tostring(rec.logBg) .. ", shadow blank " .. tostring(rec.shadowBlank)
+        .. ", hooks " .. tostring(rec.navRefresh) .. "/" .. tostring(rec.updateBackground) .. ", title "
+        .. tostring(rec.title) .. ", protected " .. rec.protected .. ", blocked " .. rec.blocked)
+    record("MP." .. label, rec)
+    return rec
+end
+
+-- want.combat, want.max: the state expected; want.log: the quest log read.
+local function mpOn(label, want)
+    want = want or {}
+    return function()
+        local r = mpState(label)
+        local bad = {}
+        local function want_(cond, why) if not cond then bad[#bad + 1] = why end end
+        want_(r.shown, "the map not shown")
+        want_(r.installed, "not installed")
+        if want.combat ~= nil then want_(r.combat == want.combat, "combat " .. tostring(r.combat)) end
+        if want.max ~= nil then want_(r.maximized == want.max, "maximized " .. tostring(r.maximized)) end
+        want_(r.shell == 0, "shell " .. tostring(r.shell))
+        want_(r.disc == r.portrait, "disc " .. tostring(r.disc) .. " with the portrait " .. tostring(r.portrait))
+        want_(r.glyphs > 0 and r.glyphsShown == r.glyphs, "glyphs " .. r.glyphsShown .. " of " .. r.glyphs)
+        want_(r.crumbs > 0 and r.crumbsFaded == r.crumbs, "crumbs faded " .. r.crumbsFaded .. " of " .. r.crumbs)
+        want_(not r.overflowShown or r.overflowAlpha == 1, "the overflow button faded")
+        want_(r.navRefresh and r.updateBackground, "a hooked method missing on this build")
+        if want.log then
+            want_(r.log, "the quest log not shown")
+            want_(r.logBg == 0, "log background " .. tostring(r.logBg))
+            want_(r.shadowBlank, "the log's shadow back")
+            want_(r.headers > 0 and r.headersRight == r.headers, "headers " .. r.headersRight .. " of " .. r.headers)
+        end
+        want_(r.protected == 0, r.protected .. " of ours protected")
+        want_(r.blocked == 0, r.blocked .. " blocked")
+        return #bad == 0, #bad == 0 and "as Blizzard shows it" or table.concat(bad, "; ")
+    end
+end
+
+local function mpSwitch(on)
+    local G = glassUI()
+    if not (G and G.Engine) then return false, "Glass UI not loaded" end
+    return G.Engine.SetEnabled("map", on)
+end
+
+-- The map shown, in combat, and the skin's deferred first pass done.
+local function mapFirstOpen()
+    local G = glassUI()
+    local T = G and G.Map and G.Map._test
+    local wm = frameByName("WorldMapFrame")
+    local okC, c = pcall(InCombatLockdown)
+    local fighting = okC and plain(c) == true
+    local ready = wm ~= nil and seen(wm) and T and T.wins[wm] ~= nil
+    return ready and fighting, fighting and "waiting for the map" or "waiting for combat"
+end
+
+Probe:Steps("mapglass", {
+    title = "Glass UI: the world map and quest log in glass (#99)",
+    rev = 1,
+    { text = "Turns on script errors, the taint log OFF for the first pass, and counts blocked actions from now.",
+      auto = true,
+      run = function()
+          if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
+          return setCVar("scriptErrors", "1"), setCVar("taintLog", "0")
+      end },
+    { text = "Type /reload, then don't open the map before the next step: its first opening has to be in combat.",
+      reload = true },
+    { text = "Get into combat, then press M. This step goes on by itself once the map is open and styled; a "
+          .. "screenshot is taken.", timeout = 180, screenshot = "map, first opening in combat",
+      wait = mapFirstOpen, check = mpOn("first in combat", { combat = true, log = true }) },
+    { text = "Out of combat, press Next for a screenshot of the map and the quest log.", screenshot = "map",
+      check = mpOn("windowed", { combat = false, max = false, log = true }) },
+    { text = "Does it read as the mockup: dark glass round the map, the smoky title band down to the breadcrumbs, "
+          .. "the book's disc, the three buttons on glass with gold glyphs, the breadcrumbs as text on a dark bar, "
+          .. "the quest log a recessed pane with its zone headers on glass bars, the search box and the count on "
+          .. "glass? Anything off: the Note.", ask = true },
+    -- Maximise and minimise.
+    { text = "Maximise the map (the arrow button, top right). Press Next.", screenshot = "map, maximised",
+      check = mpOn("maximised", { max = true }) },
+    { text = "Minimise it again. Then, in combat if you can, maximise and minimise once more. Press Next when it's "
+          .. "windowed.", check = mpOn("minimised", { max = false, log = true }) },
+    { text = "Close the map. Press M, hide the quest log with its toggle (bottom right of the map), show it "
+          .. "again, close the map, then press L. Press Next.", check = mpOn("quest log key", { log = true }) },
+    -- The breadcrumbs.
+    { text = "Go up to the world (the World crumb), into a continent, into a zone, and use a crumb's dropdown "
+          .. "arrow to pick another zone. Press Next.", screenshot = "map, breadcrumbs",
+      check = mpOn("map changes", { log = true }) },
+    { text = "Does the bar look right: the crumbs as gold text on the dark bar, their chevrons, the selected one "
+          .. "marked, and the overflow button (if any) still visible? Anything off: the Note.", ask = true },
+    -- The quest log.
+    { text = "In the quest log: collapse a zone header and expand it again; search for a word that finds "
+          .. "nothing, then clear the search; scroll down and up. Press Next.",
+      check = mpOn("log headers", { log = true }) },
+    { text = "Track and untrack a quest with its checkbox, click a quest to open its details, then go back. "
+          .. "Press Next.", screenshot = "map, quest log",
+      check = mpOn("log details", { log = true }) },
+    { text = "Is Questie's map button still there, and Leatrix's coordinates at the bottom of the map? Did "
+          .. "everything work, with no 'blocked' or 'interface action failed' message?", ask = true },
+    -- The same with the taint log on.
+    { text = "Turns the taint log ON for a comparison pass.", auto = true,
+      run = function() return setCVar("taintLog", "1") end },
+    { text = "Maximise and minimise, go into another zone, collapse and expand a header. Press Next.",
+      check = mpOn("taint log on", { log = true }) },
+    taintOff(),
+    -- Off and on.
+    { text = "Maximise the map, then: switches the skin off (Blizzard's look).", button = "Skin off",
+      run = function() return mpSwitch(false) end, screenshot = "map, skin off",
+      check = function()
+          local r = mpState("off")
+          local ok = r.shown and r.shell == 1 and not r.disc and r.glyphsShown == 0
+          return ok, ok and "Blizzard's look, nothing of ours" or "something of ours while off"
+      end },
+    { text = "Minimise it, open a quest's details, then switch the skin on.", button = "Skin on",
+      run = function() return mpSwitch(true) end,
+      check = function()
+          return true, "read at the next step"
+      end },
+    { text = "Go back to the quest list. Press Next.", screenshot = "map, on again",
+      check = mpOn("on again", { max = false, log = true }) },
+    -- The other first opening: from the objective tracker, in combat.
+    { text = "Type /reload, then don't open the map before the next step.", reload = true },
+    { text = "Get into combat, then click a quest in the objective tracker (it opens the map on that quest). This "
+          .. "step goes on by itself once the map is open and styled.", timeout = 180,
+      screenshot = "map, first opening from the tracker",
+      wait = mapFirstOpen, check = mpOn("first from the tracker", { combat = true }) },
+    { text = "Type /reload to save the results.", reload = true },
+})
+
+skinChecks.mpState, skinChecks.mpOn = mpState, mpOn
+end
+
+--------------------------------------------------------------------------------
 -- The suite theme (#24, docs/SUITE.md "In-game validation", S.1-S.8): Glass
 -- UI coordinating Glass Unit Frames and Glass Raid Frames. It reads only
 -- public state: Glass UI's Suite record, each addon's glass instance (its
@@ -3952,7 +4176,7 @@ boot:SetScript("OnEvent", function(_, _, name)
     say("loaded (" .. SkinProbeDB.loads .. " loads). /fp skin for the commands, /fp steps skin wave1 to start")
 end)
 
-NS._test = { chState = skinChecks.chState, chOn = skinChecks.chOn, gdState = skinChecks.gdState, gdOn = skinChecks.gdOn, gmState = skinChecks.gmState, gmOn = skinChecks.gmOn, settingsReturn = skinChecks.settingsReturn, bagsState = skinChecks.bagsState,
+NS._test = { mpState = skinChecks.mpState, mpOn = skinChecks.mpOn, chState = skinChecks.chState, chOn = skinChecks.chOn, gdState = skinChecks.gdState, gdOn = skinChecks.gdOn, gmState = skinChecks.gmState, gmOn = skinChecks.gmOn, settingsReturn = skinChecks.settingsReturn, bagsState = skinChecks.bagsState,
     bagsOn = skinChecks.bagsOn, both = both, closeState = closeState, closeOn = closeOn, headerTry = headerTry, layoutState = layoutState, layoutOn = layoutOn, Probe = Probe, state = state, tree = tree, fade = fade, slashOwners = slashOwners,
              gamepad = gamepad, panelsOn = panelsOn, panelsOff = panelsOff, borderFade = borderFade,
              borderRestore = borderRestore, gradientOn = gradientOn, gradientOff = gradientOff,

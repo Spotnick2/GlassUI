@@ -525,10 +525,17 @@ function Kit.PlaceHeader(h)
     if h.header then h.header:SetShown(on) end
 end
 
+-- A glyph button's strokes (#99), as the close X.
+local function paintGlyph(st)
+    local c = accent()
+    for _, t in ipairs(st.strokes) do t:SetColorTexture(c[1], c[2], c[3], st.alpha) end
+end
+
 -- The close X's colour: the accent, at its current strength.
 function Kit.PaintClose(h)
     local c = accent()
     for _, t in ipairs(h.closeX or {}) do t:SetColorTexture(c[1], c[2], c[3], h.closeAlpha) end
+    for _, st in pairs(h.glyphs or {}) do paintGlyph(st) end
 end
 
 -- The close button's feedback, on our X only: full on hover, 1 px down while
@@ -542,12 +549,26 @@ function Kit.CloseFeedback(h, hover, pushed)
     Kit.PaintClose(h)
 end
 
--- From the button's getters: a hover or press that ended while we were off.
+-- A glyph button's feedback (#99): its own state, the close button's look.
+function Kit.GlyphFeedback(st, hover, pushed)
+    st.hover, st.pushed = hover, pushed
+    st.alpha = hover and 1 or Kit.CLOSE_REST
+    st.frame:ClearAllPoints()
+    st.frame:SetPoint("CENTER", st.button, "CENTER", 0, pushed and -1 or 0)
+    paintGlyph(st)
+end
+
+local function buttonState(b)
+    local okM, over = pcall(b.IsMouseOver, b)
+    local okS, state = pcall(b.GetButtonState, b)
+    return okM and API.Plain(over) == true, okS and API.Plain(state) == "PUSHED"
+end
+
+-- From the buttons' getters: a hover or press that ended while we were off,
+-- or while a glyph button was hidden (the maximise mixin's swap on click).
 function Kit.CloseSync(h)
-    if not h.close then return end
-    local okM, over = pcall(h.close.IsMouseOver, h.close)
-    local okS, state = pcall(h.close.GetButtonState, h.close)
-    Kit.CloseFeedback(h, okM and API.Plain(over) == true, okS and API.Plain(state) == "PUSHED")
+    if h.close then Kit.CloseFeedback(h, buttonState(h.close)) end
+    for b, st in pairs(h.glyphs or {}) do Kit.GlyphFeedback(st, buttonState(b)) end
 end
 
 -- The close button (#86; UIPanelCloseButton, its X baked into four atlases,
@@ -587,6 +608,54 @@ function K:CloseButton(close, h)
     Kit.CloseFeedback(h, false, false)
     track(self, h)
     return h
+end
+
+-- Glyphs drawn with colour textures, like the close X: { width, height, x,
+-- y, rotation } in a 24 px box. expand (the maximise button's): a 45 degree
+-- shaft, its head at the top right; condense: the same, its head at the
+-- bottom left.
+Kit.GLYPHS = {
+    expand = { { 2, 12, 0, 0, -math.pi / 4 }, { 6, 2, 2, 4.5, 0 }, { 2, 6, 4.5, 2, 0 } },
+    condense = { { 2, 12, 0, 0, -math.pi / 4 }, { 6, 2, -2, -4.5, 0 }, { 2, 6, -4.5, -2, 0 } },
+}
+
+-- A button whose glyph is baked into its art (#99: the maximise and minimise
+-- buttons, RedButton-Expand/Condense): the close button's recipe with a glyph
+-- of ours, its state per button in h.glyphs[button]. Parented to the
+-- button, so it shows and hides with it. The fades are CloseFades.
+function K:GlyphButton(button, h, kind)
+    if type(button) ~= "table" or not Kit.GLYPHS[kind] then return nil end
+    h.glyphs = h.glyphs or {}
+    if h.glyphs[button] then return h.glyphs[button] end
+    local level = button:GetFrameLevel()
+    local okW, w = pcall(button.GetWidth, button)
+    w = okW and API.Plain(w) or nil
+    if type(w) ~= "number" or w <= 0 then w = 24 end
+    local st = { button = button, alpha = Kit.CLOSE_REST, strokes = {} }
+    st.disc = self:Disc(button, button, { ring = 0, width = w, level = level - 1 })
+    local f = self:Adopt(CreateFrame("Frame", nil, button))
+    f:SetSize(w, w)
+    f:SetFrameLevel(level + 1)
+    for i, s in ipairs(Kit.GLYPHS[kind]) do
+        local t = f:CreateTexture(nil, "OVERLAY")
+        t:SetSize(s[1], s[2])
+        t:SetPoint("CENTER", f, "CENTER", s[3], s[4])
+        if s[5] ~= 0 then t:SetRotation(s[5]) end
+        st.strokes[i] = t
+    end
+    st.frame = f
+    h.glyphs[button] = st
+    local kit = self
+    local function feedback(hover, pushed)
+        if GUI.Engine.Active(kit.key) then GUI.Engine.Run(kit.skin, "glyph", Kit.GlyphFeedback, st, hover, pushed) end
+    end
+    button:HookScript("OnEnter", function() feedback(true, st.pushed) end)
+    button:HookScript("OnLeave", function() feedback(false, false) end)
+    button:HookScript("OnMouseDown", function() feedback(st.hover, true) end)
+    button:HookScript("OnMouseUp", function() feedback(st.hover, false) end)
+    Kit.GlyphFeedback(st, false, false)
+    track(self, h)
+    return st
 end
 
 -- The close button's four state textures faded (the style pass).

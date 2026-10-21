@@ -45,6 +45,28 @@ The look is judged from the procedure's screenshots; `Logs\taint.log` is read af
 |---|---|---|
 | Merchant (#4) | `/fp steps skin merchant`: the looks side by side (clear at 0.85, 0.6 and 0.35 backing, smoked, class); buy, sell, buyback, repair; skin off and on live; after /reload; in combat (optional) | **70425: passes.** Buy, sell and buyback work; repair not tested (nothing to repair). The screenshots show the gold shell gone, glass under the window and tabs, and the item rows keeping Blizzard's red. Off live: exactly stock (owner: yes); on live: faded again; after /reload: on, faded at the first show. No `ADDON_ACTION_BLOCKED`/`FORBIDDEN` in the three sessions. Combat skipped (a plain, unprotected window). **Looks:** all five read well, and 0.35 looks the most like glass (owner): clear and class now use backing 0.35, smoked keeps 0.92. **Taint pass on 70450 (typed `/console taintLog 1`, buy/sell/buyback, full exit):** the log was on (BugGrabber: the bag-bar error 84 times that session, see the facts below), and `Logs\taint.log` was not rewritten. At level 1 the client writes only when something is blocked, so nothing was. A level-2 pass over every wave-1 skin goes into the v0.1.0 release check (#9). |
 
+### The world map and quest log (#99, docs/MAP.md)
+
+`/fp steps skin mapglass`. Each check reads:
+- the shell (the NineSlice's alpha), the disc against the book's texture, a glyph on every shown
+  button;
+- every shown crumb's normal texture, and the overflow button kept;
+- the quest log's background, its shadow blanked, and every shown zone header (its glass bar,
+  its bar faded, its +/- desaturated);
+- whether `NavBar.Refresh` and `QuestScrollFrame.UpdateBackground` are instance methods on this
+  build;
+- `IsProtected` on ours, and blocked and forbidden actions.
+
+Saved as `SkinProbeDB.results["MP.<label>"]`.
+
+| # | Question | Result |
+|---|---|---|
+| MP.1 | The first opening of the session in combat (M), styled a frame later; the look against the mockup | not run yet |
+| MP.2 | Maximise and minimise (in combat too): the NineSlice through `SetAtlas`, the disc following the portrait texture, the glyph swap; the quest log toggle and L after a map-only opening | not run yet |
+| MP.3 | Map changes and a crumb's dropdown: every crumb faded a frame after the overlay refresh, the overflow button visible | not run yet |
+| MP.4 | The quest log: collapse, an empty search, a scroll, tracking, details and back: every header in glass, the shadow blank, nothing blocked | not run yet |
+| MP.5 | The same pass with the taint log on; off while maximised, on in details; the first opening from the objective tracker in combat | not run yet |
+
 ### The character window (#94, docs/CHARACTER.md)
 
 `/fp steps skin character`. Each check reads the shown slots (their well, their frame faded, and the

@@ -1695,6 +1695,233 @@ function WoW.characterMode(i)
         for n, t in ipairs(CharacterFrame.ModeTabs.Tabs) do t:SetChecked(n == i) end
     end)
 end
+-- The world map and quest log (#99, docs/MAP.md; Blizzard_WorldMap with
+-- Camelot's templates, Mainline QuestMapFrame, origin/forever 70450). The
+-- shell: BorderFrame (NineSlice, Bg reparented to the window, InsetBorderTop,
+-- the portrait, the close and maximise/minimise buttons); OverscrollBG; the
+-- NavBar (its tile, insets, overlay, home, overflow, pooled crumbs from
+-- WoW.crumbs at each Refresh); other overlay frames, the canvas, Leatrix's
+-- strip and hover driver, Questie's button (all must stay untouched); the
+-- quest log (QuestScrollFrame, its art, the search box, QuestLogCount, rows
+-- from WoW.questRows at each update: header, title, objective, covenant, poi).
+-- Maximize/Minimize as the mixin does: the NineSlice's SetAtlas, the portrait
+-- texture only, the buttons swapped. Hidden.
+WoW.crumbs = 2
+WoW.questRows = { "header", "title", "objective", "header", "title", "covenant", "campaign", "poi" }
+local function mapRegion(parent, layer)
+    local r = blizz("Texture", parent, nil, layer)
+    table.insert(parent._regions, r)
+    return r
+end
+
+function WoW.makeWorldMap()
+    WoW.asBlizzard(function()
+        local wm = blizz("Frame", UIParent, "WorldMapFrame")
+        wm._shown, wm._level, wm._width, wm._height = false, 1, 1035, 570
+        local bf = blizz("Frame", wm)
+        bf._level, bf._strata = 2, "HIGH"
+        bf.NineSlice = nineSlice(bf)
+        bf.Bg = blizz("Texture", wm, nil, "BACKGROUND")       -- reparented (Blizzard_WorldMap.lua:27)
+        bf.InsetBorderTop = blizz("Texture", bf, nil, "BACKGROUND")
+        bf.PortraitContainer = blizz("Frame", bf)
+        bf.PortraitContainer._level = 400
+        bf.PortraitContainer.portrait = blizz("Texture", bf.PortraitContainer, nil, "OVERLAY")
+        bf.PortraitContainer.CircleMask = blizz("MaskTexture", bf.PortraitContainer)
+        bf.PortraitContainer.CircleMask._width = 58
+        bf.TitleContainer = blizz("Frame", bf)
+        bf.TitleContainer.TitleText = blizz("FontString", bf.TitleContainer, nil, "OVERLAY")
+        bf.CloseButton = blizzButton(bf, "RedButton-Exit", "RedButton-exit-pressed", "RedButton-Highlight",
+                                     "RedButton-Exit-Disabled")
+        bf.CloseButton._level, bf.CloseButton._width = 510, 28
+        local mm = blizz("Frame", bf)
+        mm.MaximizeButton = blizzButton(mm, "RedButton-Expand", "RedButton-Expand-Pressed", "RedButton-Highlight",
+                                        "RedButton-Expand-Disabled")
+        mm.MinimizeButton = blizzButton(mm, "RedButton-Condense", "RedButton-Condense-Pressed", "RedButton-Highlight",
+                                        "RedButton-Condense-Disabled")
+        mm.MaximizeButton._level, mm.MaximizeButton._width = 510, 28
+        mm.MinimizeButton._level, mm.MinimizeButton._width = 510, 28
+        mm.MinimizeButton._shown = false
+        bf.MaximizeMinimizeFrame = mm
+        wm.BorderFrame = bf
+        local over = blizz("Frame", wm)
+        mapRegion(over, "BACKGROUND")
+        mapRegion(over, "BORDER")
+        wm.OverscrollBG = over
+        -- The canvas, with Leatrix's coordinates strip on it.
+        local sc = blizz("Frame", wm)
+        sc._level = 3
+        sc.Child = blizz("Frame", sc)
+        sc.Child.TiledBackground = blizz("Texture", sc.Child, nil, "BACKGROUND")
+        wm.ScrollContainer = sc
+        WoW.neighbours = {}
+        local strip = blizz("Frame", sc)                    -- Leatrix's cFrame (Leatrix_Maps.lua:841-849)
+        table.insert(WoW.neighbours, mapRegion(strip, "BACKGROUND"))
+        local driver = blizz("Frame", wm)                   -- its hoverDriver (:1437)
+        table.insert(WoW.neighbours, mapRegion(driver, "ARTWORK"))
+        local krowi = blizz("Button", wm, "Krowi_WorldMapButtons1")   -- Questie's map button
+        krowi.Background = mapRegion(krowi, "BACKGROUND")
+        table.insert(WoW.neighbours, krowi.Background)
+        table.insert(WoW.neighbours, sc.Child.TiledBackground)
+        -- Other overlay frames: the filter button and the pin button.
+        local filter = blizz("Button", wm)
+        filter.Icon = mapRegion(filter, "ARTWORK")
+        wm.WorldMapTrackingOptionsButton = filter
+        table.insert(WoW.neighbours, filter.Icon)
+        local pin = blizz("Button", wm)
+        pin.Background = mapRegion(pin, "BACKGROUND")
+        wm.WorldMapTrackingPinButton = pin
+        table.insert(WoW.neighbours, pin.Background)
+        -- The NavBar.
+        local nav = blizz("Frame", wm)
+        nav._level = 5
+        mapRegion(nav, "BACKGROUND")                         -- the unnamed tile
+        for _, k in ipairs({ "InsetBorderBottomLeft", "InsetBorderBottomRight", "InsetBorderBottom", "InsetBorderLeft",
+                             "InsetBorderRight" }) do
+            nav[k] = mapRegion(nav, "BORDER")
+        end
+        nav.overlay = blizz("Frame", nav)
+        mapRegion(nav.overlay, "OVERLAY")
+        local function crumb()
+            local b = blizzButton(nav, "CS_HelpTextures_Tile", "CS_HelpTextures_Tile", "CS_HelpTextures")
+            b.text = blizz("FontString", b, nil, "OVERLAY")
+            b.arrowUp = blizz("Texture", b, nil, "OVERLAY")
+            b.selected = blizz("Texture", b, nil, "OVERLAY")
+            return b
+        end
+        nav.homeButton = crumb()
+        nav.home = nav.homeButton
+        nav.overflowButton = blizzButton(nav, "CS_HelpTextures", "CS_HelpTextures", "CS_HelpTextures")
+        nav.overflow = nav.overflowButton
+        nav.navList, nav.freeButtons = { nav.homeButton }, {}
+        WoW.allCrumbs = {}
+        -- WorldMapNavBarMixin:Refresh: the bar rebuilt (pooled crumbs reused, new ones made).
+        luaMethod(nav, "Refresh", function(self)
+            for i = #self.navList, 2, -1 do
+                local b = table.remove(self.navList, i)
+                b:Hide()
+                table.insert(self.freeButtons, b)
+            end
+            for _ = 1, WoW.crumbs do
+                local b = table.remove(self.freeButtons) or crumb()
+                table.insert(WoW.allCrumbs, b)
+                b:Show()
+                table.insert(self.navList, b)
+            end
+        end)
+        wm.NavBar = nav
+        -- WorldMapMixin:Maximize/Minimize (Blizzard_WorldMap.lua:52-80).
+        local function display(max)
+            for _, k in ipairs({ "TopLeftCorner", "TopEdge", "BottomEdge" }) do
+                if bf.NineSlice[k] then bf.NineSlice[k]:SetAtlas(max and "UI-Frame-Metal-NoPortrait" or "UI-Frame-PortraitMetal") end
+            end
+            bf.PortraitContainer.portrait:SetShown(not max)
+            mm.MaximizeButton:SetShown(not max)
+            mm.MinimizeButton:SetShown(max)
+        end
+        luaMethod(wm, "Maximize", function() display(true) end)
+        luaMethod(wm, "Minimize", function() display(false) end)
+        -- The quest log.
+        local qmf = blizz("Frame", wm, "QuestMapFrame")
+        qmf._level, qmf._strata = 2, "HIGH"
+        qmf.QuestsFrame = blizz("Frame", qmf)
+        qmf.QuestsFrame._level = 3
+        local qsf = blizz("Frame", qmf.QuestsFrame, "QuestScrollFrame")
+        qsf._level = 4
+        qmf.QuestsFrame.ScrollFrame = qsf
+        qsf.Background = blizz("Texture", qsf, nil, "BACKGROUND")
+        qsf.Edge = blizz("Texture", qsf, nil, "ARTWORK")
+        qsf.BorderFrame = blizz("Frame", qsf)
+        qsf.BorderFrame.Border = blizz("Texture", qsf.BorderFrame, nil, "BORDER")
+        qsf.BorderFrame.TopDetail = blizz("Texture", qsf.BorderFrame, nil, "OVERLAY")
+        qsf.BorderFrame.Shadow = blizz("Texture", qsf.BorderFrame, nil, "OVERLAY")
+        qsf.BorderFrame.Shadow._atlas = "questlog-frame-gradient-bottom"
+        qsf.Contents = blizz("Frame", qsf)
+        qsf.Contents.Separator = blizz("Frame", qsf.Contents)
+        qsf.Contents.Separator.Divider = blizz("Texture", qsf.Contents.Separator, nil, "ARTWORK")
+        qsf.Contents.StoryHeader = blizz("Frame", qsf.Contents)
+        qsf.Contents.StoryHeader.Background = blizz("Texture", qsf.Contents.StoryHeader, nil, "BACKGROUND")
+        qsf.Contents.StoryHeader.Text = blizz("FontString", qsf.Contents.StoryHeader, nil, "OVERLAY")
+        local sb = blizz("EditBox", qsf)
+        for _, k in ipairs({ "Left", "Right", "Middle" }) do sb[k] = blizz("Texture", sb, nil, "BACKGROUND") end
+        sb.searchIcon = blizz("Texture", sb, nil, "OVERLAY")
+        qsf.SearchBox = sb
+        qsf.SettingsDropdown = blizz("Button", qsf)
+        qsf.SettingsDropdown.Icon = blizz("Texture", qsf.SettingsDropdown, nil, "ARTWORK")
+        qsf.ScrollBar = blizz("Frame", qsf)
+        local count = blizz("Frame", qsf, "QuestLogCount")
+        for _, k in ipairs({ "Left", "Right", "Middle" }) do count[k] = blizz("Texture", count, nil, "BACKGROUND") end
+        blizz("FontString", count, "QuestLogQuestCount", "OVERLAY")
+        luaMethod(qsf, "UpdateBackground", function(self) self.Background:SetAtlas("QuestLog-main-background") end)
+        -- The pools (QuestMapFrame.lua:1228-1237), every row parented to Contents.
+        local qpool = {}
+        WoW.questPool = qpool
+        local function row(kind)
+            local r
+            if kind == "header" or kind == "covenant" then
+                r = blizzButton(qsf.Contents, "common-button-list-collapseExpand", nil, "common-button-list-collapseExpand")
+                r.ButtonText = blizz("FontString", r, nil, "OVERLAY")
+                r.ButtonText._textColor = { 0.5, 0.5, 0.5, 1 }
+                r.CollapseButton = blizz("Button", r)
+                r.CollapseButton.Icon = blizz("Texture", r.CollapseButton, nil, "ARTWORK")
+                if kind == "covenant" then r.SelectedHighlight = blizz("Texture", r, nil, "HIGHLIGHT") end
+            elseif kind == "campaign" then
+                -- CampaignHeaderTemplate: its name is Text, not ButtonText (WarCampaignTemplates.xml:160-248).
+                r = blizzButton(qsf.Contents, "CampaignHeader", nil, "CampaignHeader")
+                r.Text = blizz("FontString", r, nil, "OVERLAY")
+                r.CollapseButton = blizz("Button", r)
+                r.CollapseButton.Icon = blizz("Texture", r.CollapseButton, nil, "ARTWORK")
+            elseif kind == "title" then
+                r = blizz("Button", qsf.Contents)
+                r.Text = blizz("FontString", r, nil, "OVERLAY")
+                r.Checkbox = blizz("Frame", r)
+                r.Checkbox.CheckMark = mapRegion(r.Checkbox, "ARTWORK")
+                r._highlight = blizz("Texture", r, nil, "BORDER")
+            elseif kind == "objective" then
+                r = blizz("Frame", qsf.Contents)
+                r.Text = blizz("FontString", r, nil, "OVERLAY")
+            else
+                r = blizz("Button", qsf.Contents)                 -- a POI button
+                r.Display = blizz("Frame", r)
+                r._normal = blizz("Texture", r, nil, "ARTWORK")
+            end
+            r._kind = kind
+            return r
+        end
+        -- QuestLogQuests_Update: rows released and acquired, then UpdateBackground (2159).
+        function WoW.questLogUpdate()
+            WoW.asBlizzard(function()
+                for _, r in ipairs(qpool) do r:Hide() end
+                for i, kind in ipairs(WoW.questRows) do
+                    local r = qpool[i]
+                    if not r or r._kind ~= kind then
+                        r = row(kind)
+                        qpool[i] = r
+                    end
+                    if rawget(r, "CollapseButton") then r.CollapseButton.Icon:SetAtlas("common-button-list-minus") end
+                    r:Show()
+                end
+                qsf:UpdateBackground()
+            end)
+        end
+        WoW.snapshot()
+    end)
+end
+
+function WoW.showMap()
+    WoW.asBlizzard(function() WorldMapFrame:Show() end)
+    WoW.questLogUpdate()
+end
+function WoW.hideMap() WoW.asBlizzard(function() WorldMapFrame:Hide() end) end
+function WoW.mapRefresh() WoW.asBlizzard(function() WorldMapFrame.NavBar:Refresh() end) end
+function WoW.mapMaximize(max)
+    WoW.asBlizzard(function()
+        if max then WorldMapFrame:Maximize() else WorldMapFrame:Minimize() end
+    end)
+end
+-- The quest list scrolled (UpdateBottomShadow, QuestMapFrame.lua:1391-1397).
+function WoW.questScroll(a)
+    WoW.asBlizzard(function() QuestScrollFrame.BorderFrame.Shadow:SetAlpha(a) end)
+end
 function WoW.hideMerchant() WoW.asBlizzard(function() MerchantFrame:Hide() end) end
 
 --------------------------------------------------------------------------------

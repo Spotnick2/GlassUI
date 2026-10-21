@@ -1244,6 +1244,122 @@ end
 rawset(_G, "GlassUI", savedGUI7)
 end
 
+do
+-- #99: the world map as the procedure reads it.
+local savedGUI8 = rawget(_G, "GlassUI")
+local wm = CreateFrame("Frame", "WorldMapFrame", UIParent)
+local bf = CreateFrame("Frame", nil, wm)
+wm.BorderFrame = bf
+bf.NineSlice = CreateFrame("Frame", nil, bf)
+bf.NineSlice:SetAlpha(0)
+bf.PortraitContainer = CreateFrame("Frame", nil, bf)
+bf.PortraitContainer.portrait = bf.PortraitContainer:CreateTexture()
+bf.TitleContainer = CreateFrame("Frame", nil, bf)
+bf.TitleContainer.TitleText = bf.TitleContainer:CreateFontString()
+local mm = CreateFrame("Frame", nil, bf)
+mm.MaximizeButton, mm.MinimizeButton = CreateFrame("Button", nil, mm), CreateFrame("Button", nil, mm)
+mm.MinimizeButton:Hide()
+bf.MaximizeMinimizeFrame = mm
+local function texButton(parent, alpha)
+    local b = CreateFrame("Button", nil, parent)
+    b._normal = b:CreateTexture()
+    b._normal:SetAlpha(alpha)
+    return b
+end
+local nav = CreateFrame("Frame", nil, wm)
+nav.homeButton = texButton(nav, 0)
+local crumb = texButton(nav, 0)
+nav.navList = { nav.homeButton, crumb }
+nav.overflowButton = texButton(nav, 1)
+nav.Refresh = function() end
+wm.NavBar = nav
+local qsf = CreateFrame("Frame", "QuestScrollFrame", wm)
+qsf.UpdateBackground = function() end
+qsf.Background = qsf:CreateTexture()
+qsf.Background:SetAlpha(0)
+qsf.BorderFrame = CreateFrame("Frame", nil, qsf)
+qsf.BorderFrame.Shadow = qsf.BorderFrame:CreateTexture()
+qsf.Contents = CreateFrame("Frame", nil, qsf)
+local hdr = texButton(qsf.Contents, 0)
+hdr.ButtonText = hdr:CreateFontString()
+hdr.CollapseButton = CreateFrame("Button", nil, hdr)
+hdr.CollapseButton.Icon = hdr.CollapseButton:CreateTexture()
+hdr.CollapseButton.Icon:SetDesaturated(true)
+local disc = CreateFrame("Frame", nil, bf)
+local h = { disc = disc, glyphs = { [mm.MaximizeButton] = { frame = CreateFrame("Frame", nil, mm.MaximizeButton) } } }
+local mheaders = { [hdr] = { glass = CreateFrame("Frame", nil, hdr) } }
+rawset(_G, "GlassUI", { Map = { _test = { wins = { [wm] = h }, headers = mheaders,
+    isHeader = function(row) return type(row.ButtonText) == "table" and type(row.CollapseButton) == "table" end } } })
+SkinProbeDB.suiteBlocked = 0
+local okM, whyM = T.mpOn("t", { log = true, max = false })()
+check(okM, "the map as the skin leaves it: pass: " .. tostring(whyM))
+local mr = SkinProbeDB.results["MP.t"]
+eq(mr.crumbs, 2, "two crumbs read (home once)")
+eq(mr.headers, 1, "one header")
+crumb._normal:SetAlpha(1)
+okM, whyM = T.mpOn("t")()
+check(not okM and whyM:find("crumbs faded 1 of 2", 1, true), "a crumb left fails")
+crumb._normal:SetAlpha(0)
+nav.overflowButton._normal:SetAlpha(0)
+okM, whyM = T.mpOn("t")()
+check(not okM and whyM:find("overflow button faded", 1, true), "the overflow button faded fails")
+nav.overflowButton:Hide()
+check(T.mpOn("t")(), "a hidden overflow button isn't read")
+nav.overflowButton:Show()
+nav.overflowButton._normal:SetAlpha(1)
+bf.PortraitContainer.portrait:Hide()
+okM, whyM = T.mpOn("t")()
+check(not okM and whyM:find("disc true with the portrait false", 1, true), "the disc left over a hidden portrait fails")
+disc:Hide()
+check(T.mpOn("t")(), "the disc hidden with it: pass")
+bf.PortraitContainer.portrait:Show()
+disc:Show()
+h.glyphs[mm.MaximizeButton].frame:Hide()
+okM, whyM = T.mpOn("t")()
+check(not okM and whyM:find("glyphs 0 of 1", 1, true), "a shown button without its glyph fails")
+h.glyphs[mm.MaximizeButton].frame:Show()
+hdr.CollapseButton.Icon:SetDesaturated(false)
+okM, whyM = T.mpOn("t", { log = true })()
+check(not okM and whyM:find("headers 0 of 1", 1, true), "a header's +/- untinted fails")
+check(T.mpOn("t")(), "not read without want.log")
+hdr.CollapseButton.Icon:SetDesaturated(true)
+hdr._normal:SetAlpha(1)
+okM, whyM = T.mpOn("t", { log = true })()
+check(not okM and whyM:find("headers 0 of 1", 1, true), "a header's bar back fails")
+hdr._normal:SetAlpha(0)
+qsf.BorderFrame.Shadow:SetAtlas("questlog-frame-gradient-bottom")
+okM, whyM = T.mpOn("t", { log = true })()
+check(not okM and whyM:find("shadow back", 1, true), "the log's shadow back fails")
+qsf.BorderFrame.Shadow:SetTexture(nil)
+qsf.BorderFrame.Shadow._atlas = nil
+qsf.Background:SetAlpha(1)
+okM, whyM = T.mpOn("t", { log = true })()
+check(not okM and whyM:find("log background 1", 1, true), "the log's background back fails")
+qsf.Background:SetAlpha(0)
+nav.Refresh = nil
+okM, whyM = T.mpOn("t")()
+check(not okM and whyM:find("hooked method missing", 1, true), "a hooked method missing fails")
+nav.Refresh = function() end
+bf.NineSlice:SetAlpha(1)
+okM, whyM = T.mpOn("t")()
+check(not okM and whyM:find("shell 1", 1, true), "the shell left fails")
+bf.NineSlice:SetAlpha(0)
+okM, whyM = T.mpOn("t", { max = true })()
+check(not okM and whyM:find("maximized false", 1, true), "maximised wanted, windowed: fails")
+okM, whyM = T.mpOn("t", { combat = true })()
+check(not okM and whyM:find("combat false", 1, true), "combat wanted: fails")
+SkinProbeDB.suiteBlocked = 2
+okM, whyM = T.mpOn("t")()
+check(not okM and whyM:find("2 blocked", 1, true), "a blocked action fails")
+SkinProbeDB.suiteBlocked = 0
+GlassUI.Map._test.wins[wm] = nil
+okM, whyM = T.mpOn("t")()
+check(not okM and whyM:find("not installed", 1, true), "not installed fails")
+rawset(_G, "WorldMapFrame", nil)
+rawset(_G, "QuestScrollFrame", nil)
+rawset(_G, "GlassUI", savedGUI8)
+end
+
 -- #56 discovery: Questie's tracker and RestedXP's window and arrow.
 -- When each frame first exists: the first place it was seen is kept.
 local qbase = CreateFrame("Frame", "Questie_BaseFrame", UIParent)

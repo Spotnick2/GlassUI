@@ -112,6 +112,23 @@ WoW.guildMode("ROSTER")
 GUI._test.slash("skin guild on")
 WoW.hideGuild()
 eq(#WoW.rosterHooks, 0, "no script hook on any roster frame (#92)")
+-- The world map (#99): opened in combat, maximised, a map change, a quest
+-- log update, scrolled, off and on.
+WoW.combat = true
+WoW.showMap()
+WoW.flushTimers(0)
+WoW.mapMaximize(true)
+WoW.mapRefresh()
+WoW.questLogUpdate()
+WoW.flushTimers(0)
+WoW.combat = false
+WoW.questScroll(0.5)
+WoW.mapMaximize(false)
+WoW.flushTimers(0)
+GUI._test.slash("skin map off")
+GUI._test.slash("skin map on")
+WoW.flushTimers(0)
+WoW.hideMap()
 -- The character window (#94): opened in combat, modes, the stats scrolled,
 -- off and on; nothing touches the currency pane.
 WoW.combat = true
