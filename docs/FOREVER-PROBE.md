@@ -126,6 +126,17 @@ its own checked state, the tenants' panels applied, the shell, and blocked actio
 | GD.4 | With GuildSpy: its tabs and panel handed over and applied | **Run 1: passes** for the tabs and panel as GuildSpy shows them today (not handed over yet: its side waits for the owner's go-ahead). Owner: yes. |
 | GD.5 | Off (tenants told), a tab changed, on | **Run 1: passes.** Off: Blizzard's look, tenants told; on again: as before. |
 
+**Run 2 (2026-10-21, run #403, with GuildSpy#64 installed):** every check passed but one.
+- **GuildSpy:** every read had "tenants 2 tabs, 1/1 panels applied", the first opening in combat
+  included. Off: "0/1 panels applied, tenants told"; on again: 1/1. 0 blocked. The look: yes.
+- **Step 11 failed** ("the window not shown"): closing Social settings after the Shift-click had
+  closed the guild window. Rev 3 asks to reopen it before Next.
+- **The owner, at step 8:** "the edit box for the guild note is not skinned". A note is edited in a
+  Blizzard static popup (`StaticPopup_Show("SET_GUILD_COMMUNITIY_NOTE")`, `GuildRoster.xml:150-156`),
+  and the static popups' skin (#5) is parked. The member-detail panel it opens from
+  (`CommunitiesFrame.GuildMemberDetailFrame`, its note boxes `TooltipBackdropTemplate`) isn't in
+  the guild skin either. Left for a follow-up.
+
 ### The game menu (#90, docs/GAME-MENU.md)
 
 `/fp steps skin gamemenu`. Each check reads the menu and its shown buttons against what Blizzard shows
