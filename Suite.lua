@@ -45,6 +45,9 @@ Suite.ROSTER = {
     { name = "AltStable", title = "AltStable", dynamic = true },
     -- A mage's teleport and portal wheel, built once (live = false) (#106).
     { name = "PortalRoulette", title = "Portal Roulette", dynamic = true },
+    -- Its own look by default even with us (WoW Forever): it follows only when
+    -- the player picked glass in it, else it reports `declined` (#152).
+    { name = "Stakeout", title = "Stakeout", dynamic = true },
 }
 local member = {}
 for _, m in ipairs(Suite.ROSTER) do member[m.name] = true end
@@ -128,6 +131,9 @@ local function copyReport(addon, state)
         -- false: it builds its look once (#101, AltStable): a later change
         -- of the suite look takes a /reload.
         live = plain(state.live, "boolean"),
+        -- The name of an own look chosen in the addon's settings (#152,
+        -- Stakeout's "WoW Forever"): not a failure, nothing pending.
+        declined = plain(state.declined, "string"),
     }
     local cc = state.clickCast
     if type(cc) == "table" then
@@ -408,6 +414,9 @@ function Suite.State(addon)
     local pending = a ~= nil and answer(addon) ~= a.preset
     if a and not a.ready then return "early", pending end
     if not r then return "silent", pending end
+    -- Its own look by the player's choice in it (#152): asked or not, not a
+    -- failure, and no reload would change it.
+    if r.declined and not r.built then return "chosen", false end
     if a and a.preset and r.built ~= a.preset then return "failed", pending end
     if r.built and r.live == false and r.look then
         -- A non-live follower (#101): built with the look it reported; the
@@ -436,9 +445,12 @@ Suite.STATE_TEXT = {
     failed = "Pearl failed, own look",
     following = "following Glass UI",
     own = "own look",
+    chosen = "its own look by its choice",
 }
 
 local NOT_RUNNING = { missing = true, disabled = true, unloaded = true, other = true }
+-- No "set to follow" on these: running, but a reload wouldn't make them follow.
+local SET_TO_FOLLOW_SKIP = { following = true, chosen = true }
 
 -- One line per family member, for /glassui suite and the settings page.
 function Suite.Line(m)
@@ -449,10 +461,12 @@ function Suite.Line(m)
         text = text .. " (" .. Suite.THEMES[Suite.ThemeName()].label .. ")"
     elseif state == "failed" and r and r.reason then
         text = text .. ": " .. r.reason
+    elseif state == "chosen" then
+        text = text .. " (" .. r.declined .. ")"
     end
     -- Only for a member running this session: everyone follows by default
     -- (#82), so it would sit on every disabled one.
-    if not NOT_RUNNING[state] and Suite.Following(m.name) and state ~= "following" then
+    if not NOT_RUNNING[state] and Suite.Following(m.name) and not SET_TO_FOLLOW_SKIP[state] then
         text = text .. "; set to follow"
     end
     local look = Suite.LookLine(m.name)

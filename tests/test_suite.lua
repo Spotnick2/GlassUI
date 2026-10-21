@@ -693,6 +693,48 @@ WoW.installed.PortalRoulette, WoW.loaded.PortalRoulette = 2, true
 eq(Suite.Listed(pr), true, "loaded: listed")
 local prt = ask("PortalRoulette")
 check(prt and prt.preset == "pearl", "Theme answers it, following by default")
+-- Stakeout (#152): dynamic; its own look by the player's choice in it is
+-- "chosen", never "failed", nothing pending, no "set to follow".
+setup({})
+local so
+for _, m in ipairs(Suite.ROSTER) do if m.name == "Stakeout" then so = m end end
+check(so and so.dynamic and so.title == "Stakeout", "Stakeout is a dynamic member")
+eq(Suite.Listed(so), false, "not installed: not listed")
+WoW.installed.Stakeout, WoW.loaded.Stakeout = 2, true
+Suite.Report("Stakeout", { api = 1, live = false, declined = "WoW Forever" })
+local ss, sp = Suite.State("Stakeout")
+eq(ss, "chosen", "never asked, declined: chosen")
+eq(sp, false, "nothing pending")
+eq(Suite.ReportOf("Stakeout").declined, "WoW Forever", "declined is copied")
+GUI._test.slash("suite")
+local sline = chat()
+check(sline:find("Stakeout: its own look by its choice (WoW Forever)", 1, true), "/glassui suite names the choice")
+check(not sline:find("Stakeout: its own look by its choice (WoW Forever); set to follow", 1, true), "no \"set to follow\"")
+GUI.Options._test.panel:Show()
+local srow = GUI.Options._test.rows.Stakeout
+check(srow.card:IsShown(), "it speaks the API: a card")
+eq(srow.line:GetText(), "Its own look by its choice: WoW Forever", "the card says so")
+GUI.Options._test.panel:Hide()
+-- Asked (Pearl offered) but its choice declined: still chosen, not failed.
+ask("Stakeout")
+Suite.Report("Stakeout", { api = 1, live = false, declined = "WoW Forever" })
+ss, sp = Suite.State("Stakeout")
+eq(ss, "chosen", "asked and declined: chosen, not failed")
+eq(sp, false, "and nothing pending")
+Suite.SetFollow("Stakeout", false)
+eq(select(2, Suite.State("Stakeout")), false, "Follow switched off: still nothing pending (its own choice decides)")
+Suite.SetFollow("Stakeout", true)
+-- Glass picked in it: it builds Pearl and follows like any member.
+Suite.Report("Stakeout", { api = 1, built = "pearl", live = false, look = { tint = "clear", accent = "gold" } })
+eq(Suite.State("Stakeout"), "following", "built Pearl: following")
+-- Junk: a non-string declined isn't copied (a plain failure then).
+Suite.Report("Stakeout", { api = 1, declined = 12 })
+eq(Suite.ReportOf("Stakeout").declined, nil, "a junk declined isn't copied")
+eq(Suite.State("Stakeout"), "failed", "so an asked member that built nothing reads failed, as before")
+-- declined with built set: built wins (it followed after all).
+Suite.Report("Stakeout", { api = 1, built = "pearl", declined = "WoW Forever" })
+eq(Suite.State("Stakeout"), "following", "built and declined: built wins")
+
 -- Not following: its own look, built once; a suite look change isn't its business.
 setup({ suite = { follow = { AltStable = false } } })
 WoW.installed.AltStable, WoW.loaded.AltStable = 2, true
