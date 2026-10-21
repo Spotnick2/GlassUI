@@ -1462,6 +1462,9 @@ function WoW.hideGuild() WoW.asBlizzard(function() CommunitiesFrame:Hide() end) 
 -- sidebar CheckButtons; the currency pane (TokenFrame: its rows and transfer
 -- toggle record any addon touch in WoW.currencyTouches). Hidden.
 WoW.statRows = { "header", "stat", "stat", "header", "stat", "stat", "stat" }
+WoW.paneRows = { ReputationFrame = { "header", "entry", "entry", "header", "sub", "entry" },
+                 SkillsFrame = { "header", "entry", "header", "entry" },
+                 StatisticsFrame = { "header", "header", "entry", "sub", "entry" } }
 local function regionOn(parent, wtype, layer)
     local r = blizz(wtype, parent, nil, layer)
     table.insert(parent._regions, r)
@@ -1604,6 +1607,51 @@ function WoW.makeCharacter()
             t._checkedTex = blizz("Texture", t, nil, "OVERLAY")
             t._highlight = blizz("Texture", t, nil, "HIGHLIGHT")
         end
+        -- The list panes (reputation, skills, statistics): their lists acquire
+        -- top headers (an unnamed BACKGROUND bar and HIGHLIGHT copy, StateIcon,
+        -- Name), entries (a Content) and sub-headers (a Content and a
+        -- ToggleCollapseButton) from WoW.paneRows[pane] at each Update.
+        WoW.panePools = {}
+        for _, name in ipairs({ "ReputationFrame", "SkillsFrame", "StatisticsFrame" }) do
+            local pane = blizz("Frame", cf, name)
+            pane._shown = false
+            local plist = blizz("Frame", pane)
+            plist.ScrollTarget = blizz("Frame", plist)
+            pane.ScrollBox = plist
+            local ppool = {}
+            WoW.panePools[name] = ppool
+            luaMethod(plist, "Update", function(self)
+                for _, r in ipairs(ppool) do r:Hide() end
+                for i, kind in ipairs(WoW.paneRows[name]) do
+                    local r = ppool[i]
+                    if not r or r._kind ~= kind then
+                        r = blizz("Button", self.ScrollTarget)
+                        r._kind = kind
+                        if kind == "header" then
+                            regionOn(r, "Texture", "BACKGROUND")
+                            regionOn(r, "Texture", "HIGHLIGHT")
+                            r.StateIcon = regionOn(r, "Texture", "BORDER")
+                            r.Name = blizz("FontString", r, nil, "OVERLAY")
+                            r.Name._textColor = { 1, 0.82, 0, 1 }
+                        else
+                            r.Content = blizz("Frame", r)
+                            r.Content.Name = blizz("FontString", r.Content, nil, "OVERLAY")
+                            if kind == "sub" then
+                                local t = blizz("Button", r)
+                                t._normal = blizz("Texture", t)
+                                t._pushed = blizz("Texture", t)
+                                r.ToggleCollapseButton = t
+                            end
+                        end
+                        ppool[i] = r
+                    end
+                    -- Initialize: the text and the icon's atlas only.
+                    if kind == "header" then r.StateIcon:SetAtlas("common-button-list-minus") end
+                    if kind == "sub" then r.ToggleCollapseButton._normal:SetAtlas("campaign_headericon_open") end
+                    r:Show()
+                end
+            end)
+        end
         -- The currency pane: every touch from addon code recorded.
         local token = blizz("Frame", cf, "TokenFrame")
         token._shown = false
@@ -1634,6 +1682,13 @@ function WoW.showCharacter()
     end)
 end
 function WoW.hideCharacter() WoW.asBlizzard(function() CharacterFrame:Hide() end) end
+-- A list pane shown (CharacterFrame.lua's ShowSubFrame), its list filled.
+function WoW.characterPane(name)
+    WoW.asBlizzard(function()
+        for _, n in ipairs({ "ReputationFrame", "SkillsFrame", "StatisticsFrame" }) do _G[n]:SetShown(n == name) end
+        if name then _G[name].ScrollBox:Update() end
+    end)
+end
 -- A mode chosen (CharacterFrame.lua:217-242): each tab's SetChecked.
 function WoW.characterMode(i)
     WoW.asBlizzard(function()

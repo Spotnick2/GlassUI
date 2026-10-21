@@ -13,7 +13,9 @@
 -- the close button; the hosts' own art faded, the right pane a recessed pane
 -- with a separator; the level strip a pane; the model on the glass; each slot
 -- a glass well; the stats headers as glass bars (the stat lines stock); the
--- six mode tabs and the four sidebar tabs through the kit's side tabs.
+-- six mode tabs and the four sidebar tabs through the kit's side tabs; the
+-- reputation, skills and statistics panes' collapsible headers in the quest
+-- tracker's look (the owner, run 1).
 
 local GUI = GlassUI
 local API = GUI.API
@@ -31,10 +33,19 @@ local STRIP_ART = { "TopBackgroundStrip", "TopBackgroundStripBottomEdge" }
 local MODE_INSETS = { 2, 2, 2, 2 }
 local SIDEBAR_INSETS = { -1, -1, -1, -1 }
 local SIDEBAR = 4
+-- The list panes whose top headers share one template (ReputationFrame.xml:3,
+-- SkillsFrame.xml:3, Blizzard_Statistics StatisticsFrame.xml:3; forever 70450):
+-- an unnamed BACKGROUND bar (common-button-list-collapseExpand), its HIGHLIGHT
+-- copy, a StateIcon, a Name in GameFontNormalLeft. Blizzard only sets the
+-- Name's text and the StateIcon's atlas. Their sub-headers are entries (a
+-- Content) with a ToggleCollapseButton (the red campaign icons).
+local PANES = { "ReputationFrame", "SkillsFrame", "StatisticsFrame" }
 
 local wins = setmetatable({}, { __mode = "k" })     -- the window -> our pieces
 local slots = setmetatable({}, { __mode = "k" })    -- slot -> { glass, g }
-local headers = setmetatable({}, { __mode = "k" })  -- a pooled stats header row -> { glass, g }
+local headers = setmetatable({}, { __mode = "k" })  -- a pooled header row -> { glass, g, pane = a list pane's }
+local subs = setmetatable({}, { __mode = "k" })     -- a pooled sub-header row -> true
+local lists = setmetatable({}, { __mode = "k" })    -- a list hooked -> its kind
 
 local function tbl(v) return type(v) == "table" and v or nil end
 
@@ -80,22 +91,73 @@ local function styleAmmo(kit, b)
     if ok then kit:Fade(tbl(normal)) end
 end
 
--- The stats list's rows: a header is a row with a Background and a Title
--- (CharacterFrame.xml:77-94); stat lines (Background, Label, Value) are left
--- to Blizzard. Called by the style pass and the list's Update post-hook.
+local function accent() return GUI.Suite.Accent() or { 1, 0.82, 0 } end
+
+-- A header row's glass bar, once (the rim at its own level).
+local function bar(kit, row, pane)
+    if not headers[row] then
+        local glass, g = kit:Panel(row, "small", { 0, 0, 0, 0 }, nil, { backing = false })
+        if g and g.top then g.top:SetFrameLevel(glass:GetFrameLevel()) end
+        headers[row] = { glass = glass, g = g, pane = pane }
+    end
+end
+
+-- A list pane's header in the accent: its +/- and its name (#71's audited
+-- titles), the hover glow neutral. A sub-header: its toggle's icons.
+local function paintHeader(kit, row)
+    local c = accent()
+    kit:Tint(row.StateIcon, c[1], c[2], c[3])
+    kit:TextColor(row.Name, c[1], c[2], c[3])
+end
+local function paintSub(kit, row)
+    local c = accent()
+    local b = row.ToggleCollapseButton
+    for _, getter in ipairs({ "GetNormalTexture", "GetPushedTexture" }) do
+        local ok, tex = pcall(b[getter], b)
+        if ok and tbl(tex) then kit:Tint(tex, c[1], c[2], c[3]) end
+    end
+end
+
+-- The rows a list shows. The stats list: a header is a row with a Background
+-- and a Title (CharacterFrame.xml:77-94); stat lines (Background, Label,
+-- Value) are left to Blizzard. A list pane: a header has a Name and a
+-- StateIcon (an entry's Name is its Content's); entries stay Blizzard's. Called by the style pass
+-- and the list's Update post-hook.
 local function styleHeaders(kit, list)
     local target = tbl(list.ScrollTarget)
     if not target then return end
+    local pane = lists[list] == "pane"
     for _, row in ipairs({ target:GetChildren() }) do
-        if tbl(row.Background) and tbl(row.Title) then
-            if not headers[row] then
-                local glass, g = kit:Panel(row, "small", { 0, 0, 0, 0 }, nil, { backing = false })
-                if g and g.top then g.top:SetFrameLevel(glass:GetFrameLevel()) end
-                headers[row] = { glass = glass, g = g }
+        if not pane then
+            if tbl(row.Background) and tbl(row.Title) then
+                bar(kit, row)
+                kit:Fade(row.Background)
             end
-            kit:Fade(row.Background)
+        elseif tbl(row.Name) and tbl(row.StateIcon) then
+            bar(kit, row, true)
+            for _, r in ipairs(regionsOf(row, "Texture", "BACKGROUND")) do kit:Fade(r) end
+            for _, r in ipairs(regionsOf(row, "Texture", "HIGHLIGHT")) do kit:Tint(r, 1, 1, 1) end
+            paintHeader(kit, row)
+        elseif tbl(row.Content) and tbl(row.ToggleCollapseButton) then
+            subs[row] = true
+            paintSub(kit, row)
         end
     end
+end
+
+-- A list's Update post-hook, once: every row it acquires (a scroll, a
+-- collapse, new data) while the skin is on.
+local function hookList(kit, list, kind)
+    if not list or lists[list] then return end
+    lists[list] = kind
+    hooksecurefunc(list, "Update", function(l)
+        if GUI.Engine.Active("character") then GUI.Engine.Run(kit.skin, "headers", styleHeaders, kit, l) end
+    end)
+end
+
+local function paneList(name)
+    local f = tbl(rawget(_G, name))
+    return f and tbl(f.ScrollBox)
 end
 
 -- A recessed pane on a host frame of ours parented to `parent` (it shows and
@@ -176,10 +238,9 @@ GUI.Engine.Register({
         if stats then h.stats = pane(kit, stats, stats, stats:GetFrameLevel()) end
         if list then
             h.list = list
-            hooksecurefunc(list, "Update", function(l)
-                if GUI.Engine.Active("character") then GUI.Engine.Run(kit.skin, "headers", styleHeaders, kit, l) end
-            end)
+            hookList(kit, list, "stats")
         end
+        for _, name in ipairs(PANES) do hookList(kit, paneList(name), "pane") end
         for _, tab in ipairs(modeTabs(frame)) do kit:SideTab(tab, MODE_TAB) end
         for i = 1, SIDEBAR do
             local tab = tbl(rawget(_G, "PaperDollSidebarTab" .. i))
@@ -218,6 +279,10 @@ GUI.Engine.Register({
             kit:Fade(tbl(stats.ClassBackground))
             if tbl(stats.ScrollBox) then styleHeaders(kit, stats.ScrollBox) end
         end
+        for _, name in ipairs(PANES) do
+            local l = paneList(name)
+            if l and lists[l] then styleHeaders(kit, l) end
+        end
         for tab, st in pairs(Kit.sideTabs) do
             if st.kit == kit then kit:StyleSideTab(tab) end
         end
@@ -230,4 +295,15 @@ GUI.Engine.Register({
     end,
 })
 
-GUI.Character = { _test = { wins = wins, slots = slots, headers = headers, SLOTS = SLOTS } }
+-- An accent change (Theme.Refresh): the list panes' headers follow while on;
+-- while off, the style pass repaints.
+GUI.Theme.OnRefresh(function()
+    if not GUI.Engine.Active("character") then return end
+    for _, h in pairs(wins) do
+        for row, st in pairs(headers) do if st.pane then paintHeader(h.kit, row) end end
+        for row in pairs(subs) do paintSub(h.kit, row) end
+    end
+end)
+
+GUI.Character = { _test = { wins = wins, slots = slots, headers = headers, subs = subs, SLOTS = SLOTS,
+                            PANES = PANES } }

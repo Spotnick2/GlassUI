@@ -3,7 +3,8 @@
 -- pane and the level strip as panes, the model on the glass, each slot a glass
 -- well with nothing on its click path (the ammo slot's own anatomy), the stats
 -- headers as glass bars and the stat lines stock (style pass and Update), the
--- pet's stats stock, the mode and sidebar tabs through the kit's side tabs.
+-- pet's stats stock, the mode and sidebar tabs through the kit's side tabs;
+-- the reputation, skills and statistics headers in the tracker's look.
 dofile("tests/wow_stubs.lua")
 dofile("tests/harness.lua")
 
@@ -120,6 +121,51 @@ end
 eq(WoW.petHeader.Background:GetAlpha(), 1, "the pet's stats untouched")
 eq(C.headers[WoW.petHeader], nil, "and no glass there")
 
+-- The list panes' headers: a glass bar, the bronze bar faded, the hover glow
+-- neutral, the +/- and the name in the accent; entries stock; sub-headers'
+-- toggles in the accent.
+local function paneRows(name, kind)
+    local out = {}
+    for _, r in ipairs(WoW.panePools[name]) do if r._kind == kind and r:IsShown() then out[#out + 1] = r end end
+    return out
+end
+local function goldIs(tex) return tex._vertex and tex._vertex[2] == gold[2] and tex._vertex[3] == gold[3] end
+for _, name in ipairs(C.PANES) do
+    WoW.characterPane(name)
+    local hs = paneRows(name, "header")
+    check(#hs > 0, name .. ": headers shown")
+    for _, r in ipairs(hs) do
+        check(C.headers[r] ~= nil and C.headers[r].pane, name .. ": a header on a glass bar")
+        eq(r._regions[1]:GetAlpha(), 0, name .. ": its bronze bar faded")
+        check(r._regions[2]._desat and r._regions[2]._vertex[2] == 1, name .. ": its hover glow neutral")
+        eq(r._regions[2]:GetAlpha(), 1, name .. ": and kept")
+        check(goldIs(r.StateIcon) and r.StateIcon._desat, name .. ": its +/- in the accent")
+        local cr, cg, cb = r.Name:GetTextColor()
+        check(cr == gold[1] and cg == gold[2] and cb == gold[3], name .. ": its name in the accent")
+    end
+    for _, r in ipairs(paneRows(name, "entry")) do
+        eq(C.headers[r], nil, name .. ": an entry: no glass")
+        eq(#ours(r), 0, name .. ": nothing of ours on it")
+    end
+    for _, r in ipairs(paneRows(name, "sub")) do
+        check(goldIs(r.ToggleCollapseButton._normal) and goldIs(r.ToggleCollapseButton._pushed),
+              name .. ": a sub-header's toggle in the accent")
+        eq(C.headers[r], nil, name .. ": and no bar")
+    end
+end
+-- A collapse: new data, a header acquired where an entry was.
+WoW.paneRows.SkillsFrame = { "header", "header", "header" }
+WoW.asBlizzard(function() SkillsFrame.ScrollBox:Update() end)
+for _, r in ipairs(paneRows("SkillsFrame", "header")) do
+    check(C.headers[r] ~= nil and r._regions[1]:GetAlpha() == 0, "after a collapse: every header")
+    eq(#ours(r), 1, "one bar per pooled row")
+end
+-- Blizzard's atlas on collapse keeps our tint.
+local sh = paneRows("SkillsFrame", "header")[1]
+WoW.asBlizzard(function() sh.StateIcon:SetAtlas("common-button-list-plus") end)
+check(goldIs(sh.StateIcon), "the +/- keeps the accent through Blizzard's SetAtlas")
+WoW.characterPane(nil)
+
 -- The tabs: the six mode tabs (SelectedTexture) and the four sidebar (GetChecked).
 local modes = CF.ModeTabs.Tabs
 local ts = Kit.sideTabs
@@ -146,6 +192,11 @@ check(ts[sb2].light:IsShown() and not ts[sb1].light:IsShown(), "a sidebar change
 -- The accent.
 GUI._test.slash("look accent ice")
 check(ts[modes[1]].g.rim._vertex[2] == GUI.Suite.ACCENTS.ice[2], "the accent followed")
+local ice = GUI.Suite.ACCENTS.ice
+check(sh.StateIcon._vertex[2] == ice[2], "a list header's +/- followed")
+check(select(2, sh.Name:GetTextColor()) == ice[2], "and its name")
+local sub = paneRows("StatisticsFrame", "sub")[1] or WoW.panePools.StatisticsFrame[4]
+check(sub.ToggleCollapseButton._normal._vertex[2] == ice[2], "a sub-header's toggle followed")
 GUI._test.slash("look accent gold")
 
 -- Off: Blizzard's look, its changes meanwhile untouched; on: re-synced, without a Blizzard Update.
@@ -155,6 +206,19 @@ eq(CharacterHeadSlot.BorderFrame:GetAlpha(), 1, "the slots' frames back")
 eq(heads[1].Background:GetAlpha(), 1, "the headers' backgrounds back")
 eq(modes[1].Background:GetAlpha(), 1, "the tabs' art back")
 check(not C.slots[CharacterHeadSlot].glass:IsShown(), "our glass hidden")
+eq(sh._regions[1]:GetAlpha(), 1, "off: a list header's bar back")
+check(not sh.StateIcon._desat and sh.StateIcon._vertex[2] == 1, "its +/- Blizzard's")
+local orr, org = sh.Name:GetTextColor()
+check(orr == 1 and org == 0.82, "its name Blizzard's gold")
+check(not C.headers[sh].glass:IsShown(), "its bar hidden")
+WoW.characterPane("ReputationFrame")
+local offRep = paneRows("ReputationFrame", "header")[1]
+check(not offRep.StateIcon._desat and offRep._regions[1]:GetAlpha() == 1, "off: an Update styles no list header")
+GUI._test.slash("look accent ice")
+check(not sh.StateIcon._desat and sh.StateIcon._vertex[2] == 1, "off: an accent change tints no list header")
+eq(select(2, sh.Name:GetTextColor()), 0.82, "nor colours its name")
+GUI._test.slash("look accent gold")
+WoW.characterPane(nil)
 WoW.characterMode(4)
 check(not ts[modes[4]].light:IsShown(), "off: a mode change lights nothing")
 WoW.statRows = { "stat", "header" }
@@ -167,6 +231,8 @@ GUI._test.slash("skin character on")
 eq(CF.NineSlice:GetAlpha(), 0, "on: faded")
 eq(heads[1].Background:GetAlpha(), 0, "the headers re-styled without a Blizzard Update")
 check(ts[modes[4]].light:IsShown(), "the mode read again")
+eq(sh._regions[1]:GetAlpha(), 0, "on: the list headers re-styled without a Blizzard Update")
+check(goldIs(sh.StateIcon), "in the accent")
 WoW.characterMode(1)
 
 -- Hazards: nothing on the currency pane; no anchor on Blizzard's frames.

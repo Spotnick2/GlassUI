@@ -17,7 +17,8 @@ local ALLOWED = { SetAlpha = true, SetVertexColor = true, SetDesaturated = true,
 
 -- The audited titles (docs/PLAN.md, "The accent on Blizzard's titles", #71),
 -- found by structure, never by what a kit registered: the tracker's headers,
--- the quest timers' title (#73) and each meter window's title.
+-- the quest timers' title (#73), each meter window's title and the character
+-- window's list headers (#94: a pooled row with a Name and a StateIcon).
 local function audited()
     local set = {}
     local t = rawget(_G, "ObjectiveTrackerFrame")
@@ -30,6 +31,9 @@ local function audited()
     for i = 1, 3 do
         local w = rawget(_G, "DamageMeterSessionWindow" .. i)
         if w then set[w.DamageMeterTypeDropdown.TypeName] = true end
+    end
+    for _, pool in pairs(WoW.panePools or {}) do
+        for _, r in ipairs(pool) do if r.StateIcon then set[r.Name] = true end end
     end
     return set
 end
@@ -117,6 +121,10 @@ WoW.combat = false
 WoW.characterMode(5)
 WoW.characterMode(1)
 WoW.asBlizzard(function() CharacterStatsPaneScrollBox.ScrollBox:Update() end)
+WoW.characterPane("ReputationFrame")
+WoW.characterPane("SkillsFrame")
+WoW.characterPane("StatisticsFrame")
+WoW.characterPane(nil)
 GUI._test.slash("skin character off")
 GUI._test.slash("skin character on")
 WoW.hideCharacter()

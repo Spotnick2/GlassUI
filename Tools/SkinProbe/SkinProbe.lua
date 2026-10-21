@@ -1898,11 +1898,36 @@ local function chState(label)
             if okS and (plain(on) == true) == (st.light:IsShown() == true) then rec.mirrored = rec.mirrored + 1 end
         end
     end
+    -- The list panes' top headers (a Name and a StateIcon): the glass bar
+    -- shown, the bronze bar (BACKGROUND) faded, the +/- desaturated (tinted).
+    rec.paneHeaders, rec.paneRight = 0, 0
+    for _, name in ipairs({ "ReputationFrame", "SkillsFrame", "StatisticsFrame" }) do
+        local pane = frameByName(name)
+        local pt = pane and seen(pane) and type(pane.ScrollBox) == "table" and pane.ScrollBox.ScrollTarget
+        if pt then
+            for _, row in ipairs({ pt:GetChildren() }) do
+                if type(row.Name) == "table" and type(row.StateIcon) == "table" and seen(row) then
+                    rec.paneHeaders = rec.paneHeaders + 1
+                    local fadedBar = true
+                    for _, r in ipairs({ row:GetRegions() }) do
+                        local okL, l = call(r, "GetDrawLayer")
+                        local okA, a = call(r, "GetAlpha")
+                        if okL and plain(l) == "BACKGROUND" and not (okA and plain(a) == 0) then fadedBar = false end
+                    end
+                    local okD, d = call(row.StateIcon, "IsDesaturated")
+                    if fadedBar and okD and plain(d) == true and T and T.headers[row] and seen(T.headers[row].glass) then
+                        rec.paneRight = rec.paneRight + 1
+                    end
+                end
+            end
+        end
+    end
     rec.blocked = type(SkinProbeDB) == "table" and SkinProbeDB.suiteBlocked or 0
     say("CH " .. label .. ": shown " .. tostring(rec.shown) .. ", combat " .. tostring(rec.combat) .. ", slots "
         .. rec.wells .. "/" .. rec.slots .. " wells, frames faded " .. rec.framesFaded .. ", normal back "
         .. rec.normalBack .. " (" .. rec.normalBackSlots .. "), headers " .. rec.headersRight .. "/" .. rec.headers
-        .. ", tabs mirrored " .. rec.mirrored .. "/" .. rec.tabs .. ", protected " .. rec.protected .. ", blocked "
+        .. ", tabs mirrored " .. rec.mirrored .. "/" .. rec.tabs .. ", list headers " .. rec.paneRight .. "/"
+        .. rec.paneHeaders .. ", protected " .. rec.protected .. ", blocked "
         .. rec.blocked)
     record("CH." .. label, rec)
     return rec
@@ -1926,6 +1951,8 @@ local function chOn(label, want)
             want_(r.normalBack == 0, "NormalTexture back on " .. r.normalBack .. " (" .. r.normalBackSlots .. ")")
             want_(r.headersRight == r.headers, "headers " .. r.headersRight .. " of " .. r.headers)
         end
+        want_(r.paneRight == r.paneHeaders, "list headers " .. r.paneRight .. " of " .. r.paneHeaders)
+        if want.lists then want_(r.paneHeaders > 0, "no list header shown") end
         want_(r.blocked == 0, r.blocked .. " blocked")
         return #bad == 0, #bad == 0 and "as Blizzard shows it" or table.concat(bad, "; ")
     end
@@ -1944,6 +1971,7 @@ end
 
 Probe:Steps("character", {
     title = "Glass UI: the character window in glass (#94)",
+    rev = 2,
     { text = "Turns on script errors and the taint log, and counts blocked actions from now.", auto = true,
       run = function()
           if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
@@ -1997,9 +2025,41 @@ Probe:Steps("character", {
           local ok = r.shown and r.shell == 1 and r.wells == 0 and r.framesFaded == 0
           return ok, ok and "Blizzard's look, nothing of ours" or "something of ours while off"
       end },
-    { text = "Click another side tab and back, then switch the skin on.", button = "Skin on",
+    { text = "Click another side tab, then the Character tab again (the paper doll: this check reads the slots), "
+          .. "then switch the skin on.", button = "Skin on",
       run = function() return chSwitch(true) end, screenshot = "character, on again",
       check = chOn("on again", { paperdoll = true }) },
+    taintOff(),
+    { text = "Type /reload to save the results.", reload = true },
+})
+
+-- The list panes' headers in the tracker's look (the owner, run 1).
+Probe:Steps("characterlists", {
+    title = "Glass UI: the character window's list headers (#94)",
+    { text = "Counts blocked actions from now, with the taint log on.", auto = true,
+      run = function()
+          if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
+          return setCVar("scriptErrors", "1"), setCVar("taintLog", "1")
+      end },
+    { text = "Press C, then the Reputation tab. Press Next.", screenshot = "character lists, reputation",
+      check = chOn("lists reputation", { lists = true }) },
+    { text = "Collapse a header (click it) and expand it again; hover over one. Press Next.",
+      check = chOn("lists collapse", { lists = true }) },
+    { text = "The Skills tab. Press Next.", screenshot = "character lists, skills",
+      check = chOn("lists skills", { lists = true }) },
+    { text = "The Statistics tab: expand a category and one of its sub-categories (the small square), scroll down. "
+          .. "Press Next.", screenshot = "character lists, statistics", check = chOn("lists statistics", { lists = true }) },
+    { text = "Do the headers read like the quest tracker's: a glass bar, the name and the +/- in the accent, no bronze? "
+          .. "Anything off: the Note.", ask = true },
+    { text = "Still on Statistics: switches the skin off (Blizzard's bronze headers).", button = "Skin off",
+      run = function() return chSwitch(false) end,
+      check = function()
+          local r = chState("lists off")
+          local ok = r.shown and r.paneHeaders > 0 and r.paneRight == 0
+          return ok, ok and "Blizzard's headers" or ("list headers ours " .. r.paneRight .. " of " .. r.paneHeaders)
+      end },
+    { text = "Switches the skin on again.", button = "Skin on", run = function() return chSwitch(true) end,
+      screenshot = "character lists, on again", check = chOn("lists on again", { lists = true }) },
     taintOff(),
     { text = "Type /reload to save the results.", reload = true },
 })

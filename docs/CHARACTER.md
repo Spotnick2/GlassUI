@@ -243,3 +243,34 @@ Codex `gpt-6-astra` consensus in round 2.
     Update while off, the ammo slot's icon layer, another kit's tabs); the probe's checks, 7, all
     killed.
 - **Both test files hit Lua 5.1's 200-locals limit;** their newer blocks are each in a `do` scope.
+
+## Run 1 (2026-10-20) and the list headers
+
+**Run 1:** every check passed; FOREVER-PROBE CH.1-5 has the details. The NormalTexture gate held on
+all 19 slots after equips, unequips and the flyout, so the fade stays. That answers Codex's P2 on
+PR #95, which traced the code but couldn't run it.
+
+**The owner:** "my only problem was the yellow/bronze subsections that should be more like the
+quest manager", in reputation, skills and statistics. The three lists share one header template:
+an unnamed BACKGROUND bar (`common-button-list-collapseExpand`), its HIGHLIGHT copy, a `StateIcon`
+and a `Name` in GameFontNormalLeft. Blizzard only sets the text and the icon's atlas. The tracker's
+look on them:
+- **a glass bar** (the stats headers' bar), the bronze bar faded;
+- **the +/- tinted** in the accent (a tint survives `SetAtlas`, GQT pass B);
+- **the name in the accent**: an audited title (docs/PLAN.md, #71);
+- **the hover glow** desaturated to white;
+- **the sub-headers' red toggle** (`ToggleCollapseButton`'s normal and pushed textures) tinted in
+  the accent;
+- **entries** are left stock.
+
+Each list's `Update` is post-hooked on the instance, gated (`ScrollBox.lua:762`; a scroll, a
+collapse and a data change all reach it through `self:Update()`), and the style pass re-styles
+the lists after a switch-on. An accent change repaints them while the skin is on.
+
+**Tests:**
+- `test_character` 356: each pane's headers, entries and sub-headers; a collapse; the atlas
+  change; the accent, also while off; off and on.
+- `test_contract` fills the three lists and audits their header names.
+- 18 mutants. Two survived: a redundant `Content` guard (removed) and the refresh while off (a
+  test added). All are killed now.
+- The probe's list-header checks: 6 mutants, all killed.
