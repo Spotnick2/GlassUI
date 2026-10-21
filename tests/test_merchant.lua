@@ -602,14 +602,22 @@ local xc = u.closeX[1]._color
 check(xc and xc[1] == gold[1] and xc[2] == gold[2] and xc[4] == R.CLOSE_REST, "gold, at CLOSE_REST")
 eq(R.CLOSE_REST, 0.85, "0.85")
 at(x, "CENTER", cb, "CENTER", 0, 0, "at rest: centred")
--- Feedback: our X only.
+-- Feedback: our X and a light on our disc (#103).
+local light = u.closeLight
+check(light ~= nil and not light:IsShown(), "a hover light, off at rest")
+eq(light:GetParent(), u.closeDisc, "on our disc")
+eq(light._color[4], GUI.Kit.HOVER_LIGHT, "white at HOVER_LIGHT")
+check(light._color[1] == 1 and light._color[2] == 1 and light._color[3] == 1, "white")
+check(light._masks and #light._masks == 1, "clipped by the disc's mask")
 WoW.asBlizzard(function() cb._scripts.OnEnter(cb) end)
 eq(u.closeX[1]._color[4], 1, "hover: full")
+check(light:IsShown(), "hover: the light on")
 WoW.asBlizzard(function() cb._scripts.OnMouseDown(cb) end)
 at(x, "CENTER", cb, "CENTER", 0, -1, "pressed: 1 px down")
 eq(u.closeX[2]._color[4], 1, "still full")
 WoW.asBlizzard(function() cb._scripts.OnMouseUp(cb) end)
 at(x, "CENTER", cb, "CENTER", 0, 0, "released")
+check(light:IsShown(), "still hovered: still lit")
 -- The accent changes: the X and the tab's glow follow (Theme.OnRefresh).
 GUI._test.slash("look accent ice")
 local ice = GUI.Suite.ACCENTS.ice
@@ -632,6 +640,7 @@ WoW.mouseOver[cb] = false
 cb._buttonState = "PUSHED"
 GUI._test.slash("skin merchant on")
 eq(u.closeX[1]._color[4], R.CLOSE_REST, "on: the hover read back, gone")
+check(not light:IsShown(), "and its light off")
 check(u.closeX[1]._color[1] == ice[1], "the accent set while off")
 at(x, "CENTER", cb, "CENTER", 0, -1, "and the press read back")
 check(u.closeDisc:IsShown() and x:IsShown(), "our disc and X back")
