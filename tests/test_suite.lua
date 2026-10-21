@@ -682,6 +682,17 @@ eq(select(2, Suite.State("AltStable")), false, "a live follower: never pending o
 Suite.Report("AltStable", { api = 1, live = false, look = { tint = "clear", accent = "gold" } })
 eq(select(2, Suite.State("AltStable")), false, "its own look (not built Pearl): nothing pending")
 Suite.SetLook("accent", "gold")
+-- Portal Roulette (#106): dynamic too, never "not installed", answered like any member.
+setup({})
+local pr
+for _, m in ipairs(Suite.ROSTER) do if m.name == "PortalRoulette" then pr = m end end
+check(pr and pr.dynamic and pr.title == "Portal Roulette", "Portal Roulette is a dynamic member")
+GUI._test.slash("suite")
+check(not chat():find("Portal Roulette", 1, true), "not installed: no line")
+WoW.installed.PortalRoulette, WoW.loaded.PortalRoulette = 2, true
+eq(Suite.Listed(pr), true, "loaded: listed")
+local prt = ask("PortalRoulette")
+check(prt and prt.preset == "pearl", "Theme answers it, following by default")
 -- Not following: its own look, built once; a suite look change isn't its business.
 setup({ suite = { follow = { AltStable = false } } })
 WoW.installed.AltStable, WoW.loaded.AltStable = 2, true

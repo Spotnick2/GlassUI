@@ -43,6 +43,8 @@ Suite.ROSTER = {
     -- dynamic: listed only while loaded, never as "not installed" (#101, the
     -- owner: "dynamically add you to the list if added only").
     { name = "AltStable", title = "AltStable", dynamic = true },
+    -- A mage's teleport and portal wheel, built once (live = false) (#106).
+    { name = "PortalRoulette", title = "Portal Roulette", dynamic = true },
 }
 local member = {}
 for _, m in ipairs(Suite.ROSTER) do member[m.name] = true end
