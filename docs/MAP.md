@@ -372,3 +372,10 @@ NodeRadar's `SuperTrackedFrame` noise under the taint log.
 
 **The tracker case and the in-combat minimise** moved to `/fp steps skin maptracker`. A
 mid-run redeploy had stopped `mapglass` at its last reload.
+
+**`maptracker` (2026-10-20):**
+- The first opening from the objective tracker in combat passes.
+- Minimise in combat leaves the map maximised, with no blocked action; out of combat it works.
+  Very likely Blizzard's (`SetDisplayState` → `ShowUIPanel`, the panel manager), but checking with
+  the skin off settles it.
+- **The scroll bar stays Blizzard's** (the owner: fine if it matches the other bars, and it does).
