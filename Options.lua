@@ -38,7 +38,7 @@ local category
 local refreshers = {}
 
 -- The states of a member that speaks the suite API (Suite.State).
-local SPEAKS = { early = true, silent = true, failed = true, following = true, own = true }
+local SPEAKS = { early = true, silent = true, failed = true, following = true, own = true, chosen = true }
 local PAD = 16
 local FOOTER = 64    -- the footer's height under the scrolled page: the note, the Reload UI button, the credit
 local CARD_BACKING = { 0.05, 0.06, 0.08, 0.55 }
@@ -209,6 +209,7 @@ local function memberCard(m)
         elseif state == "failed" then s = theme .. " failed (" .. ((r and r.reason) or "?") .. "): using addon settings"
         elseif state == "early" then s = "Started before Glass UI: using addon settings"
         elseif state == "silent" then s = "No report from it: see its errors"
+        elseif state == "chosen" then s = "Its own look by its choice: " .. ((r and r.declined) or "?")
         else s = "Using addon settings" end
         -- The suite look it overrides, and the addons wearing its skin.
         if r and r.own and (state == "following" or state == "own") then

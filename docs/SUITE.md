@@ -180,6 +180,14 @@ treat it as any member, and it follows by default (#82). `Suite.Listed(m)` decid
 apply" as soon as the suite's look differs from that look in a key it doesn't own. It reports
 again only after a build, never on `LookChanged`.
 
+**An own look chosen in the addon (#152).** A member that the player turned off in its own settings
+reports `declined = "<the look's name>"` with `built = nil`. Stakeout does this (the owner,
+2026-10-21): like every member it follows Glass UI by default, its own option turns that off, and
+without Glass UI its WoW Forever theme is the default. The state is **chosen**: "its own look by
+its choice (<name>)". It isn't a failure, nothing is pending, and there's no "set to follow".
+Whether or not it asked `Theme` doesn't matter. Turned back on, it asks `Theme` and reports what it
+built, as any follower.
+
 The states, in order:
 
 | State | When |
