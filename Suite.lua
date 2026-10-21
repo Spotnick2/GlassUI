@@ -45,8 +45,8 @@ Suite.ROSTER = {
     { name = "AltStable", title = "AltStable", dynamic = true },
     -- A mage's teleport and portal wheel, built once (live = false) (#106).
     { name = "PortalRoulette", title = "Portal Roulette", dynamic = true },
-    -- Its own look by default even with us (WoW Forever): it follows only when
-    -- the player picked glass in it, else it reports `declined` (#152).
+    -- Follows by default like every member; turned off in its own settings it
+    -- reports `declined` (its WoW Forever theme) (#152).
     { name = "Stakeout", title = "Stakeout", dynamic = true },
 }
 local member = {}
