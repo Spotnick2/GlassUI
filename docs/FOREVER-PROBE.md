@@ -94,7 +94,21 @@ A fake history row is built by the probe from Blizzard's template; a `/reload` c
   they captured at `Play`. The mechanism is still unverified; the behaviour is measured.
 - **The fix:** each pass (the style pass, and the rows after an Update) runs again once those
   animations have finished. It reads `IsPlaying` (a getter, no hook) a frame at a time, through
-  `Engine.Defer`, up to 30 frames.
+  `Engine.Defer`, bounded by **0.5 s of elapsed time**, not a frame count. Codex on #110: 30 frames
+  pass in under 0.1 s at 300 fps.
+- **lootglass run 3** (rev 3, account #1, "at mouse" on by default there, then off for Edit Mode):
+  **the skin passes.**
+  - The shell is at 0 and the rows are right at every read taken after the animations: the second
+    loot in combat, closing in combat twice, at the mouse, Edit Mode saved and discarded, `/loot`
+    empty and resized.
+  - The fake history row is in glass at 399.
+  - 0 blocked, and the look: yes. The screenshot of the first loot in combat shows it in glass.
+  - **The three failed reads were the probe reading too early:**
+    - "first in combat" and "on again" were read before the pass that follows the animations;
+    - "look" read no item row, only money.
+
+  Rev 4 waits for the opening animation and 0.3 s before reading, and reads "on again" in its own
+  step.
 
 ### The world map and quest log (#99, docs/MAP.md)
 

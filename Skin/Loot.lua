@@ -36,7 +36,10 @@ local NINE_PIECES = { "TopLeftCorner", "TopRightCorner", "BottomLeftCorner", "Bo
                       "BottomEdge", "LeftEdge", "RightEdge", "Center" }
 local BG_PIECES = { "BottomLeft", "BottomRight", "BottomEdge", "TopSection" }
 
-local SETTLE_TRIES = 30                            -- frames to wait for the show animations (0.1 s each)
+-- How long to wait for the show animations (0.1 s each, ScrollingFlatPanel.xml
+-- :35, LootFrame.xml:58): a time, not a frame count (Codex on #110: 30 frames
+-- pass in under 0.1 s at 300 fps).
+local SETTLE_SECONDS = 0.5
 
 local wins = setmetatable({}, { __mode = "k" })   -- a window -> our pieces
 local rows = setmetatable({}, { __mode = "k" })   -- a pooled row -> { glass, g }
@@ -88,13 +91,14 @@ local function animating(frame)
     return any
 end
 
--- `fn` again once the show animations have finished, a frame at a time
--- (Engine.Defer: the skin's generation checked); nothing when none plays.
-local function afterAnims(kit, frame, fn, tries)
-    tries = tries or 0
-    if animating(frame) and tries < SETTLE_TRIES then
-        GUI.Engine.Defer(kit.skin, "settle", function() afterAnims(kit, frame, fn, tries + 1) end)
-    elseif tries > 0 then
+-- `fn` again once the show animations have finished, checked a frame at a
+-- time (Engine.Defer: the skin's generation checked), or after SETTLE_SECONDS
+-- if one never stops; nothing when none plays.
+local function afterAnims(kit, frame, fn, started)
+    if animating(frame) and (not started or GetTime() - started < SETTLE_SECONDS) then
+        local t0 = started or GetTime()
+        GUI.Engine.Defer(kit.skin, "settle", function() afterAnims(kit, frame, fn, t0) end)
+    elseif started then
         fn()
     end
 end
@@ -214,4 +218,4 @@ GUI.Engine.Register({
 })
 
 GUI.Loot = { _test = { wins = wins, rows = rows, NINE_PIECES = NINE_PIECES, BG_PIECES = BG_PIECES,
-                       SETTLE_TRIES = SETTLE_TRIES } }
+                       SETTLE_SECONDS = SETTLE_SECONDS } }

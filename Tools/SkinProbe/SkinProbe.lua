@@ -2474,10 +2474,10 @@ end
 --------------------------------------------------------------------------------
 
 do
-local opens = 0
+local opens, lastOpen = 0, 0
 local lootEvents = CreateFrame("Frame")
 lootEvents:RegisterEvent("LOOT_OPENED")
-lootEvents:SetScript("OnEvent", function() opens = opens + 1 end)
+lootEvents:SetScript("OnEvent", function() opens = opens + 1; lastOpen = GetTime() end)
 
 -- What shows of a shell (#109): the most visible of its pieces, each its
 -- frame's alpha times its own, the frame alone when it has no piece read.
@@ -2593,7 +2593,11 @@ local function lootWait(n, wantCombat)
         local lf = frameByName("LootFrame")
         local okC, c = pcall(InCombatLockdown)
         local fighting = okC and plain(c) == true
-        local ready = opens >= n and lf ~= nil and seen(lf) and T and T.wins[lf] ~= nil
+        -- Read once the opening animation has ended and the skin's pass after
+        -- it has run (#109: 0.1 s, then a frame): not at the first frame.
+        local okP, anim = call(lf and lf.ShowAnim, "IsPlaying")
+        local settled = not (okP and plain(anim)) and GetTime() - lastOpen > 0.3
+        local ready = opens >= n and lf ~= nil and seen(lf) and T and T.wins[lf] ~= nil and settled
         if wantCombat and not fighting then return false, "waiting for combat" end
         return ready, "waiting for the loot window"
     end
@@ -2647,7 +2651,7 @@ end
 
 Probe:Steps("lootglass", {
     title = "Glass UI: the loot window and /loot in glass (#105)",
-    rev = 3,
+    rev = 4,
     { text = "Turns on script errors, the taint log off, and counts blocked actions from now.", auto = true,
       run = function()
           if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
@@ -2689,8 +2693,8 @@ Probe:Steps("lootglass", {
           local ok = r.shown and r.shell == 1 and r.rowsRight == 0
           return ok, ok and "Blizzard's look, nothing of ours" or "something of ours while off"
       end },
-    { text = "Switches the skin on again.", button = "Skin on", run = function() return ltSwitch("loot", true) end,
-      check = ltOn("on again", { rows = true }) },
+    { text = "Switches the skin on again.", button = "Skin on", run = function() return ltSwitch("loot", true) end },
+    { text = "Wait a second, then press Next (the window still open).", check = ltOn("on again", { rows = true }) },
     { text = "Did every loot open and close, with no 'Interface action failed' message? If a master-looted group "
           .. "loot happened, say how it went in the Note; else answer Unsure.", ask = true },
     -- /loot.

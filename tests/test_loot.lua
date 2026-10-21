@@ -147,6 +147,37 @@ WoW.loot()
 WoW.flushTimers(0)
 WoW.lootAnimsDone()
 WoW.flushTimers(0)
+-- Codex on #110: the wait is a time, not a frame count. Many frames within
+-- 0.1 s (a high frame rate): still waiting, nothing undone by a pass run
+-- during the animation; past SETTLE_SECONDS with one still playing: the pass
+-- runs anyway.
+fresh({ "item" })
+for _ = 1, 10 do WoW.flushTimers(0) end                    -- 100 frames, no time passed
+check(#WoW.timers > 0, "100 frames, the animation playing: still waiting")
+WoW.lootAnimsDone()
+eq(LF.NineSlice:GetAlpha(), 1, "(the stub) undone at its end")
+WoW.flushTimers(0)
+eq(LF.NineSlice:GetAlpha(), 0, "the pass after it, however many frames that took")
+fresh({ "money" })
+WoW.flushTimers(0)
+WoW.now = WoW.now + L.SETTLE_SECONDS + 0.1
+WoW.flushTimers(0)
+eq(#WoW.timers, 0, "an animation that never stops: the wait ends after SETTLE_SECONDS")
+WoW.lootAnimsDone()
+WoW.flushTimers(0)
+-- The bound counts from the first wait, not from each frame: time in small steps.
+fresh({ "item" })
+for _ = 1, 8 do
+    WoW.now = WoW.now + 0.1
+    WoW.flushTimers(0)
+end
+eq(#WoW.timers, 0, "0.8 s in 0.1 s steps: the wait ended (counted from its start)")
+WoW.lootAnimsDone()
+WoW.flushTimers(0)
+fresh({ "item", "item", "money", "base" })                  -- the layout the tests below expect
+WoW.flushTimers(0)
+WoW.lootAnimsDone()
+WoW.flushTimers(0)
 -- No animation playing: no second pass is queued.
 WoW.flushTimers(0)
 local queued = #WoW.timers
