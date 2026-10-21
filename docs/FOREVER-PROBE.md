@@ -59,10 +59,56 @@ A fake history row is built by the probe from Blizzard's template; a `/reload` c
 
 | # | Question | Result |
 |---|---|---|
-| LT.1 | The first loot of the session in combat, styled a frame later; closed in combat; a second loot in combat through the installed hook, closed another way | not run yet |
-| LT.2 | The look; taking items one by one; money; an auto-loot sliding out | not run yet |
-| LT.3 | "Open Loot Window at Mouse"; Edit Mode save and discard; off and on | not run yet |
-| LT.4 | `/loot`: empty, resized, reopened; the fake row in glass at 399; real rows, master loot and the roll-100 effect when group content allows (else unverified) | not run yet |
+| LT.1 | The first loot of the session in combat, styled a frame later; closed in combat; a second loot in combat through the installed hook, closed another way | **Rows: pass** (run 1, 2026-10-21): first and second loot in combat, every row in glass, closed in combat twice, 0 blocked. **The shell: fail, #109.** `NineSlice` and `Bg` read alpha 1 at every open (see below) |
+| LT.2 | The look; taking items one by one; money; an auto-loot sliding out | Taking items and auto-loot: 0 blocked. The look: "it's the blizzard ui", the frame still Blizzard's (#109) |
+| LT.3 | "Open Loot Window at Mouse"; Edit Mode save and discard; off and on | At the mouse and Edit Mode saved: rows pass, shell #109. Discarded: read with the window closed (Edit Mode needs "at mouse" off). Off: Blizzard's look; after on, the frame was skinned properly (the owner) |
+| LT.4 | `/loot`: empty, resized, reopened; the fake row in glass at 399; real rows, master loot and the roll-100 effect when group content allows (else unverified) | Empty: **pass**, the shell faded ("now we have the right skin"). Resized: read with it closed. **The fake row: not built.** The step ran with `/loot` closed ("type /loot first"); rev 2 makes it a button that says so. Real rows, master loot, roll-100: unverified |
+
+**#109, the loot window's frame (70450).** The loot skin fades `LootFrame.NineSlice` and
+`LootFrame.Bg` (frames) in its style pass, a frame after each show.
+- `lootshell`: right after a loot, both read alpha 1, with no `fade:` failure and nothing
+  protected. After the skin was turned off and on, both read 0 and stayed 0 on the next loot.
+- `loottimeline`, sampled every frame from `LOOT_OPENED`:
+  - the style pass runs at about frame 2 (0.01-0.02 s), while the window's `ShowAnim` plays
+    (`setToFinalAlpha`);
+  - inside it, `Fade` returns true, the read-back is 0, and the region counts as faded;
+  - every sample after it reads 1.00.
+
+  So the frames' alpha is reset within a frame, without the instance `SetAlpha` hook seeing it.
+  The rows' **textures** hold. FrameXML has no such write (Codex, consulted). The mechanism is
+  unknown: likely native animation state on the window's children.
+- **The fix:** each shell piece (the NineSlice's nine, the Bg's four) is faded as well as the two
+  frames, as Ellesmere does ("so a relayout cannot resurrect it"). The probe now reads the shell as
+  shown: the frame's alpha times each piece's, the most visible.
+- The history window (no `defer`, no open animation) faded normally.
+- **lootglass run 2, with the pieces faded too:** the pieces came back as well, and some row plates.
+  So it isn't limited to frames.
+- **`lootshell` rev 2, run with "Open Loot Window at Mouse" both off and on, the same both ways:**
+  - first loot: a piece read 1 while the kit's record said held at 0 (`to 0`, not busy);
+  - **"Fade again"** through the same records on the settled window: 0, **and it held on every later
+    loot**.
+
+  So it isn't the records, the hook, or the at-mouse path. **A fade applied while the opening
+  animations play (the window's `ShowAnim`, each row's, `setToFinalAlpha`) is undone by the time they
+  end; a fade applied before them survives them.** That fits the animations restoring the alpha
+  they captured at `Play`. The mechanism is still unverified; the behaviour is measured.
+- **The fix:** each pass (the style pass, and the rows after an Update) runs again once those
+  animations have finished. It reads `IsPlaying` (a getter, no hook) a frame at a time, through
+  `Engine.Defer`, bounded by **0.5 s of elapsed time**, not a frame count. Codex on #110: 30 frames
+  pass in under 0.1 s at 300 fps.
+- **lootglass run 3** (rev 3, account #1, "at mouse" on by default there, then off for Edit Mode):
+  **the skin passes.**
+  - The shell is at 0 and the rows are right at every read taken after the animations: the second
+    loot in combat, closing in combat twice, at the mouse, Edit Mode saved and discarded, `/loot`
+    empty and resized.
+  - The fake history row is in glass at 399.
+  - 0 blocked, and the look: yes. The screenshot of the first loot in combat shows it in glass.
+  - **The three failed reads were the probe reading too early:**
+    - "first in combat" and "on again" were read before the pass that follows the animations;
+    - "look" read no item row, only money.
+
+  Rev 4 waits for the opening animation and 0.3 s before reading, and reads "on again" in its own
+  step.
 
 ### The world map and quest log (#99, docs/MAP.md)
 
