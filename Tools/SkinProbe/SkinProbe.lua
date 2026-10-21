@@ -1779,7 +1779,7 @@ end
 
 Probe:Steps("guild", {
     title = "Glass UI: Guild & Communities in glass (#92)",
-    rev = 2,
+    rev = 3,
     { text = "Turns on script errors and the taint log, and counts blocked actions from now.", auto = true,
       run = function()
           if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
@@ -1808,8 +1808,9 @@ Probe:Steps("guild", {
           .. "last one.", screenshot = "guild, info", check = gdOn("info") },
     { text = "Back on the chat tab, click the minimize button (the arrows, top right): the small chat window. Press "
           .. "Next.", screenshot = "guild, minimized", check = gdOn("minimized", { minimized = true }) },
-    { text = "Maximize it again. Shift-click the chat tab (it opens Social settings; close them), then press Next: "
-          .. "the selected look follows each tab's state.", check = gdOn("shift-click") },
+    { text = "Maximize it again. Shift-click the chat tab (it opens Social settings), close them, then press J to "
+          .. "open Guild & Communities again if it closed with them. Press Next with it open: the selected look "
+          .. "follows each tab's state.", check = gdOn("shift-click") },
     { text = "If GuildSpy is installed: open its tab (the spyglass under the side tabs), then its professions tab, then "
           .. "back to the chat. Press Next on the chat. Skip if GuildSpy isn't installed.",
       screenshot = "guild, guildspy", check = gdOn("guildspy") },
