@@ -74,7 +74,7 @@ audited exceptions and the reasons are in docs/PLAN.md, "The skin contract". In 
 
 Planned, per docs/PLAN.md: `Skin\<Window>.lua` for the rest, `Hub.lua`.
 `Tools\SkinProbe\` is the ForeverProbe module (never shipped): `/fp skin`, the measurements
-`/fp steps skin wave1|map|gradient|meter|questing`, each skin's acceptance (`/fp steps skin merchant|merchantlayout|bags|gamemenu|guild|character|characterlists|mapglass|meterskin|tracker|accent|timer|timerfake`),
+`/fp steps skin wave1|map|gradient|meter|questing`, each skin's acceptance (`/fp steps skin merchant|merchantlayout|bags|gamemenu|guild|character|characterlists|mapglass|maptracker|meterskin|tracker|accent|timer|timerfake`),
 the meter's glass bars preview (`/fp steps skin meterbars`), the suite's (`/fp steps skin suite`,
 #24) and Glass Panel's place in it (`/fp steps skin suitepanel`, #58), Glass UI's own skins on Pearl
 (`/fp steps skin pearl`, #54);

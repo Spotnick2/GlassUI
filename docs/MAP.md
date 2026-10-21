@@ -357,3 +357,18 @@ Nit taken: the probe's steps are renumbered (the logging pass names the steps it
   - **The probe's map checks:** 12 mutants, all killed.
 - **The Leatrix-On case** is covered offline only (`test_map`). In game, it would need a change to
   the owner's Leatrix setting and two reloads.
+
+## Run 1 (2026-10-20)
+
+Every check passed (FOREVER-PROBE MP.1-5), except one "minimised" read in combat that found the
+map still maximised. Nothing was blocked, the taint-log pass included. BugSack held only
+NodeRadar's `SuperTrackedFrame` noise under the taint log.
+
+**The owner's notes:**
+- **The look:** "close enough".
+- **The scroll bar's colour:** an open question; the bar is left stock in v1.
+- **A header "auto expands after a collapse":** Blizzard's `QuestMapFrame_ResetFilters` on every
+  refresh, and pin hovers.
+
+**The tracker case and the in-combat minimise** moved to `/fp steps skin maptracker`. A
+mid-run redeploy had stopped `mapglass` at its last reload.

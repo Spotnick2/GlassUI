@@ -2294,6 +2294,29 @@ Probe:Steps("mapglass", {
     { text = "Type /reload to save the results.", reload = true },
 })
 
+-- The case mapglass run 1 missed (a probe redeploy mid-run stopped it at
+-- its reload), and minimising in combat (MP.minimised read it maximised).
+Probe:Steps("maptracker", {
+    title = "Glass UI: the map opened from the objective tracker in combat (#99)",
+    rev = 1,
+    { text = "Counts blocked actions from now, with the taint log off.", auto = true,
+      run = function()
+          if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
+          return setCVar("scriptErrors", "1"), setCVar("taintLog", "0")
+      end },
+    { text = "Type /reload, then don't open the map before the next step.", reload = true },
+    { text = "Get into combat, then click a quest in the objective tracker (it opens the map on that quest). This "
+          .. "step goes on by itself once the map is open and styled.", timeout = 180,
+      screenshot = "map, first opening from the tracker",
+      wait = mapFirstOpen, check = mpOn("first from the tracker", { combat = true }) },
+    { text = "Still in combat: maximise the map, then minimise it. Press Next once it's windowed. If minimise "
+          .. "does nothing in combat, say so in the Note and press Next anyway.",
+      check = mpOn("combat minimise", { max = false, log = true }) },
+    { text = "Out of combat, the same: maximise, then minimise. Press Next.",
+      check = mpOn("minimise", { combat = false, max = false, log = true }) },
+    { text = "Type /reload to save the results.", reload = true },
+})
+
 skinChecks.mpState, skinChecks.mpOn = mpState, mpOn
 end
 
