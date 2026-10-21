@@ -2266,7 +2266,8 @@ Probe:Steps("mapglass", {
     -- The same with the taint log on.
     { text = "Turns the taint log ON for a comparison pass.", auto = true,
       run = function() return setCVar("taintLog", "1") end },
-    { text = "Maximise and minimise, go into another zone, collapse and expand a header. Press Next.",
+    { text = "Maximise and minimise, go into another zone, collapse and expand a header. Press Next. "
+          .. TAINT_NOISE .. " (NodeRadar's waypoint hook makes the arrow's one, every frame.)",
       check = mpOn("taint log on", { log = true }) },
     taintOff(),
     -- Off and on.
