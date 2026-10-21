@@ -2542,8 +2542,10 @@ local function ltState(label, which)
         end
         if which == "history" then rec.noInfo = seen(frame.NoInfoString) end
     end
+    local okM, m = pcall(GetCVar, "lootUnderMouse")
+    rec.atMouse = okM and plain(m) or "?"
     rec.blocked = type(SkinProbeDB) == "table" and SkinProbeDB.suiteBlocked or 0
-    say("LT " .. label .. ": shown " .. tostring(rec.shown) .. ", combat " .. tostring(rec.combat) .. ", installed "
+    say("LT " .. label .. ": at mouse " .. tostring(rec.atMouse) .. ", shown " .. tostring(rec.shown) .. ", combat " .. tostring(rec.combat) .. ", installed "
         .. tostring(rec.installed) .. ", shell " .. tostring(rec.shell) .. ", rows " .. rec.rowsRight .. "/"
         .. rec.rows .. ", opens " .. rec.opens .. ", blocked " .. rec.blocked)
     record("LT." .. label, rec)
@@ -2645,7 +2647,7 @@ end
 
 Probe:Steps("lootglass", {
     title = "Glass UI: the loot window and /loot in glass (#105)",
-    rev = 2,
+    rev = 3,
     { text = "Turns on script errors, the taint log off, and counts blocked actions from now.", auto = true,
       run = function()
           if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
@@ -2674,9 +2676,9 @@ Probe:Steps("lootglass", {
     { text = "Loot a corpse with plain right-click (auto-loot): the window flashes, its rows sliding out. Press "
           .. "Next.", check = function() local r = ltState("auto-loot", "loot"); return r.blocked == 0, r.blocked .. " blocked" end },
     -- The other positioning paths.
-    { text = "In Options > Controls, turn on \"Open Loot Window at Mouse\", Shift-loot a corpse, press Next with the "
-          .. "window open.", check = ltOn("at mouse", { rows = true }) },
-    { text = "Turn \"Open Loot Window at Mouse\" back off. Then open Edit Mode, move the Loot Window, Save, close "
+    { text = "For this one loot only: in Options > Controls, turn ON \"Open Loot Window at Mouse\" (it's normally "
+          .. "off), Shift-loot a corpse, press Next with the window open.", check = ltOn("at mouse", { rows = true }) },
+    { text = "Turn \"Open Loot Window at Mouse\" OFF again (Edit Mode can only move the window with it off). Then open Edit Mode, move the Loot Window, Save, close "
           .. "Edit Mode, Shift-loot a corpse. Press Next with the window open.", check = ltOn("edit mode saved", { rows = true }) },
     { text = "Open Edit Mode, move the Loot Window again, then Revert Changes (or close without saving), close "
           .. "Edit Mode, Shift-loot a corpse. Press Next with the window open.", check = ltOn("edit mode discarded", { rows = true }) },
@@ -2729,7 +2731,25 @@ local function shellRead(label)
         rec.failures = table.concat(fails, " | ")
         rec.status = G and G.Engine and G.Engine.Status("loot") or "?"
         rec.shown = lf ~= nil and seen(lf)
+        -- The kit's record for the NineSlice and one of its pieces: present,
+        -- held at, busy, Blizzard's latest alpha.
+        local faded = G and G.Kit and G.Kit._test and G.Kit._test.faded
+        local function entry(r)
+            local e = faded and r and faded[r]
+            if not e then return "none" end
+            return "to " .. tostring(e.to) .. " busy " .. tostring(e.busy) .. " blizz " .. tostring(e.alpha)
+                .. " kit " .. tostring(e.kit and e.kit.key)
+        end
+        local okM, m = pcall(GetCVar, "lootUnderMouse")
+        rec.atMouse = okM and plain(m) or "?"
+        rec.nineEntry = entry(lf and lf.NineSlice)
+        rec.edgeEntry = entry(lf and lf.NineSlice and lf.NineSlice.TopEdge)
+        local okE, ea = call(lf and lf.NineSlice and lf.NineSlice.TopEdge, "GetAlpha")
+        rec.edge = okE and plain(ea) or nil
         record("LT." .. label, rec)
+        say("LT " .. label .. ": at mouse " .. tostring(rec.atMouse) .. ", edge " .. tostring(rec.edge) .. " ("
+            .. rec.edgeEntry .. "), nine entry "
+            .. rec.nineEntry)
         say("LT " .. label .. ": nine " .. tostring(rec.nine) .. ", bg " .. tostring(rec.bg) .. ", protected "
             .. rec.protected .. "/" .. rec.ninePro .. ", status " .. tostring(rec.status) .. ", failures: "
             .. (rec.failures ~= "" and rec.failures or "none"))
@@ -2801,12 +2821,40 @@ Probe:Steps("loottimeline", {
     { text = "Type /reload to save the results.", reload = true },
 })
 
+-- The same kit's Fade again, through its existing records and hooks, on the
+-- open, settled window: holds (the first was undone by the opening's timing)
+-- or reverts again (the first records are broken; off/on makes fresh ones).
+local function fadeAgain()
+    local G = glassUI()
+    local s = G and G.Engine and G.Engine.byKey and G.Engine.byKey.loot
+    local lf = frameByName("LootFrame")
+    if not (s and s.kit and lf and seen(lf)) then return false, "open a loot window first" end
+    local n = 0
+    for _, host in ipairs({ lf.NineSlice, lf.Bg }) do
+        if type(host) == "table" then
+            s.kit:Fade(host)
+            n = n + 1
+            for _, k in ipairs({ "TopLeftCorner", "TopRightCorner", "BottomLeftCorner", "BottomRightCorner", "TopEdge",
+                                 "BottomEdge", "LeftEdge", "RightEdge", "Center", "BottomLeft", "BottomRight",
+                                 "TopSection" }) do
+                if type(host[k]) == "table" then s.kit:Fade(host[k]); n = n + 1 end
+            end
+        end
+    end
+    return true, n .. " faded again"
+end
+
 Probe:Steps("lootshell", {
     title = "Glass UI: the loot window's frame not faded (#109)",
-    rev = 1,
-    { text = "Type /reload, then don't loot before the next step.", reload = true },
+    rev = 2,
+    { text = "Set \"Open Loot Window at Mouse\" (Options > Controls) the way you want to test it: this run is read "
+          .. "with it as it is. Then type /reload, and don't loot before the next step.", reload = true },
     { text = "Out of combat, Shift + right-click a corpse. Press Next with the loot window open.",
       screenshot = "loot shell, first", check = shellRead("shell first") },
+    { text = "With the window still open, wait a second, then: the skin's own Fade again, through its existing "
+          .. "records.", button = "Fade again", run = fadeAgain },
+    { text = "Wait a second, then press Next (the window still open).", screenshot = "loot shell, faded again",
+      check = shellRead("shell faded again") },
     { text = "Close it, Shift-loot another corpse, press Next with the window open.", check = shellRead("shell second") },
     { text = "Switches the loot skin off.", auto = true, run = function() return ltSwitch("loot", false) end },
     { text = "Switches it on again.", auto = true, run = function() return ltSwitch("loot", true) end },

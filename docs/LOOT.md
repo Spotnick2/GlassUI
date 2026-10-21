@@ -238,3 +238,14 @@ Every round-1 finding is resolved, with nothing new:
   1 within a frame of each open, past the kit's `SetAlpha` hook (FOREVER-PROBE, #109).
 - **The fix:** the shell's pieces are faded too.
 - **The fake row** wasn't built, because `/loot` was closed at that step. Rev 2 makes it a button.
+
+**#109, settled (lootshell rev 2):**
+- A fade applied while the opening animations play is undone at their end. Applied after, it
+  holds, through later opens too. This is measured the same with "at mouse" on and off.
+- Each pass now runs again once the window's and the rows' `ShowAnim` have finished
+  (`afterAnims`).
+- `test_loot` 156 models the revert in the stub (`WoW.lootAnimsDone`). It covers the window's
+  animation alone, the rows' alone, a loot into the open window, and a pass dropped by the switch.
+  Mutation testing killed every mutant but one equivalent (a second pass when nothing animates).
+- **Unverified edge:** switched off during an opening animation, a restore the animation then
+  reverts would leave the art faded until the next open.

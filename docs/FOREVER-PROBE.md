@@ -81,6 +81,20 @@ A fake history row is built by the probe from Blizzard's template; a `/reload` c
   frames, as Ellesmere does ("so a relayout cannot resurrect it"). The probe now reads the shell as
   shown: the frame's alpha times each piece's, the most visible.
 - The history window (no `defer`, no open animation) faded normally.
+- **lootglass run 2, with the pieces faded too:** the pieces came back as well, and some row plates.
+  So it isn't limited to frames.
+- **`lootshell` rev 2, run with "Open Loot Window at Mouse" both off and on, the same both ways:**
+  - first loot: a piece read 1 while the kit's record said held at 0 (`to 0`, not busy);
+  - **"Fade again"** through the same records on the settled window: 0, **and it held on every later
+    loot**.
+
+  So it isn't the records, the hook, or the at-mouse path. **A fade applied while the opening
+  animations play (the window's `ShowAnim`, each row's, `setToFinalAlpha`) is undone by the time they
+  end; a fade applied before them survives them.** That fits the animations restoring the alpha
+  they captured at `Play`. The mechanism is still unverified; the behaviour is measured.
+- **The fix:** each pass (the style pass, and the rows after an Update) runs again once those
+  animations have finished. It reads `IsPlaying` (a getter, no hook) a frame at a time, through
+  `Engine.Defer`, up to 30 frames.
 
 ### The world map and quest log (#99, docs/MAP.md)
 

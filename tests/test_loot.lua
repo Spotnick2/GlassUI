@@ -38,14 +38,20 @@ check(h ~= nil, "built a frame later, in combat too")
 -- The shell.
 eq(LF.NineSlice:GetAlpha(), 0, "the NineSlice faded")
 eq(LF.Bg:GetAlpha(), 0, "the Bg frame faded")
--- #109: in game the two frames' alpha came back within a frame of every open;
--- their pieces are faded too, and hold through the frame's reset.
 for _, k in ipairs(L.NINE_PIECES) do eq(LF.NineSlice[k]:GetAlpha(), 0, "the NineSlice's " .. k .. " faded") end
 for _, k in ipairs(L.BG_PIECES) do eq(LF.Bg[k]:GetAlpha(), 0, "the Bg's " .. k .. " faded") end
-rawset(LF.NineSlice, "_alpha", 1)                           -- the reset, bypassing SetAlpha
-rawset(LF.Bg, "_alpha", 1)
-eq(LF.NineSlice.TopEdge:GetAlpha(), 0, "a frame reset leaves its pieces faded")
-eq(LF.Bg.TopSection:GetAlpha(), 0, "the Bg's too")
+-- #109, as measured: what was faded while the window's and the rows' show
+-- animations played comes back when they end; the pass runs again then.
+local firstRow = shown(WoW.lootPool, "item")[1]
+WoW.lootAnimsDone()
+eq(LF.NineSlice:GetAlpha(), 1, "(the stub) the animations' end undoes the fades")
+eq(firstRow.NameFrame:GetAlpha(), 1, "(the stub) a row's plate too")
+WoW.flushTimers(0)
+eq(LF.NineSlice:GetAlpha(), 0, "a frame after the animations: the NineSlice faded again")
+eq(LF.NineSlice.TopEdge:GetAlpha(), 0, "its pieces")
+eq(LF.Bg:GetAlpha(), 0, "the Bg")
+eq(LF.Bg.TopSection:GetAlpha(), 0, "its pieces")
+eq(firstRow.NameFrame:GetAlpha(), 0, "and the row's plate")
 eq(h.backing._color[4], GUI.Theme.WINDOW_BACKING, "the window floor")
 local hp
 for _, pt in ipairs(h.header._points) do if pt[1] == "BOTTOM" then hp = pt end end
@@ -93,6 +99,76 @@ WoW.asBlizzard(function() item:Hide() end)
 check(not L.rows[item].glass:IsVisible(), "a row slid out: its glass gone with it")
 WoW.closeLoot()
 
+-- A loot while the window is already open (no OnShow): the rows' pass waits too.
+WoW.loot()
+WoW.flushTimers(0)
+WoW.lootAnimsDone()                                       -- what the opens left waiting, settled
+WoW.flushTimers(0)
+check(LF:IsShown(), "the window open")
+WoW.lootRows = { "money", "money", "item" }               -- new kinds: fresh rows
+WoW.loot()
+WoW.flushTimers(0)
+local late = WoW.lootPool[1]
+WoW.lootAnimsDone()
+eq(late.NameFrame:GetAlpha(), 1, "(the stub) the new row's plate undone at the animations' end")
+WoW.flushTimers(0)
+eq(late.NameFrame:GetAlpha(), 0, "the rows' pass ran again after them")
+-- Waiting for both: the window's animation alone, then the rows' alone.
+local function stopRows() WoW.asBlizzard(function() for _, r in ipairs(WoW.lootPool) do r.ShowAnim:Stop() end end) end
+local function stopWindow() WoW.asBlizzard(function() LF.ShowAnim:Stop() end) end
+-- Each from scratch: the skin off and on (fresh, unfaded), nothing waiting,
+-- then one open whose fades the animations' end undoes.
+local function fresh(rowKinds)
+    WoW.closeLoot()
+    WoW.lootAnimsDone()
+    WoW.flushTimers(0)
+    GUI._test.slash("skin loot off")
+    WoW.lootRows = rowKinds
+    WoW.loot()
+    GUI._test.slash("skin loot on")
+end
+fresh({ "item", "money" })
+WoW.flushTimers(0)
+stopRows()
+WoW.flushTimers(0)
+WoW.lootAnimsDone()
+WoW.flushTimers(0)
+eq(LF.NineSlice:GetAlpha(), 0, "the rows done, the window's still playing: waited for it")
+fresh({ "money", "item" })
+WoW.flushTimers(0)
+stopWindow()
+WoW.flushTimers(0)
+WoW.lootAnimsDone()
+WoW.flushTimers(0)
+eq(WoW.lootPool[1].NameFrame:GetAlpha(), 0, "the window done, a row's still playing: waited for it")
+WoW.closeLoot()
+WoW.lootRows = { "item", "item", "money", "base" }
+WoW.loot()
+WoW.flushTimers(0)
+WoW.lootAnimsDone()
+WoW.flushTimers(0)
+-- No animation playing: no second pass is queued.
+WoW.flushTimers(0)
+local queued = #WoW.timers
+WoW.asBlizzard(function() LF.ScrollBox:Update() end)
+WoW.flushTimers(0)
+eq(#WoW.timers, queued, "no animation: nothing waits")
+-- The skin off while a pass waits for the animations: it's dropped.
+WoW.closeLoot()
+WoW.loot()
+WoW.flushTimers(0)
+GUI._test.slash("skin loot off")
+WoW.asBlizzard(function()
+    LF.ShowAnim:Stop()
+    for _, r in ipairs(WoW.lootPool) do r.ShowAnim:Stop() end
+end)
+WoW.lootSnapshot = nil
+WoW.flushTimers(0)
+eq(LF.NineSlice:GetAlpha(), 1, "off while waiting: the pass is dropped")
+GUI._test.slash("skin loot on")
+WoW.flushTimers(0)
+eq(LF.NineSlice:GetAlpha(), 0, "on: faded")
+WoW.closeLoot()
 -- A second loot: new rows through the list's Update, styled a frame later, not inside it.
 WoW.lootRows = { "money", "item", "item", "item", "item" }
 WoW.combat = true

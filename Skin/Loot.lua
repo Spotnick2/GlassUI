@@ -23,13 +23,20 @@ local Kit = GUI.Kit
 
 local ROW_INSETS = { 0, 0, 0, 0 }
 -- The shell's own textures (NineSliceLayouts, FlatPanelBackgroundTemplate,
--- SharedUIPanelTemplates.xml:404-433), faded as well as their two frames:
--- in game the frames' alpha came back to 1 within a frame of every open
--- (#109, SkinProbe loottimeline, 70450), with Fade's read-back at 0 and no
--- SetAlpha seen; the rows' textures held. Ellesmere fades the pieces too.
+-- SharedUIPanelTemplates.xml:404-433), faded as well as their two frames, as
+-- Ellesmere does.
+--
+-- #109 (SkinProbe lootshell and loottimeline, 70450): a fade applied while
+-- the window's or a row's ShowAnim plays (setToFinalAlpha) is undone by the
+-- time it ends, past the SetAlpha hook; Fade's read-back was 0 and its record
+-- intact. The same Fade on the settled window holds, through every later
+-- open too. So each pass runs again once those animations have finished
+-- (afterAnims), read through IsPlaying, a getter: no hook on them.
 local NINE_PIECES = { "TopLeftCorner", "TopRightCorner", "BottomLeftCorner", "BottomRightCorner", "TopEdge",
                       "BottomEdge", "LeftEdge", "RightEdge", "Center" }
 local BG_PIECES = { "BottomLeft", "BottomRight", "BottomEdge", "TopSection" }
+
+local SETTLE_TRIES = 30                            -- frames to wait for the show animations (0.1 s each)
 
 local wins = setmetatable({}, { __mode = "k" })   -- a window -> our pieces
 local rows = setmetatable({}, { __mode = "k" })   -- a pooled row -> { glass, g }
@@ -64,6 +71,32 @@ local function eachRow(frame, fn)
     local target = sb and tbl(sb.ScrollTarget)
     if not target then return end
     for _, row in ipairs({ target:GetChildren() }) do fn(row) end
+end
+
+local function playing(anim)
+    if type(anim) ~= "table" or type(anim.IsPlaying) ~= "function" then return false end
+    local ok, on = pcall(anim.IsPlaying, anim)
+    return ok and API.Plain(on) == true
+end
+
+-- The window's ShowAnim (ScrollingFlatPanel.xml:35) or a shown row's
+-- (LootFrame.xml:58) still playing.
+local function animating(frame)
+    if playing(frame.ShowAnim) then return true end
+    local any = false
+    eachRow(frame, function(row) if row:IsShown() and playing(row.ShowAnim) then any = true end end)
+    return any
+end
+
+-- `fn` again once the show animations have finished, a frame at a time
+-- (Engine.Defer: the skin's generation checked); nothing when none plays.
+local function afterAnims(kit, frame, fn, tries)
+    tries = tries or 0
+    if animating(frame) and tries < SETTLE_TRIES then
+        GUI.Engine.Defer(kit.skin, "settle", function() afterAnims(kit, frame, fn, tries + 1) end)
+    elseif tries > 0 then
+        fn()
+    end
 end
 
 -- A loot row (LootFrame.xml:7-115): an item or money element has a NameFrame
@@ -143,14 +176,20 @@ GUI.Engine.Register({
     frames = function() return rawget(_G, "LootFrame") end,
     install = function(kit, frame)
         build(kit, frame)
+        local function rows() eachRow(frame, function(row) lootRow(kit, row) end) end
         schedule(kit, tbl(frame.ScrollBox), "Update", "rows", function()
-            eachRow(frame, function(row) lootRow(kit, row) end)
+            rows()
+            afterAnims(kit, frame, rows)
         end)
     end,
     style = function(kit, frame)
-        shell(kit, frame)
-        eachRow(frame, function(row) lootRow(kit, row) end)
+        local function pass()
+            shell(kit, frame)
+            eachRow(frame, function(row) lootRow(kit, row) end)
+        end
+        pass()
         finish(frame)
+        afterAnims(kit, frame, pass)
     end,
 })
 
@@ -174,4 +213,5 @@ GUI.Engine.Register({
     end,
 })
 
-GUI.Loot = { _test = { wins = wins, rows = rows, NINE_PIECES = NINE_PIECES, BG_PIECES = BG_PIECES } }
+GUI.Loot = { _test = { wins = wins, rows = rows, NINE_PIECES = NINE_PIECES, BG_PIECES = BG_PIECES,
+                       SETTLE_TRIES = SETTLE_TRIES } }

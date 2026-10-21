@@ -1972,6 +1972,7 @@ function WoW.makeLoot()
         local function lootRow(kind)
             local r = blizz("Frame", sb.ScrollTarget)
             r._level, r._kind = 3, kind
+            r.ShowAnim = r:CreateAnimationGroup()
             if kind ~= "base" then
                 local item = blizz("Button", r)
                 item._level = 3                                    -- useParentLevel
@@ -2008,10 +2009,35 @@ function WoW.makeLoot()
                 r:Show()
             end
         end)
+        -- The window's ShowAnim and each row's (#109): what a fade did to the
+        -- shell and the rows while they play is undone when they end, as
+        -- measured on 70450 (WoW.lootAnimsDone).
+        lf.ShowAnim = lf:CreateAnimationGroup()
+        local function shellRegions()
+            local list = { lf.NineSlice, lf.Bg }
+            for _, k in ipairs(NINE) do list[#list + 1] = lf.NineSlice[k] end
+            for _, k in ipairs({ "BottomLeft", "BottomRight", "BottomEdge", "TopSection" }) do list[#list + 1] = lf.Bg[k] end
+            for _, r in ipairs(pool) do
+                if r:IsShown() and rawget(r, "NameFrame") then list[#list + 1] = r.NameFrame end
+            end
+            return list
+        end
         luaMethod(lf, "Open", function(self)
             self.ScrollBox:Update()
             self:Show()                                            -- ShowUIPanel
+            WoW.lootSnapshot = {}
+            for _, r in ipairs(shellRegions()) do WoW.lootSnapshot[r] = r._alpha end
+            self.ShowAnim:Play()
+            for _, r in ipairs(pool) do if r:IsShown() and rawget(r, "ShowAnim") then r.ShowAnim:Play() end end
         end)
+        function WoW.lootAnimsDone()
+            WoW.asBlizzard(function()
+                lf.ShowAnim:Stop()
+                for _, r in ipairs(pool) do if rawget(r, "ShowAnim") then r.ShowAnim:Stop() end end
+                for r, a in pairs(WoW.lootSnapshot or {}) do rawset(r, "_alpha", a) end
+                WoW.lootSnapshot = nil
+            end)
+        end
         -- The other overlay-like pieces to keep: the master looter frame.
         local ml = blizz("Frame", lf, "MasterLooterFrame")
         ml._shown = false
