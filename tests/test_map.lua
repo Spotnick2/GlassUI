@@ -65,9 +65,14 @@ eq(#gmax.strokes, 3, "a shaft and a head")
 check(goldIs(gmax.strokes[1]) or (gmax.strokes[1]._color and gmax.strokes[1]._color[2] == gold[2]), "in the accent")
 
 -- Glyph feedback: per button, the close X untouched.
+check(gmax.light ~= nil and not gmax.light:IsShown(), "a hover light on its disc, off at rest")
+eq(gmax.light:GetParent(), gmax.disc, "on the button's disc")
 WoW.asBlizzard(function() MM.MaximizeButton._scripts.OnEnter(MM.MaximizeButton) end)
 eq(gmax.alpha, 1, "hover: the glyph full")
+check(gmax.light:IsShown(), "and its light on (#103)")
 eq(h.closeAlpha, Kit.CLOSE_REST, "the close X not")
+check(not h.closeLight:IsShown(), "nor the close button's light")
+check(not gmin.light:IsShown(), "nor the other glyph button's")
 WoW.asBlizzard(function() MM.MaximizeButton._scripts.OnMouseDown(MM.MaximizeButton) end)
 check(gmax.pushed, "pressed")
 

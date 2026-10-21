@@ -525,6 +525,18 @@ function Kit.PlaceHeader(h)
     if h.header then h.header:SetShown(on) end
 end
 
+-- A white light on a button's disc while hovered (#103: the glyph's 0.85 to
+-- full alone was "not visible at all"), clipped by the disc's own mask: on
+-- the disc host's ARTWORK, over its body, under its rim. The side tabs'.
+Kit.HOVER_LIGHT = 0.2
+local function discLight(host, g)
+    local t = host:CreateTexture(nil, "ARTWORK")
+    t:SetAllPoints(host)
+    t:SetColorTexture(1, 1, 1, Kit.HOVER_LIGHT)
+    if g and g.mask then t:AddMaskTexture(g.mask) end
+    return t
+end
+
 -- A glyph button's strokes (#99), as the close X.
 local function paintGlyph(st)
     local c = accent()
@@ -544,6 +556,7 @@ function Kit.CloseFeedback(h, hover, pushed)
     if not h.closeFrame then return end
     h.hover, h.pushed = hover, pushed
     h.closeAlpha = hover and 1 or Kit.CLOSE_REST
+    if h.closeLight then h.closeLight:SetShown(hover) end
     h.closeFrame:ClearAllPoints()
     h.closeFrame:SetPoint("CENTER", h.close, "CENTER", 0, pushed and -1 or 0)
     Kit.PaintClose(h)
@@ -553,6 +566,7 @@ end
 function Kit.GlyphFeedback(st, hover, pushed)
     st.hover, st.pushed = hover, pushed
     st.alpha = hover and 1 or Kit.CLOSE_REST
+    st.light:SetShown(hover)
     st.frame:ClearAllPoints()
     st.frame:SetPoint("CENTER", st.button, "CENTER", 0, pushed and -1 or 0)
     paintGlyph(st)
@@ -584,7 +598,8 @@ function K:CloseButton(close, h)
     local okW, w = pcall(close.GetWidth, close)
     w = okW and API.Plain(w) or nil
     if type(w) ~= "number" or w <= 0 then w = 24 end
-    h.closeDisc = self:Disc(close, close, { ring = 0, width = w, level = level - 1 })
+    local disc, dg = self:Disc(close, close, { ring = 0, width = w, level = level - 1 })
+    h.closeDisc, h.closeLight = disc, discLight(disc, dg)
     local x = self:Adopt(CreateFrame("Frame", nil, close))
     x:SetSize(w, w)
     x:SetFrameLevel(level + 1)
@@ -632,7 +647,8 @@ function K:GlyphButton(button, h, kind)
     w = okW and API.Plain(w) or nil
     if type(w) ~= "number" or w <= 0 then w = 24 end
     local st = { button = button, alpha = Kit.CLOSE_REST, strokes = {} }
-    st.disc = self:Disc(button, button, { ring = 0, width = w, level = level - 1 })
+    local disc, dg = self:Disc(button, button, { ring = 0, width = w, level = level - 1 })
+    st.disc, st.light = disc, discLight(disc, dg)
     local f = self:Adopt(CreateFrame("Frame", nil, button))
     f:SetSize(w, w)
     f:SetFrameLevel(level + 1)
