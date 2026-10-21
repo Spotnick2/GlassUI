@@ -46,6 +46,9 @@
 --                and an accent X of ours, feedback on our X only.
 --   PortraitDisc the disc behind a portrait's round mask.
 --   FlatShell    PortraitFrameFlatTemplate's NineSlice and Bg faded.
+--   SideTab      a side tab on small glass, the selected one lighter with its
+--                rim in the accent, mirroring a per-window selected reader
+--                (#92, #94); SyncSideTabs re-reads a skin's tabs.
 -- Tracked handles are repainted on Theme.Refresh, gated by their skin.
 --
 -- Widget kinds, each written when the first skin needed it: Shell
@@ -613,14 +616,87 @@ function K:PortraitDisc(frame, opts)
     return (self:Disc(frame, around, { ring = opts.ring, width = opts.width, level = level }))
 end
 
+--------------------------------------------------------------------------------
+-- Side tabs (#92 the guild's, moved here for #94 the character window's)
+--------------------------------------------------------------------------------
+
+Kit.TAB_LIGHT = 0.12
+-- tab -> { kit =, glass =, g =, light =, selected = fn(tab), art = fn(tab) }
+local sideTabs = setmetatable({}, { __mode = "k" })
+Kit.sideTabs = sideTabs
+local sideKits = setmetatable({}, { __mode = "k" })
+
+-- Every side tab of this kit's skin from its own selected reader: the light
+-- and the accent rim on the selected ones, the built rim on the others. It
+-- mirrors; it never writes a selection (GuildSpy's one-frame wait can leave
+-- two checked: both show).
+function Kit.SyncSideTabs(kit)
+    local c = accent()
+    for tab, s in pairs(sideTabs) do
+        if s.kit == kit then
+            local ok, on = pcall(s.selected, tab)
+            on = ok and API.Plain(on) == true
+            s.light:SetShown(on)
+            if s.g then
+                if on then
+                    GUI.Glass.SetSurfaceRim(s.g, c[1], c[2], c[3], 1)
+                else
+                    GUI.Glass.SetSurfaceRim(s.g)
+                end
+            end
+        end
+    end
+end
+
+-- A side tab: our small glass once (parented to it, so it moves and hides
+-- with it), its rim at its own level, a white light; the hooks once.
+-- opts: insets, selected(tab) --> bool, art(tab) --> { regions to fade },
+-- methods (instance methods to post-hook: SetChecked) and scripts (to
+-- HookScript: OnClick, a CheckButton's native toggle), named, never
+-- discovered by calling Blizzard's methods.
+function K:SideTab(tab, opts)
+    if type(tab) ~= "table" then return nil end
+    if not sideTabs[tab] then
+        local glass, g = self:Panel(tab, "small", opts.insets)
+        if g and g.top then g.top:SetFrameLevel(glass:GetFrameLevel()) end
+        local light = glass:CreateTexture(nil, "ARTWORK")
+        light:SetAllPoints(glass)
+        light:SetColorTexture(1, 1, 1, Kit.TAB_LIGHT)
+        if g and g.mask then light:AddMaskTexture(g.mask) end
+        light:Hide()
+        sideTabs[tab] = { kit = self, glass = glass, g = g, light = light, selected = opts.selected, art = opts.art }
+        sideKits[self] = true
+        local kit = self
+        local function relay()
+            if GUI.Engine.Active(kit.key) then GUI.Engine.Run(kit.skin, "tabs", Kit.SyncSideTabs, kit) end
+        end
+        for _, m in ipairs(opts.methods or {}) do hooksecurefunc(tab, m, relay) end
+        for _, sc in ipairs(opts.scripts or {}) do tab:HookScript(sc, relay) end
+    end
+    return sideTabs[tab]
+end
+
+-- A side tab's art faded (the style pass: a restore drops the fades).
+function K:StyleSideTab(tab)
+    local s = sideTabs[tab]
+    if not (s and s.art) then return end
+    local ok, regions = pcall(s.art, tab)
+    if not ok or type(regions) ~= "table" then return end
+    for _, r in pairs(regions) do self:Fade(r) end
+end
+
 -- A tint, an accent or a floor changed: each tracked window's header and
--- close X follow, while its skin is on; the style pass repaints the rest.
+-- close X follow, and each skin's side tabs, while its skin is on; the style
+-- pass repaints the rest.
 GUI.Theme.OnRefresh(function()
     for _, t in ipairs(tracked) do
         if GUI.Engine.Active(t.key) then
             Kit.PlaceHeader(t.h)
             Kit.PaintClose(t.h)
         end
+    end
+    for kit in pairs(sideKits) do
+        if GUI.Engine.Active(kit.key) then Kit.SyncSideTabs(kit) end
     end
 end)
 

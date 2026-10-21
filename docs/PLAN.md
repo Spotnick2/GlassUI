@@ -66,7 +66,7 @@ lines in each TOC are the authoritative list of Forever-only variants (FV below)
 |---|---|---|---|---|
 | Static popups | `StaticPopup1..4` | always | `DefaultDialogPanelTemplate`, `BG.Top`/`BG.Bottom` atlases, no NineSlice | `.Text` (`.text` is nil), `.ButtonContainer.Buttons[n]`, `.EditBox`, `.MoneyInputFrame`, `.ItemFrame` (`GameDialog.xml:51-338`) |
 | Merchant | `MerchantFrame` | always | `ButtonFrameTemplate` | plain; the kit's window-shell pilot |
-| Character sheet | `CharacterFrame` + `PaperDollFrame`, `ReputationFrame`, `SkillsFrame`, `PVPRankFrame`, `TokenFrame`, `StatisticsFrame` | always; Blizzard_TokenUI, Blizzard_Statistics (Forever only) | FV `PortraitFrameBaseTemplate`, six `LargeSideTabButtonTemplate` side tabs (`Camelot\CharacterFrame.xml:403, 574-599`) | every pane is FV |
+| Character sheet | `CharacterFrame` + `PaperDollFrame`, `ReputationFrame`, `SkillsFrame`, `PVPRankFrame`, `TokenFrame`, `StatisticsFrame` | always; Blizzard_Statistics is Forever only (Blizzard_TokenUI loads its Camelot files on Forever) | FV `PortraitFrameBaseTemplate` (no Bg or Inset: the backdrops are the pane hosts), six `LargeSideTabButtonTemplate` side tabs (`Camelot\CharacterFrame.xml:403, 568-605`) | every pane is FV; the slots' click is the protected equip/use path; **the currency pane and its transfer UI stay untouched** (Ellesmere: skinning them taints the warband transfer). Skinned in #94 (docs/CHARACTER.md) |
 | World map | `WorldMapFrame`, `QuestMapFrame` | Blizzard_WorldMap, always | `WorldMapFrameTemplate`, `frameBuffer="true"` | Leatrix Maps rebuilds the border (below); the frame buffer may flatten a child panel (probe) |
 | Bags | `ContainerFrame1..N`, `ContainerFrameCombinedBags` | always | `PortraitFrameFlatTemplate` | opened in combat, so first pass may wait; item buttons are on the use path: alpha only |
 | Tooltips | `GameTooltip`, `ShoppingTooltip1/2`, `ItemRefTooltip`, `EmbeddedItemTooltip` | always | `SharedTooltipTemplate` + `.NineSlice` | hook `SharedTooltip_SetBackdropStyle`, deferred a frame (it fires from secure code); `GameTooltip.StatusBar` is secure and secret: fade only; skip embedded tooltips; no `OnTooltipSetItem` (porting guide :488, :862) |
@@ -140,7 +140,12 @@ lines in each TOC are the authoritative list of Forever-only variants (FV below)
     module's `Header.Text`);
   - the quest timers' title (`QuestTimerFrame.Header.Text`, #73: a `DialogHeaderTemplate`'s Text in
     GameFontNormal; Blizzard only sets its text, `DialogTemplates.lua:10-12`), never its countdowns;
-  - the damage meter's window titles (`DamageMeterTypeDropdown.TypeName`).
+  - the damage meter's window titles (`DamageMeterTypeDropdown.TypeName`);
+  - the character window's list headers (#94, the owner: "more like the quest manager"): the
+    `Name` of each top header in the reputation, skills and statistics lists
+    (`ReputationHeaderTemplate`, `SkillsHeaderTemplate`, `StatisticsHeaderTemplate`: GameFontNormalLeft;
+    their `Initialize` only sets the text, `ReputationFrame.lua:279`, `SkillsFrame.lua:301`,
+    `StatisticsFrame.lua:199`), never an entry's name or value.
 
   The rules:
   - **Through the kit only:** `kit:TextColor(fs, r, g, b)`. It captures the colour Blizzard gave

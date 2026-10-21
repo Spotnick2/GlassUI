@@ -974,6 +974,7 @@ SkinProbeDB.suiteBlocked = 0
 rawset(_G, "ContainerFrame1", nil)
 rawset(_G, "GlassUI", savedGUI4)
 
+do
 -- #90: the game menu as the procedure reads it.
 local savedGUI5 = rawget(_G, "GlassUI")
 local gm = CreateFrame("Frame", "GameMenuFrame", UIParent)
@@ -1076,7 +1077,9 @@ rawset(_G, "SettingsPanel", nil)
 rawset(_G, "GameMenuFrame", nil)
 rawset(_G, "GlassUI", savedGUI5)
 SkinProbeDB.gmSize = nil
+end
 
+do
 -- #92: the guild window as the procedure reads it.
 local savedGUI6 = rawget(_G, "GlassUI")
 local gcf = CreateFrame("Frame", "CommunitiesFrame", UIParent)
@@ -1133,6 +1136,113 @@ okD, whyD = T.gdOn("t")()
 check(not okD and whyD:find("not shown", 1, true), "the window hidden fails")
 rawset(_G, "CommunitiesFrame", nil)
 rawset(_G, "GlassUI", savedGUI6)
+end
+
+do
+-- #94: the character window as the procedure reads it.
+local savedGUI7 = rawget(_G, "GlassUI")
+local ccf = CreateFrame("Frame", "CharacterFrame", UIParent)
+ccf.NineSlice = CreateFrame("Frame", nil, ccf)
+ccf.NineSlice:SetAlpha(0)
+local cslots, cheaders = {}, {}
+local function cslot(name)
+    local b = CreateFrame("Button", "Character" .. name .. "Slot", ccf)
+    b.BorderFrame = CreateFrame("Frame", nil, b)
+    b.BorderFrame:SetAlpha(0)
+    b._normal = b:CreateTexture()
+    b._normal:SetAlpha(0)
+    cslots[b] = { glass = CreateFrame("Frame", nil, b) }
+    return b
+end
+local head, chest = cslot("Head"), cslot("Chest")
+local cstats = CreateFrame("Frame", "CharacterStatsPaneScrollBox", ccf)
+cstats.ScrollBox = CreateFrame("Frame", nil, cstats)
+cstats.ScrollBox.ScrollTarget = CreateFrame("Frame", nil, cstats.ScrollBox)
+local hrow = CreateFrame("Frame", nil, cstats.ScrollBox.ScrollTarget)
+hrow.Background, hrow.Title = hrow:CreateTexture(), hrow:CreateFontString()
+hrow.Background:SetAlpha(0)
+cheaders[hrow] = { glass = CreateFrame("Frame", nil, hrow) }
+local srow = CreateFrame("Frame", nil, cstats.ScrollBox.ScrollTarget)
+srow.Background, srow.Label = srow:CreateTexture(), srow:CreateFontString()
+local ckit = { key = "character" }
+local ctab = CreateFrame("Frame", nil, ccf)
+ctab.SelectedTexture = ctab:CreateTexture()
+local sideTabs = { [ctab] = { kit = ckit, light = ctab:CreateTexture(), selected = function(t) return t.SelectedTexture:IsShown() end } }
+ctab.SelectedTexture:Hide()
+sideTabs[ctab].light:Hide()
+rawset(_G, "GlassUI", { Character = { _test = { slots = cslots, headers = cheaders } }, Kit = { sideTabs = sideTabs } })
+SkinProbeDB.suiteBlocked = 0
+local okH, whyH = T.chOn("t", { paperdoll = true })()
+check(okH, "the slots, a header, the tab mirrored: pass: " .. tostring(whyH))
+eq(SkinProbeDB.results["CH.t"].slots, 2, "two slots counted")
+eq(SkinProbeDB.results["CH.t"].headers, 1, "one header: the stat row isn't one")
+head._normal:SetAlpha(1)
+okH, whyH = T.chOn("t", { paperdoll = true })()
+check(not okH and whyH:find("NormalTexture back on 1 (Head)", 1, true), "the NormalTexture gate: a fade that didn't hold fails, named")
+check(T.chOn("t")(), "but not read off the paper doll")
+head._normal:SetAlpha(0)
+chest.BorderFrame:SetAlpha(1)
+okH, whyH = T.chOn("t", { paperdoll = true })()
+check(not okH and whyH:find("slot frames faded 1 of 2", 1, true), "a slot frame left fails")
+chest.BorderFrame:SetAlpha(0)
+cslots[chest].glass:Hide()
+okH, whyH = T.chOn("t", { paperdoll = true })()
+check(not okH and whyH:find("wells 1 of 2", 1, true), "a slot without its well fails")
+cslots[chest].glass:Show()
+hrow.Background:SetAlpha(1)
+okH, whyH = T.chOn("t", { paperdoll = true })()
+check(not okH and whyH:find("headers 0 of 1", 1, true), "a header left fails")
+hrow.Background:SetAlpha(0)
+sideTabs[ctab].light:Show()
+okH, whyH = T.chOn("t", { paperdoll = true })()
+check(not okH and whyH:find("tabs mirrored 0 of 1", 1, true), "a tab lit but not selected fails")
+sideTabs[ctab].light:Hide()
+ccf.NineSlice:SetAlpha(1)
+okH, whyH = T.chOn("t")()
+check(not okH and whyH:find("shell 1", 1, true), "the shell left fails")
+ccf.NineSlice:SetAlpha(0)
+SkinProbeDB.suiteBlocked = 1
+okH, whyH = T.chOn("t")()
+check(not okH and whyH:find("1 blocked", 1, true), "a blocked action fails")
+SkinProbeDB.suiteBlocked = 0
+okH, whyH = T.chOn("t", { combat = true })()
+check(not okH and whyH:find("combat false", 1, true), "combat wanted, not in combat: fails")
+-- The list panes' headers.
+local skills = CreateFrame("Frame", "SkillsFrame", ccf)
+skills.ScrollBox = CreateFrame("Frame", nil, skills)
+skills.ScrollBox.ScrollTarget = CreateFrame("Frame", nil, skills.ScrollBox)
+local lh = CreateFrame("Button", nil, skills.ScrollBox.ScrollTarget)
+local lbar = lh:CreateTexture(nil, "BACKGROUND")
+lh.StateIcon, lh.Name = lh:CreateTexture(nil, "BORDER"), lh:CreateFontString()
+local entry = CreateFrame("Button", nil, skills.ScrollBox.ScrollTarget)
+entry.Content = CreateFrame("Frame", nil, entry)
+lbar:SetAlpha(0)
+lh.StateIcon:SetDesaturated(true)
+cheaders[lh] = { glass = CreateFrame("Frame", nil, lh) }
+okH, whyH = T.chOn("t", { lists = true })()
+check(okH, "a list header in glass: pass: " .. tostring(whyH))
+eq(SkinProbeDB.results["CH.t"].paneHeaders, 1, "one list header: the entry isn't one")
+lbar:SetAlpha(1)
+okH, whyH = T.chOn("t")()
+check(not okH and whyH:find("list headers 0 of 1", 1, true), "its bronze bar back fails")
+lbar:SetAlpha(0)
+lh.StateIcon:SetDesaturated(false)
+okH, whyH = T.chOn("t")()
+check(not okH and whyH:find("list headers 0 of 1", 1, true), "its +/- untinted fails")
+lh.StateIcon:SetDesaturated(true)
+cheaders[lh].glass:Hide()
+okH, whyH = T.chOn("t")()
+check(not okH and whyH:find("list headers 0 of 1", 1, true), "its bar hidden fails")
+cheaders[lh].glass:Show()
+skills:Hide()
+okH, whyH = T.chOn("t", { lists = true })()
+check(not okH and whyH:find("no list header shown", 1, true), "lists wanted, none shown: fails")
+check(T.chOn("t")(), "but not otherwise")
+for _, n in ipairs({ "CharacterFrame", "CharacterHeadSlot", "CharacterChestSlot", "CharacterStatsPaneScrollBox", "SkillsFrame" }) do
+    rawset(_G, n, nil)
+end
+rawset(_G, "GlassUI", savedGUI7)
+end
 
 -- #56 discovery: Questie's tracker and RestedXP's window and arrow.
 -- When each frame first exists: the first place it was seen is kept.

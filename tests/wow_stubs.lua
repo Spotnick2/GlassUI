@@ -1449,6 +1449,252 @@ function WoW.clickTab(tab)
 end
 function WoW.showGuild() WoW.asBlizzard(function() CommunitiesFrame:Show() end) end
 function WoW.hideGuild() WoW.asBlizzard(function() CommunitiesFrame:Hide() end) end
+
+-- Forever's character window (#94, Camelot\CharacterFrame.xml and
+-- PaperDollFrame.xml, origin/forever 70450): PortraitFrameBaseTemplate (no Bg
+-- or Inset); the two pane hosts with their own art (the right one's StoneBg
+-- and its divider child); the six large side tabs (Frames whose mixin
+-- SetChecked shows SelectedTexture); the paper doll's level strip, model
+-- background, slots (BorderFrame, NormalTexture, IconBorder) and the ammo
+-- slot (its own BACKGROUND ring, an arrow child); the stats wrapper and its
+-- inner list, whose Update acquires header rows (Background + Title) and stat
+-- rows (Background + Label + Value) from WoW.statRows; the pet list; the four
+-- sidebar CheckButtons; the currency pane (TokenFrame: its rows and transfer
+-- toggle record any addon touch in WoW.currencyTouches). Hidden.
+WoW.statRows = { "header", "stat", "stat", "header", "stat", "stat", "stat" }
+WoW.paneRows = { ReputationFrame = { "header", "entry", "entry", "header", "sub", "entry" },
+                 SkillsFrame = { "header", "entry", "header", "entry" },
+                 StatisticsFrame = { "header", "header", "entry", "sub", "entry" } }
+local function regionOn(parent, wtype, layer)
+    local r = blizz(wtype, parent, nil, layer)
+    table.insert(parent._regions, r)
+    return r
+end
+
+local function largeTab(parent)
+    local t = blizz("Frame", parent)
+    t._width, t._height, t._level = 43, 55, 20
+    t.Background = blizz("Texture", t, nil, "BACKGROUND")
+    t.Icon = blizz("Texture", t, nil, "ARTWORK")
+    t.SelectedTexture = blizz("Texture", t, nil, "OVERLAY")
+    t.SelectedTexture._shown = false
+    t.TabGlow = blizz("Texture", t, nil, "OVERLAY")
+    -- SidePanelTabButtonMixin:SetChecked (SharedUIPanelTemplates.lua:391-401).
+    luaMethod(t, "SetChecked", function(self, checked) self.SelectedTexture:SetShown(checked) end)
+    return t
+end
+
+local function slotButton(parent, name)
+    local b = blizz("Button", parent, name)
+    b._width, b._height, b._level = 37, 37, 60
+    b.icon = blizz("Texture", b, nil, "BORDER")
+    b.IconBorder = blizz("Texture", b, nil, "OVERLAY")
+    b._normal = blizz("Texture", b, nil, "ARTWORK")
+    b.BorderFrame = blizz("Frame", b)
+    regionOn(b.BorderFrame, "Texture", "BACKGROUND")
+    return b
+end
+
+function WoW.makeCharacter()
+    WoW.asBlizzard(function()
+        local cf = blizz("Frame", UIParent, "CharacterFrame")
+        cf._shown, cf._level, cf._width, cf._height = false, 10, 631, 484
+        cf.NineSlice = nineSlice(cf)
+        cf.PortraitContainer = blizz("Frame", cf)
+        cf.PortraitContainer._level = 400
+        cf.PortraitContainer.portrait = blizz("Texture", cf.PortraitContainer, "CharacterFramePortrait", "OVERLAY")
+        cf.PortraitContainer.portrait._width = 62
+        cf.PortraitContainer.CircleMask = blizz("MaskTexture", cf.PortraitContainer)
+        cf.PortraitContainer.CircleMask._width = 58
+        cf.TitleContainer = blizz("Frame", cf)
+        cf.TitleContainer.TitleText = blizz("FontString", cf.TitleContainer, nil, "OVERLAY")
+        local cb = blizz("Button", cf, "CharacterFrameCloseButton")
+        cb._level, cb._width, cb._height = 510, 24, 24
+        for key, atlas in pairs({ _normal = "RedButton-Exit", _pushed = "RedButton-exit-pressed",
+                                  _disabled = "RedButton-Exit-Disabled", _highlight = "RedButton-Highlight" }) do
+            cb[key] = blizz("Texture", cb)
+            cb[key]._atlas = atlas
+        end
+        cf.CloseButton = cb
+        local left = blizz("Frame", cf, "CharacterFrameLeftPaneHost")
+        left._level = 11
+        regionOn(left, "Texture", "BACKGROUND")
+        cf.LeftPaneHost = left
+        local right = blizz("Frame", cf, "CharacterFrameRightPaneHost")
+        right._level = 11
+        regionOn(right, "Texture", "BACKGROUND")
+        right.StoneBg = regionOn(right, "Texture", "BORDER")
+        local divider = blizz("Frame", right)
+        divider._level = 505
+        regionOn(divider, "Texture", "OVERLAY")
+        cf.RightPaneHost = right
+        cf.RightPaneToggleButton = blizz("Button", cf)
+        cf.ModeTabs = blizz("Frame", cf)
+        cf.ModeTabs.Tabs = {}
+        for i = 1, 6 do cf.ModeTabs.Tabs[i] = largeTab(cf.ModeTabs) end
+        -- The paper doll.
+        local pd = blizz("Frame", cf, "PaperDollFrame")
+        pd._level = 10
+        local strip = blizz("Frame", pd)
+        strip._level = 50
+        strip.TopBackgroundStrip = blizz("Texture", strip, nil, "BACKGROUND")
+        strip.TopBackgroundStripBottomEdge = blizz("Texture", strip, nil, "BORDER")
+        pd.TopBackgroundStripHost = strip
+        local model = blizz("ModelScene", pd, "CharacterModelScene")
+        model._level = 50
+        for _, k in ipairs({ "BackgroundTopLeft", "BackgroundTopRight", "BackgroundBotLeft", "BackgroundBotRight",
+                             "BackgroundOverlay" }) do
+            model[k] = blizz("Texture", model, nil, "BACKGROUND")
+        end
+        model.ControlFrame = blizz("Frame", model)
+        for _, n in ipairs({ "Head", "Neck", "Shoulder", "Back", "Chest", "Shirt", "Tabard", "Wrist", "Hands",
+                             "Waist", "Legs", "Feet", "Finger0", "Finger1", "Trinket0", "Trinket1", "MainHand",
+                             "SecondaryHand", "Ranged" }) do
+            slotButton(pd, "Character" .. n .. "Slot")
+        end
+        local ammo = blizz("Button", pd, "CharacterAmmoSlot")
+        ammo._width, ammo._height, ammo._level = 20, 20, 60
+        regionOn(ammo, "Texture", "BACKGROUND")
+        ammo.iconTexture = regionOn(ammo, "Texture", "BORDER")      -- $parentIconTexture
+        ammo._normal = blizz("Texture", ammo, nil, "ARTWORK")
+        local arrow = blizz("Frame", ammo)
+        regionOn(arrow, "Texture", "OVERLAY")
+        ammo.arrowFrame = arrow
+        -- The stats wrapper, its inner list, the pet list.
+        local stats = blizz("Frame", cf, "CharacterStatsPaneScrollBox")
+        stats._level = 12
+        stats.Border = blizz("Texture", stats, nil, "BORDER")
+        stats.ClassBackground = blizz("Texture", stats, nil, "BACKGROUND")
+        local list = blizz("Frame", stats)
+        list._level = 13
+        list.ScrollTarget = blizz("Frame", list)
+        stats.ScrollBox = list
+        stats.ScrollBar = blizz("Frame", stats)
+        local pool = {}
+        WoW.statPool = pool
+        luaMethod(list, "Update", function(self)
+            for _, r in ipairs(pool) do r:Hide() end
+            for i, kind in ipairs(WoW.statRows) do
+                local r = pool[i]
+                if not r or r._kind ~= kind then
+                    r = blizz("Frame", self.ScrollTarget)
+                    r._kind = kind
+                    r.Background = blizz("Texture", r, nil, "BACKGROUND")
+                    if kind == "header" then
+                        r.Title = blizz("FontString", r, nil, "OVERLAY")
+                    else
+                        r.Label = blizz("FontString", r, nil, "OVERLAY")
+                        r.Value = blizz("FontString", r, nil, "OVERLAY")
+                    end
+                    pool[i] = r
+                end
+                r:Show()
+            end
+        end)
+        local pet = blizz("Frame", cf, "CharacterStatsPanePetScrollBox")
+        pet.Border = blizz("Texture", pet, nil, "BORDER")
+        pet.ScrollBox = blizz("Frame", pet)
+        pet.ScrollBox.ScrollTarget = blizz("Frame", pet.ScrollBox)
+        local prow = blizz("Frame", pet.ScrollBox.ScrollTarget)
+        prow.Background = blizz("Texture", prow, nil, "BACKGROUND")
+        prow.Title = blizz("FontString", prow, nil, "OVERLAY")
+        WoW.petHeader = prow
+        for i = 1, 4 do
+            local t = blizz("CheckButton", cf, "PaperDollSidebarTab" .. i)
+            t._width, t._height, t._level = 33, 35, 20
+            t.Icon = regionOn(t, "Texture", "BACKGROUND")
+            regionOn(t, "Texture", "BORDER")
+            t._checkedTex = blizz("Texture", t, nil, "OVERLAY")
+            t._highlight = blizz("Texture", t, nil, "HIGHLIGHT")
+        end
+        -- The list panes (reputation, skills, statistics): their lists acquire
+        -- top headers (an unnamed BACKGROUND bar and HIGHLIGHT copy, StateIcon,
+        -- Name), entries (a Content) and sub-headers (a Content and a
+        -- ToggleCollapseButton) from WoW.paneRows[pane] at each Update.
+        WoW.panePools = {}
+        for _, name in ipairs({ "ReputationFrame", "SkillsFrame", "StatisticsFrame" }) do
+            local pane = blizz("Frame", cf, name)
+            pane._shown = false
+            local plist = blizz("Frame", pane)
+            plist.ScrollTarget = blizz("Frame", plist)
+            pane.ScrollBox = plist
+            local ppool = {}
+            WoW.panePools[name] = ppool
+            luaMethod(plist, "Update", function(self)
+                for _, r in ipairs(ppool) do r:Hide() end
+                for i, kind in ipairs(WoW.paneRows[name]) do
+                    local r = ppool[i]
+                    if not r or r._kind ~= kind then
+                        r = blizz("Button", self.ScrollTarget)
+                        r._kind = kind
+                        if kind == "header" then
+                            regionOn(r, "Texture", "BACKGROUND")
+                            regionOn(r, "Texture", "HIGHLIGHT")
+                            r.StateIcon = regionOn(r, "Texture", "BORDER")
+                            r.Name = blizz("FontString", r, nil, "OVERLAY")
+                            r.Name._textColor = { 1, 0.82, 0, 1 }
+                        else
+                            r.Content = blizz("Frame", r)
+                            r.Content.Name = blizz("FontString", r.Content, nil, "OVERLAY")
+                            if kind == "sub" then
+                                local t = blizz("Button", r)
+                                t._normal = blizz("Texture", t)
+                                t._pushed = blizz("Texture", t)
+                                r.ToggleCollapseButton = t
+                            end
+                        end
+                        ppool[i] = r
+                    end
+                    -- Initialize: the text and the icon's atlas only.
+                    if kind == "header" then r.StateIcon:SetAtlas("common-button-list-minus") end
+                    if kind == "sub" then r.ToggleCollapseButton._normal:SetAtlas("campaign_headericon_open") end
+                    r:Show()
+                end
+            end)
+        end
+        -- The currency pane: every touch from addon code recorded.
+        local token = blizz("Frame", cf, "TokenFrame")
+        token._shown = false
+        token.ScrollBox = blizz("Frame", token)
+        token.Row = blizz("Button", token.ScrollBox)
+        token.Row.Background = blizz("Texture", token.Row, nil, "BACKGROUND")
+        token.TransferToggle = blizz("Button", token)
+        WoW.currencyTouches = {}
+        for _, f in ipairs({ token, token.ScrollBox, token.Row, token.Row.Background, token.TransferToggle }) do
+            for _, m in ipairs({ "SetAlpha", "HookScript", "SetVertexColor", "Hide", "SetPoint" }) do
+                local real = f[m]
+                rawset(f, m, function(self, ...)
+                    if not WoW.inBlizzard then table.insert(WoW.currencyTouches, m) end
+                    return real(self, ...)
+                end)
+            end
+        end
+        WoW.snapshot()
+    end)
+end
+
+function WoW.showCharacter()
+    WoW.asBlizzard(function()
+        CharacterFrame:Show()
+        CharacterFrame.ModeTabs.Tabs[1]:SetChecked(true)
+        PaperDollSidebarTab1:SetChecked(true)
+        CharacterStatsPaneScrollBox.ScrollBox:Update()
+    end)
+end
+function WoW.hideCharacter() WoW.asBlizzard(function() CharacterFrame:Hide() end) end
+-- A list pane shown (CharacterFrame.lua's ShowSubFrame), its list filled.
+function WoW.characterPane(name)
+    WoW.asBlizzard(function()
+        for _, n in ipairs({ "ReputationFrame", "SkillsFrame", "StatisticsFrame" }) do _G[n]:SetShown(n == name) end
+        if name then _G[name].ScrollBox:Update() end
+    end)
+end
+-- A mode chosen (CharacterFrame.lua:217-242): each tab's SetChecked.
+function WoW.characterMode(i)
+    WoW.asBlizzard(function()
+        for n, t in ipairs(CharacterFrame.ModeTabs.Tabs) do t:SetChecked(n == i) end
+    end)
+end
 function WoW.hideMerchant() WoW.asBlizzard(function() MerchantFrame:Hide() end) end
 
 --------------------------------------------------------------------------------

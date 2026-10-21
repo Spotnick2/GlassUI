@@ -1833,6 +1833,241 @@ skinChecks.gdState, skinChecks.gdOn = gdState, gdOn
 end
 
 --------------------------------------------------------------------------------
+-- The character window (#94, docs/CHARACTER.md): each slot's well and frame,
+-- the NormalTexture fade gate (its alpha after equips, unequips, recolours),
+-- the stats headers, the mode and sidebar tabs mirrored, the protected path
+-- under the taint log, IsProtected/IsForbidden on the slots and our wells.
+-- Saved as CH.<label>.
+--------------------------------------------------------------------------------
+
+do
+local CH_SLOTS = { "Head", "Neck", "Shoulder", "Back", "Chest", "Shirt", "Tabard", "Wrist", "Hands", "Waist",
+                   "Legs", "Feet", "Finger0", "Finger1", "Trinket0", "Trinket1", "MainHand", "SecondaryHand", "Ranged" }
+
+local function chState(label)
+    local G = glassUI()
+    local T = G and G.Character and G.Character._test
+    local K = G and G.Kit
+    local cf = frameByName("CharacterFrame")
+    local rec = { slots = 0, wells = 0, framesFaded = 0, normalBack = 0, headers = 0, headersRight = 0,
+                  tabs = 0, mirrored = 0, protected = 0 }
+    rec.shown = cf ~= nil and seen(cf)
+    local okC, c = pcall(InCombatLockdown)
+    rec.combat = okC and plain(c) == true
+    if cf then
+        local okA, a = call(cf.NineSlice, "GetAlpha")
+        rec.shell = okA and plain(a) or nil
+    end
+    local backs = {}
+    for _, n in ipairs(CH_SLOTS) do
+        local b = frameByName("Character" .. n .. "Slot")
+        if b and seen(b) then
+            rec.slots = rec.slots + 1
+            local s = T and T.slots[b]
+            if s and seen(s.glass) then rec.wells = rec.wells + 1 end
+            local okF, fa = call(b.BorderFrame, "GetAlpha")
+            if okF and plain(fa) == 0 then rec.framesFaded = rec.framesFaded + 1 end
+            local okN, normal = call(b, "GetNormalTexture")
+            local okNA, na = call(okN and normal or nil, "GetAlpha")
+            if okNA and plain(na) ~= 0 then rec.normalBack = rec.normalBack + 1; backs[#backs + 1] = n end
+            for _, f in ipairs({ b, s and s.glass }) do
+                local okP, pr = call(f, "IsProtected")
+                local okX, fb = call(f, "IsForbidden")
+                if (okP and plain(pr)) or (okX and plain(fb)) then rec.protected = rec.protected + 1 end
+            end
+        end
+    end
+    rec.normalBackSlots = table.concat(backs, ",")
+    local stats = frameByName("CharacterStatsPaneScrollBox")
+    local target = stats and type(stats.ScrollBox) == "table" and stats.ScrollBox.ScrollTarget
+    if target and seen(stats) then
+        for _, row in ipairs({ target:GetChildren() }) do
+            if type(row.Background) == "table" and type(row.Title) == "table" and seen(row) then
+                rec.headers = rec.headers + 1
+                local okB, ba = call(row.Background, "GetAlpha")
+                if okB and plain(ba) == 0 and T and T.headers[row] and seen(T.headers[row].glass) then
+                    rec.headersRight = rec.headersRight + 1
+                end
+            end
+        end
+    end
+    for tab, st in pairs(K and K.sideTabs or {}) do
+        if T and st.kit and st.kit.key == "character" and seen(tab) then
+            rec.tabs = rec.tabs + 1
+            local okS, on = pcall(st.selected, tab)
+            if okS and (plain(on) == true) == (st.light:IsShown() == true) then rec.mirrored = rec.mirrored + 1 end
+        end
+    end
+    -- The list panes' top headers (a Name and a StateIcon): the glass bar
+    -- shown, the bronze bar (BACKGROUND) faded, the +/- desaturated (tinted).
+    rec.paneHeaders, rec.paneRight = 0, 0
+    for _, name in ipairs({ "ReputationFrame", "SkillsFrame", "StatisticsFrame" }) do
+        local pane = frameByName(name)
+        local pt = pane and seen(pane) and type(pane.ScrollBox) == "table" and pane.ScrollBox.ScrollTarget
+        if pt then
+            for _, row in ipairs({ pt:GetChildren() }) do
+                if type(row.Name) == "table" and type(row.StateIcon) == "table" and seen(row) then
+                    rec.paneHeaders = rec.paneHeaders + 1
+                    local fadedBar = true
+                    for _, r in ipairs({ row:GetRegions() }) do
+                        local okL, l = call(r, "GetDrawLayer")
+                        local okA, a = call(r, "GetAlpha")
+                        if okL and plain(l) == "BACKGROUND" and not (okA and plain(a) == 0) then fadedBar = false end
+                    end
+                    local okD, d = call(row.StateIcon, "IsDesaturated")
+                    if fadedBar and okD and plain(d) == true and T and T.headers[row] and seen(T.headers[row].glass) then
+                        rec.paneRight = rec.paneRight + 1
+                    end
+                end
+            end
+        end
+    end
+    rec.blocked = type(SkinProbeDB) == "table" and SkinProbeDB.suiteBlocked or 0
+    say("CH " .. label .. ": shown " .. tostring(rec.shown) .. ", combat " .. tostring(rec.combat) .. ", slots "
+        .. rec.wells .. "/" .. rec.slots .. " wells, frames faded " .. rec.framesFaded .. ", normal back "
+        .. rec.normalBack .. " (" .. rec.normalBackSlots .. "), headers " .. rec.headersRight .. "/" .. rec.headers
+        .. ", tabs mirrored " .. rec.mirrored .. "/" .. rec.tabs .. ", list headers " .. rec.paneRight .. "/"
+        .. rec.paneHeaders .. ", protected " .. rec.protected .. ", blocked "
+        .. rec.blocked)
+    record("CH." .. label, rec)
+    return rec
+end
+
+-- want.paperdoll: the slots, the headers and the NormalTexture gate are read
+-- (another pane hides them).
+local function chOn(label, want)
+    want = want or {}
+    return function()
+        local r = chState(label)
+        local bad = {}
+        local function want_(cond, why) if not cond then bad[#bad + 1] = why end end
+        want_(r.shown, "the window not shown")
+        if want.combat ~= nil then want_(r.combat == want.combat, "combat " .. tostring(r.combat)) end
+        want_(r.shell == 0, "shell " .. tostring(r.shell))
+        want_(r.mirrored == r.tabs and r.tabs > 0, "tabs mirrored " .. r.mirrored .. " of " .. r.tabs)
+        if want.paperdoll then
+            want_(r.slots > 0 and r.wells == r.slots, "wells " .. r.wells .. " of " .. r.slots)
+            want_(r.framesFaded == r.slots, "slot frames faded " .. r.framesFaded .. " of " .. r.slots)
+            want_(r.normalBack == 0, "NormalTexture back on " .. r.normalBack .. " (" .. r.normalBackSlots .. ")")
+            want_(r.headersRight == r.headers, "headers " .. r.headersRight .. " of " .. r.headers)
+        end
+        want_(r.paneRight == r.paneHeaders, "list headers " .. r.paneRight .. " of " .. r.paneHeaders)
+        if want.lists then want_(r.paneHeaders > 0, "no list header shown") end
+        want_(r.blocked == 0, r.blocked .. " blocked")
+        return #bad == 0, #bad == 0 and "as Blizzard shows it" or table.concat(bad, "; ")
+    end
+end
+
+local function chSwitch(on)
+    local G = glassUI()
+    if not (G and G.Engine) then return false, "Glass UI not loaded" end
+    return G.Engine.SetEnabled("character", on)
+end
+
+local function charShown()
+    local cf = frameByName("CharacterFrame")
+    return cf ~= nil and seen(cf)
+end
+
+Probe:Steps("character", {
+    title = "Glass UI: the character window in glass (#94)",
+    rev = 2,
+    { text = "Turns on script errors and the taint log, and counts blocked actions from now.", auto = true,
+      run = function()
+          if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
+          return setCVar("scriptErrors", "1"), setCVar("taintLog", "1")
+      end },
+    { text = "Type /reload, then don't open the character window before the next step: its first opening has to "
+          .. "be in combat.", reload = true },
+    { text = "Get into combat, then press C. This step goes on by itself once the window is open in combat; a "
+          .. "screenshot is taken.", timeout = 180, screenshot = "character, first opening in combat",
+      wait = function()
+          local okC, c = pcall(InCombatLockdown)
+          local fighting = okC and plain(c) == true
+          return charShown() and fighting, fighting and "waiting for the window" or "waiting for combat"
+      end, check = chOn("first in combat", { combat = true, paperdoll = true }) },
+    { text = "Still in combat if you can, use an item from a slot (a trinket, or a quest item worn), then press "
+          .. "Next.", check = chOn("used in combat", { paperdoll = true }) },
+    { text = "Out of combat, press Next for a screenshot of the paper doll.", screenshot = "character",
+      check = chOn("paper doll", { combat = false, paperdoll = true }) },
+    { text = "Does it read as the mockup: dark glass, the smoky title, the portrait's disc, the slots as glass wells "
+          .. "round the model, the stats in a recessed pane with glass headers, the side tabs on glass with the "
+          .. "selected one rimmed in gold? Anything off: the Note.", ask = true },
+    -- The slots and the NormalTexture gate.
+    { text = "Unequip an item (drag it to your bags), equip it again, and swap a weapon if you can. Press Next.",
+      check = chOn("equips", { paperdoll = true }) },
+    { text = "Hold Alt over a slot (the equipment flyout), and Shift-click an item (its link in chat). Press Next.",
+      check = chOn("flyout", { paperdoll = true }) },
+    { text = "Drag the model to turn it, then use its zoom, rotate and reset buttons. Press Next.",
+      check = chOn("model", { paperdoll = true }) },
+    { text = "Scroll the stats down and up (if they scroll). Press Next.", check = chOn("stats", { paperdoll = true }) },
+    { text = "Did everything so far work, with no 'blocked' or 'interface action failed' message?", ask = true },
+    -- The tabs and the other panes.
+    { text = "Click each tab at the top of the right pane (stats, equipment manager, titles), then back to the stats. "
+          .. "Press Next.", check = chOn("sidebar", { paperdoll = true }) },
+    { text = "Click the Reputation side tab (on the right). Press Next.", screenshot = "character, reputation",
+      check = chOn("reputation") },
+    { text = "The Skills tab, then the PvP tab. Press Next on the PvP tab.", screenshot = "character, pvp",
+      check = chOn("pvp") },
+    { text = "The Currency tab. If a warband currency transfer is available, open its log and its transfer, then "
+          .. "close them. Press Next.", screenshot = "character, currency", check = chOn("currency") },
+    { text = "The Statistics tab. Press Next.", screenshot = "character, statistics", check = chOn("statistics") },
+    { text = "Back to the character tab. Collapse the right pane (the arrow), close the window, open it again (C), "
+          .. "then expand the pane. Press Next.", screenshot = "character, collapsed and back",
+      check = chOn("collapse", { paperdoll = true }) },
+    { text = "Optional (Skip if no pet): the pet tab at the top of the right pane, then back. Press Next.",
+      check = chOn("pet") },
+    -- Off and on.
+    { text = "With the window open: switches the skin off (Blizzard's look).", button = "Skin off",
+      run = function() return chSwitch(false) end, screenshot = "character, skin off",
+      check = function()
+          local r = chState("off")
+          local ok = r.shown and r.shell == 1 and r.wells == 0 and r.framesFaded == 0
+          return ok, ok and "Blizzard's look, nothing of ours" or "something of ours while off"
+      end },
+    { text = "Click another side tab, then the Character tab again (the paper doll: this check reads the slots), "
+          .. "then switch the skin on.", button = "Skin on",
+      run = function() return chSwitch(true) end, screenshot = "character, on again",
+      check = chOn("on again", { paperdoll = true }) },
+    taintOff(),
+    { text = "Type /reload to save the results.", reload = true },
+})
+
+-- The list panes' headers in the tracker's look (the owner, run 1).
+Probe:Steps("characterlists", {
+    title = "Glass UI: the character window's list headers (#94)",
+    { text = "Counts blocked actions from now, with the taint log on.", auto = true,
+      run = function()
+          if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
+          return setCVar("scriptErrors", "1"), setCVar("taintLog", "1")
+      end },
+    { text = "Press C, then the Reputation tab. Press Next.", screenshot = "character lists, reputation",
+      check = chOn("lists reputation", { lists = true }) },
+    { text = "Collapse a header (click it) and expand it again; hover over one. Press Next.",
+      check = chOn("lists collapse", { lists = true }) },
+    { text = "The Skills tab. Press Next.", screenshot = "character lists, skills",
+      check = chOn("lists skills", { lists = true }) },
+    { text = "The Statistics tab: expand a category and one of its sub-categories (the small square), scroll down. "
+          .. "Press Next.", screenshot = "character lists, statistics", check = chOn("lists statistics", { lists = true }) },
+    { text = "Do the headers read like the quest tracker's: a glass bar, the name and the +/- in the accent, no bronze? "
+          .. "Anything off: the Note.", ask = true },
+    { text = "Still on Statistics: switches the skin off (Blizzard's bronze headers).", button = "Skin off",
+      run = function() return chSwitch(false) end,
+      check = function()
+          local r = chState("lists off")
+          local ok = r.shown and r.paneHeaders > 0 and r.paneRight == 0
+          return ok, ok and "Blizzard's headers" or ("list headers ours " .. r.paneRight .. " of " .. r.paneHeaders)
+      end },
+    { text = "Switches the skin on again.", button = "Skin on", run = function() return chSwitch(true) end,
+      screenshot = "character lists, on again", check = chOn("lists on again", { lists = true }) },
+    taintOff(),
+    { text = "Type /reload to save the results.", reload = true },
+})
+
+skinChecks.chState, skinChecks.chOn = chState, chOn
+end
+
+--------------------------------------------------------------------------------
 -- The suite theme (#24, docs/SUITE.md "In-game validation", S.1-S.8): Glass
 -- UI coordinating Glass Unit Frames and Glass Raid Frames. It reads only
 -- public state: Glass UI's Suite record, each addon's glass instance (its
@@ -3712,7 +3947,7 @@ boot:SetScript("OnEvent", function(_, _, name)
     say("loaded (" .. SkinProbeDB.loads .. " loads). /fp skin for the commands, /fp steps skin wave1 to start")
 end)
 
-NS._test = { gdState = skinChecks.gdState, gdOn = skinChecks.gdOn, gmState = skinChecks.gmState, gmOn = skinChecks.gmOn, settingsReturn = skinChecks.settingsReturn, bagsState = skinChecks.bagsState,
+NS._test = { chState = skinChecks.chState, chOn = skinChecks.chOn, gdState = skinChecks.gdState, gdOn = skinChecks.gdOn, gmState = skinChecks.gmState, gmOn = skinChecks.gmOn, settingsReturn = skinChecks.settingsReturn, bagsState = skinChecks.bagsState,
     bagsOn = skinChecks.bagsOn, both = both, closeState = closeState, closeOn = closeOn, headerTry = headerTry, layoutState = layoutState, layoutOn = layoutOn, Probe = Probe, state = state, tree = tree, fade = fade, slashOwners = slashOwners,
              gamepad = gamepad, panelsOn = panelsOn, panelsOff = panelsOff, borderFade = borderFade,
              borderRestore = borderRestore, gradientOn = gradientOn, gradientOff = gradientOff,

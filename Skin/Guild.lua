@@ -24,9 +24,8 @@ local Kit = GUI.Kit
 local TABS = { "ChatTab", "RosterTab", "GuildBenefitsTab", "GuildInfoTab", "GuildPreferredPlaySettingsTab" }
 -- The community list's art (CommunitiesList.xml:136-247).
 local LIST_ART = { "Bg", "TopFiligree", "BottomFiligree", "FilligreeOverlay" }
--- A side tab's glass round its 32 px button; the selected one's light.
+-- A side tab's glass round its 32 px button (the kit's side tabs, #94).
 local TAB_INSETS = { -2, -2, -2, -2 }
-local TAB_LIGHT = 0.12
 -- The portrait's disc, round PortraitOverlay's mask (CommunitiesFrame.xml:309-325).
 local DISC_RING, MASK_WIDTH = 6, 58
 -- A UIPanelButtonTemplate's three pieces.
@@ -38,7 +37,6 @@ local MAXMIN_ART = { "GetNormalTexture", "GetPushedTexture", "GetDisabledTexture
 local MAXMIN_TINT = { 0.85, 0.85, 0.85 }
 
 local wins = setmetatable({}, { __mode = "k" })     -- the window -> our pieces
-local tabs = setmetatable({}, { __mode = "k" })     -- tab -> { glass, g, light }
 
 local function tbl(v) return type(v) == "table" and v or nil end
 
@@ -57,54 +55,19 @@ local function regionOn(b, kind, layer)
     return nil
 end
 
-local function accent() return GUI.Suite.Accent() or { 1, 0.82, 0 } end
-
--- Every registered tab's selection art from its own GetChecked(): the light
--- and the accent rim on the checked ones, the built rim on the others. It
--- mirrors; it never writes a checked state (GuildSpy's one-frame wait can
--- leave two checked: both show).
-local function syncTabs()
-    local c = accent()
-    for tab, s in pairs(tabs) do
-        local ok, checked = pcall(tab.GetChecked, tab)
-        local on = ok and API.Plain(checked) == true
-        s.light:SetShown(on)
-        if s.g then
-            if on then
-                GUI.Glass.SetSurfaceRim(s.g, c[1], c[2], c[3], 1)
-            else
-                GUI.Glass.SetSurfaceRim(s.g)
-            end
-        end
-    end
-end
-
-local function relayTabs()
-    if GUI.Engine.Active("guild") and theKit then GUI.Engine.Run(theKit.skin, "tabs", syncTabs) end
-end
-
--- A side tab, Blizzard's or a tenant's: its glass once (parented to it, so
--- it moves and hides with it), the selection hooks once.
-local function installTab(kit, tab)
-    if tabs[tab] then return end
-    local glass, g = kit:Panel(tab, "small", TAB_INSETS)
-    if g and g.top then g.top:SetFrameLevel(glass:GetFrameLevel()) end
-    local light = glass:CreateTexture(nil, "ARTWORK")
-    light:SetAllPoints(glass)
-    light:SetColorTexture(1, 1, 1, TAB_LIGHT)
-    if g and g.mask then light:AddMaskTexture(g.mask) end
-    light:Hide()
-    tabs[tab] = { glass = glass, g = g, light = light }
-    -- A click toggles natively, without SetChecked: both are followed.
-    hooksecurefunc(tab, "SetChecked", relayTabs)
-    tab:HookScript("OnClick", relayTabs)
-end
-
-local function styleTab(kit, tab)
-    kit:Fade(regionOn(tab, "Texture", "BORDER"))
-    local ok, checked = pcall(tab.GetCheckedTexture, tab)
-    if ok then kit:Fade(tbl(checked)) end
-end
+-- The guild's side tabs (Blizzard's five and the tenants'): CheckButtons, the
+-- selection their own GetChecked; a click's native toggle as well as
+-- SetChecked followed; their BORDER frame and checked glow faded.
+local SIDE_TAB = {
+    insets = TAB_INSETS,
+    selected = function(tab) return tab:GetChecked() end,
+    methods = { "SetChecked" },
+    scripts = { "OnClick" },
+    art = function(tab)
+        local ok, checked = pcall(tab.GetCheckedTexture, tab)
+        return { regionOn(tab, "Texture", "BORDER"), ok and tbl(checked) or nil }
+    end,
+}
 
 -- A recessed pane on a host frame of ours parented to `parent` (so it shows
 -- and hides with it), anchored to `anchor`, at `level`.
@@ -161,9 +124,9 @@ tenants.listener = function(kind, frame)
     if kind == "tab" then
         if active then
             GUI.Engine.Run(theKit.skin, "tenant tab", function()
-                installTab(theKit, frame)
-                styleTab(theKit, frame)
-                syncTabs()
+                theKit:SideTab(frame, SIDE_TAB)
+                theKit:StyleSideTab(frame)
+                Kit.SyncSideTabs(theKit)
             end)
         end
     elseif kind == "panel" then
@@ -205,9 +168,9 @@ GUI.Engine.Register({
         h.edit = edit and pane(kit, edit, edit, edit:GetFrameLevel() - 1)
         for _, key in ipairs(TABS) do
             local tab = tbl(frame[key])
-            if tab then installTab(kit, tab) end
+            if tab then kit:SideTab(tab, SIDE_TAB) end
         end
-        for tab in pairs(tenants.tabs) do installTab(kit, tab) end
+        for tab in pairs(tenants.tabs) do kit:SideTab(tab, SIDE_TAB) end
         local control = tbl(frame.CommunitiesControlFrame)
         buttonGlass(kit, tbl(frame.InviteButton))
         buttonGlass(kit, tbl(frame.GuildLogButton))
@@ -249,8 +212,10 @@ GUI.Engine.Register({
             local b = buttons[i]
             if b then for _, key in ipairs(BUTTON_ART) do kit:Fade(tbl(b[key])) end end
         end
-        for tab in pairs(tabs) do styleTab(kit, tab) end
-        syncTabs()
+        for tab, st in pairs(Kit.sideTabs) do
+            if st.kit == kit then kit:StyleSideTab(tab) end
+        end
+        Kit.SyncSideTabs(kit)
         local h = wins[frame]
         if h then
             Kit.PlaceHeader(h)
@@ -268,10 +233,5 @@ GUI.Engine.Register({
     end,
 })
 
--- The accent changed: the selected tabs' rims follow.
-GUI.Theme.OnRefresh(function()
-    if GUI.Engine.Active("guild") then syncTabs() end
-end)
-
-GUI.Guild = { _test = { wins = wins, tabs = tabs, TAB_LIGHT = TAB_LIGHT, TAB_INSETS = TAB_INSETS,
+GUI.Guild = { _test = { wins = wins, tabs = Kit.sideTabs, TAB_LIGHT = Kit.TAB_LIGHT, TAB_INSETS = TAB_INSETS,
                          DISC_RING = DISC_RING, MAXMIN_TINT = MAXMIN_TINT } }
