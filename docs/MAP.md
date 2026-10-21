@@ -379,3 +379,9 @@ mid-run redeploy had stopped `mapglass` at its last reload.
   Very likely Blizzard's (`SetDisplayState` → `ShowUIPanel`, the panel manager), but checking with
   the skin off settles it.
 - **The scroll bar stays Blizzard's** (the owner: fine if it matches the other bars, and it does).
+
+**`mapchecks` (2026-10-20), Codex's two checks on PR #100:**
+- **The Leatrix yield** passes in game.
+- **Minimise in combat** works with the skin off. With the skin on, the owner minimised and
+  maximised in combat repeatedly, checked by hand, so the earlier failed reads were missed clicks
+  mid-fight.
