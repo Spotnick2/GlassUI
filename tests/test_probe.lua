@@ -1370,6 +1370,42 @@ wm:Hide()
 mstatus = "skipped: Leatrix_Maps rebuilds this window"
 check(not T.mpYield("y", "yield")(), "the map not shown fails")
 wm:Show()
+-- The minimise watch: what's under the cursor, the press, the swap.
+GlassUI.Map._test.wins[wm] = h
+mm.MinimizeButton:Show()
+mm.MaximizeButton:Hide()
+T.mpStartWatch()
+local foci = { mm.MinimizeButton }
+rawset(_G, "GetMouseFoci", function() return foci end)
+WoW.mouseOver[mm.MinimizeButton] = true
+T.mpWatchTick()
+mm.MinimizeButton._buttonState = "PUSHED"
+T.mpWatchTick()
+mm.MinimizeButton._buttonState = nil
+mm.MinimizeButton:Hide()
+T.mpWatchTick()
+local okW, whyW = T.mpReadWatch("w")()
+check(okW, "the watch reads")
+local wr = SkinProbeDB.results["MP.w"]
+eq(wr.pressed, true, "the press seen")
+eq(wr.minimised, true, "the swap seen")
+eq(wr.foci, "MinimizeButton", "Blizzard's button under the cursor")
+check(whyW:find("pressed true, minimised true", 1, true), "said")
+-- A frame of ours under the cursor is named; nothing after the watch stops.
+mm.MinimizeButton:Show()
+T.mpStartWatch()
+foci = { h.glyphs[mm.MaximizeButton].frame }
+T.mpWatchTick()
+T.mpReadWatch("w2")()
+eq(SkinProbeDB.results["MP.w2"].foci, "our glyph", "our glyph named")
+eq(SkinProbeDB.results["MP.w2"].pressed, false, "no press")
+eq(SkinProbeDB.results["MP.w2"].minimised, false, "no swap")
+mm.MinimizeButton:Hide()
+T.mpWatchTick()
+T.mpReadWatch("w3")()
+eq(SkinProbeDB.results["MP.w3"].minimised, false, "stopped: nothing recorded after the read")
+WoW.mouseOver[mm.MinimizeButton] = nil
+rawset(_G, "GetMouseFoci", nil)
 rawset(_G, "WorldMapFrame", nil)
 rawset(_G, "QuestScrollFrame", nil)
 rawset(_G, "GlassUI", savedGUI8)

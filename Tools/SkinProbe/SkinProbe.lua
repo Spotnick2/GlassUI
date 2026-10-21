@@ -2365,7 +2365,103 @@ Probe:Steps("mapchecks", {
     { text = "Type /reload to save the results.", reload = true },
 })
 
+-- Minimise in combat with the skin on (MP.6: it works with the skin off):
+-- while the owner clicks, what's under the cursor over the minimise button
+-- (Blizzard's button, or a frame of ours), whether the button took the
+-- press (PUSHED), and whether it swapped (Minimize ran to SetMaximizedLook).
+local watch = { on = false }
+local watcher
+
+local function describe(f)
+    local G = glassUI()
+    local T = G and G.Map and G.Map._test
+    local wm = frameByName("WorldMapFrame")
+    local h = T and wm and T.wins[wm]
+    local mm = wm and type(wm.BorderFrame) == "table" and wm.BorderFrame.MaximizeMinimizeFrame
+    if type(mm) == "table" and f == mm.MinimizeButton then return "MinimizeButton" end
+    if type(mm) == "table" and f == mm.MaximizeButton then return "MaximizeButton" end
+    for _, st in pairs(h and h.glyphs or {}) do
+        if f == st.frame then return "our glyph" end
+        if f == st.disc then return "our disc" end
+    end
+    local okN, n = call(f, "GetName")
+    local okT, t = call(f, "GetObjectType")
+    local okM, m = call(f, "IsMouseEnabled")
+    return tostring(okN and plain(n) or "unnamed") .. ":" .. tostring(okT and plain(t) or "?")
+        .. ((okM and plain(m)) and ":mouse" or "")
+end
+
+local function watchTick()
+    if not watch.on then return end
+    local wm = frameByName("WorldMapFrame")
+    local mm = wm and type(wm.BorderFrame) == "table" and wm.BorderFrame.MaximizeMinimizeFrame
+    local b = type(mm) == "table" and mm.MinimizeButton or nil
+    if not b then return end
+    local shown = seen(b)
+    if watch.wasShown and not shown then watch.minimised = true end
+    watch.wasShown = shown
+    if not shown then return end
+    local okS, st = call(b, "GetButtonState")
+    if okS and plain(st) == "PUSHED" then watch.pressed = true end
+    local okO, over = call(b, "IsMouseOver")
+    local getFoci = rawget(_G, "GetMouseFoci")
+    if okO and plain(over) and type(getFoci) == "function" then
+        local ok, foci = pcall(getFoci)
+        if ok and type(foci) == "table" then
+            for i = 1, math.min(#foci, 3) do watch.foci[describe(foci[i])] = true end
+        end
+    end
+end
+
+local function startWatch()
+    watch = { on = true, pressed = false, minimised = false, foci = {} }
+    if not watcher then
+        watcher = CreateFrame("Frame")
+        watcher:SetScript("OnUpdate", watchTick)
+    end
+    return true
+end
+
+local function readWatch(label)
+    return function()
+        watch.on = false
+        local foci = {}
+        for k in pairs(watch.foci) do foci[#foci + 1] = k end
+        table.sort(foci)
+        local okC, c = pcall(InCombatLockdown)
+        local rec = { pressed = watch.pressed, minimised = watch.minimised, foci = table.concat(foci, ", "),
+                      combat = okC and plain(c) == true,
+                      blocked = type(SkinProbeDB) == "table" and SkinProbeDB.suiteBlocked or 0 }
+        say("MP " .. label .. ": pressed " .. tostring(rec.pressed) .. ", minimised " .. tostring(rec.minimised)
+            .. ", under the cursor: " .. (rec.foci ~= "" and rec.foci or "nothing read") .. ", blocked " .. rec.blocked)
+        record("MP." .. label, rec)
+        return true, "pressed " .. tostring(rec.pressed) .. ", minimised " .. tostring(rec.minimised) .. "; "
+            .. (rec.foci ~= "" and rec.foci or "nothing read")
+    end
+end
+
+Probe:Steps("mapminimise", {
+    title = "Glass UI: minimise in combat, measured (#100)",
+    rev = 1,
+    { text = "Turns the map skin on and counts blocked actions from now.", auto = true,
+      run = function()
+          if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
+          return mpSwitch(true)
+      end },
+    { text = "Starts watching the minimise button.", auto = true, run = startWatch },
+    { text = "Out of combat: press M, maximise the map, hover the minimise button for a second, click it once. "
+          .. "Press Next.", check = readWatch("minimise watched") },
+    { text = "Starts watching again.", auto = true, run = startWatch },
+    { text = "Get into combat. Press M if the map is closed, maximise it, hover the minimise button for a second, "
+          .. "click it once. Press Next (in combat or out).", check = readWatch("combat minimise watched") },
+    { text = "In combat, after clicking minimise: did a red \"Interface action failed because of an AddOn\" "
+          .. "message appear? (Yes or No; anything else: the Note.)", ask = true },
+    { text = "Type /reload to save the results.", reload = true },
+})
+
 skinChecks.mpState, skinChecks.mpOn, skinChecks.mpYield = mpState, mpOn, mpYield
+skinChecks.describe, skinChecks.startWatch, skinChecks.readWatch, skinChecks.watchTick = describe, startWatch, readWatch,
+    watchTick
 end
 
 --------------------------------------------------------------------------------
@@ -4248,7 +4344,9 @@ boot:SetScript("OnEvent", function(_, _, name)
     say("loaded (" .. SkinProbeDB.loads .. " loads). /fp skin for the commands, /fp steps skin wave1 to start")
 end)
 
-NS._test = { mpState = skinChecks.mpState, mpOn = skinChecks.mpOn, mpYield = skinChecks.mpYield, chState = skinChecks.chState, chOn = skinChecks.chOn, gdState = skinChecks.gdState, gdOn = skinChecks.gdOn, gmState = skinChecks.gmState, gmOn = skinChecks.gmOn, settingsReturn = skinChecks.settingsReturn, bagsState = skinChecks.bagsState,
+NS._test = { mpState = skinChecks.mpState, mpOn = skinChecks.mpOn, mpYield = skinChecks.mpYield,
+    mpDescribe = skinChecks.describe, mpStartWatch = skinChecks.startWatch, mpReadWatch = skinChecks.readWatch,
+    mpWatchTick = skinChecks.watchTick, chState = skinChecks.chState, chOn = skinChecks.chOn, gdState = skinChecks.gdState, gdOn = skinChecks.gdOn, gmState = skinChecks.gmState, gmOn = skinChecks.gmOn, settingsReturn = skinChecks.settingsReturn, bagsState = skinChecks.bagsState,
     bagsOn = skinChecks.bagsOn, both = both, closeState = closeState, closeOn = closeOn, headerTry = headerTry, layoutState = layoutState, layoutOn = layoutOn, Probe = Probe, state = state, tree = tree, fade = fade, slashOwners = slashOwners,
              gamepad = gamepad, panelsOn = panelsOn, panelsOff = panelsOff, borderFade = borderFade,
              borderRestore = borderRestore, gradientOn = gradientOn, gradientOff = gradientOff,
