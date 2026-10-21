@@ -59,10 +59,28 @@ A fake history row is built by the probe from Blizzard's template; a `/reload` c
 
 | # | Question | Result |
 |---|---|---|
-| LT.1 | The first loot of the session in combat, styled a frame later; closed in combat; a second loot in combat through the installed hook, closed another way | not run yet |
-| LT.2 | The look; taking items one by one; money; an auto-loot sliding out | not run yet |
-| LT.3 | "Open Loot Window at Mouse"; Edit Mode save and discard; off and on | not run yet |
-| LT.4 | `/loot`: empty, resized, reopened; the fake row in glass at 399; real rows, master loot and the roll-100 effect when group content allows (else unverified) | not run yet |
+| LT.1 | The first loot of the session in combat, styled a frame later; closed in combat; a second loot in combat through the installed hook, closed another way | **Rows: pass** (run 1, 2026-10-21): first and second loot in combat, every row in glass, closed in combat twice, 0 blocked. **The shell: fail, #109.** `NineSlice` and `Bg` read alpha 1 at every open (see below) |
+| LT.2 | The look; taking items one by one; money; an auto-loot sliding out | Taking items and auto-loot: 0 blocked. The look: "it's the blizzard ui", the frame still Blizzard's (#109) |
+| LT.3 | "Open Loot Window at Mouse"; Edit Mode save and discard; off and on | At the mouse and Edit Mode saved: rows pass, shell #109. Discarded: read with the window closed (Edit Mode needs "at mouse" off). Off: Blizzard's look; after on, the frame was skinned properly (the owner) |
+| LT.4 | `/loot`: empty, resized, reopened; the fake row in glass at 399; real rows, master loot and the roll-100 effect when group content allows (else unverified) | Empty: **pass**, the shell faded ("now we have the right skin"). Resized: read with it closed. **The fake row: not built.** The step ran with `/loot` closed ("type /loot first"); rev 2 makes it a button that says so. Real rows, master loot, roll-100: unverified |
+
+**#109, the loot window's frame (70450).** The loot skin fades `LootFrame.NineSlice` and
+`LootFrame.Bg` (frames) in its style pass, a frame after each show.
+- `lootshell`: right after a loot, both read alpha 1, with no `fade:` failure and nothing
+  protected. After the skin was turned off and on, both read 0 and stayed 0 on the next loot.
+- `loottimeline`, sampled every frame from `LOOT_OPENED`:
+  - the style pass runs at about frame 2 (0.01-0.02 s), while the window's `ShowAnim` plays
+    (`setToFinalAlpha`);
+  - inside it, `Fade` returns true, the read-back is 0, and the region counts as faded;
+  - every sample after it reads 1.00.
+
+  So the frames' alpha is reset within a frame, without the instance `SetAlpha` hook seeing it.
+  The rows' **textures** hold. FrameXML has no such write (Codex, consulted). The mechanism is
+  unknown: likely native animation state on the window's children.
+- **The fix:** each shell piece (the NineSlice's nine, the Bg's four) is faded as well as the two
+  frames, as Ellesmere does ("so a relayout cannot resurrect it"). The probe now reads the shell as
+  shown: the frame's alpha times each piece's, the most visible.
+- The history window (no `defer`, no open animation) faded normally.
 
 ### The world map and quest log (#99, docs/MAP.md)
 

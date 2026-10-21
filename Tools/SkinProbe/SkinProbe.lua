@@ -2479,6 +2479,35 @@ local lootEvents = CreateFrame("Frame")
 lootEvents:RegisterEvent("LOOT_OPENED")
 lootEvents:SetScript("OnEvent", function() opens = opens + 1 end)
 
+-- What shows of a shell (#109): the most visible of its pieces, each its
+-- frame's alpha times its own, the frame alone when it has no piece read.
+local SHELL_PIECES = {
+    NineSlice = { "TopLeftCorner", "TopRightCorner", "BottomLeftCorner", "BottomRightCorner", "TopEdge", "BottomEdge",
+                  "LeftEdge", "RightEdge", "Center" },
+    Bg = { "BottomLeft", "BottomRight", "BottomEdge", "TopSection" },
+}
+local function shellShown(frame)
+    local most
+    for host, keys in pairs(SHELL_PIECES) do
+        local h = type(frame[host]) == "table" and frame[host]
+        local okH, ha = call(h, "GetAlpha")
+        ha = okH and plain(ha)
+        if type(ha) == "number" then
+            local any = false
+            for _, k in ipairs(keys) do
+                local okP, pa = call(h[k], "GetAlpha")
+                pa = okP and plain(pa)
+                if type(pa) == "number" then
+                    any = true
+                    most = math.max(most or 0, ha * pa)
+                end
+            end
+            if not any then most = math.max(most or 0, ha) end
+        end
+    end
+    return most
+end
+
 local function ltState(label, which)
     local G = glassUI()
     local T = G and G.Loot and G.Loot._test
@@ -2489,8 +2518,7 @@ local function ltState(label, which)
     rec.combat = okC and plain(c) == true
     rec.installed = T ~= nil and frame ~= nil and T.wins[frame] ~= nil
     if frame then
-        local okA, a = call(frame.NineSlice, "GetAlpha")
-        rec.shell = okA and plain(a) or nil
+        rec.shell = shellShown(frame)
         local target = type(frame.ScrollBox) == "table" and frame.ScrollBox.ScrollTarget
         for _, row in ipairs(target and { target:GetChildren() } or {}) do
             local art = which == "history" and type(row.BackgroundArtFrame) == "table" and row.BackgroundArtFrame or nil
@@ -2617,7 +2645,7 @@ end
 
 Probe:Steps("lootglass", {
     title = "Glass UI: the loot window and /loot in glass (#105)",
-    rev = 1,
+    rev = 2,
     { text = "Turns on script errors, the taint log off, and counts blocked actions from now.", auto = true,
       run = function()
           if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
@@ -2668,13 +2696,124 @@ Probe:Steps("lootglass", {
       check = ltOn("history empty", { history = true }) },
     { text = "Drag the handle under the window to make it taller, then close it and type /loot again. Press Next.",
       check = ltOn("history resized", { history = true }) },
-    { text = "Builds a fake roll row in the history (the probe's own, from Blizzard's template, a Hearthstone), "
-          .. "then switches the skin off and on.", auto = true, run = fakeRow },
+    { text = "Type /loot if the history is closed, then: builds a fake roll row in it (the probe's own, from "
+          .. "Blizzard's template, a Hearthstone) and switches the skin off and on.", button = "Build the fake row",
+      run = fakeRow },
     { text = "Press Next for a screenshot of the fake row.", screenshot = "loot rolls, fake row", check = fakeCheck },
     { text = "Does the fake row read right: a glass row, the Hearthstone and its name, your name as the winner, the "
           .. "roll icon? Anything off: the Note.", ask = true },
     taintOff(),
     { text = "Type /reload: it saves the results and clears the fake row.", reload = true },
+})
+
+-- #109: the loot window's NineSlice stayed at alpha 1 until the skin went
+-- off and on. Right after a loot (and a frame later, once the deferred style
+-- ran): the NineSlice's and Bg's alpha, Glass UI's in-memory failures,
+-- IsProtected on the window and its NineSlice.
+local function shellRead(label)
+    return function()
+        local G = glassUI()
+        local lf = frameByName("LootFrame")
+        local rec = {}
+        local okA, a = call(lf and lf.NineSlice, "GetAlpha")
+        rec.nine = okA and plain(a) or nil
+        local okB, b = call(lf and lf.Bg, "GetAlpha")
+        rec.bg = okB and plain(b) or nil
+        local okP, p1 = call(lf, "IsProtected")
+        rec.protected = okP and tostring(plain(p1)) or "?"
+        local okN, p2 = call(lf and lf.NineSlice, "IsProtected")
+        rec.ninePro = okN and tostring(plain(p2)) or "?"
+        local fails = {}
+        for k, v in pairs(G and G.failures or {}) do fails[#fails + 1] = tostring(k) .. "=" .. tostring(v) end
+        table.sort(fails)
+        rec.failures = table.concat(fails, " | ")
+        rec.status = G and G.Engine and G.Engine.Status("loot") or "?"
+        rec.shown = lf ~= nil and seen(lf)
+        record("LT." .. label, rec)
+        say("LT " .. label .. ": nine " .. tostring(rec.nine) .. ", bg " .. tostring(rec.bg) .. ", protected "
+            .. rec.protected .. "/" .. rec.ninePro .. ", status " .. tostring(rec.status) .. ", failures: "
+            .. (rec.failures ~= "" and rec.failures or "none"))
+        return rec.nine == 0, "nine " .. tostring(rec.nine) .. ", bg " .. tostring(rec.bg) .. "; failures: "
+            .. (rec.failures ~= "" and rec.failures or "none")
+    end
+end
+
+-- The timeline (#109): from LOOT_OPENED, every frame for 0.5 s, the
+-- NineSlice's, Bg's and window's alpha, the open animation playing, and the
+-- skin's style passes; each change kept with its frame and time.
+local timeline, tlStart, tlFrames, tlLast
+local sampler = CreateFrame("Frame")
+local function tlSample()
+    local G = glassUI()
+    local T = G and G.Loot and G.Loot._test
+    local lf = frameByName("LootFrame")
+    local okN, n = call(lf and lf.NineSlice, "GetAlpha")
+    local okB, b = call(lf and lf.Bg, "GetAlpha")
+    local okW, w = call(lf, "GetAlpha")
+    local anim = lf and type(lf.ShowAnim) == "table" and lf.ShowAnim
+    local okP, playing = call(anim, "IsPlaying")
+    local state = string.format("nine %.2f bg %.2f win %.2f anim %s style %s fade %s",
+        okN and plain(n) or -1, okB and plain(b) or -1, okW and plain(w) or -1,
+        tostring(okP and plain(playing)), tostring(T and T.passes and T.passes.style),
+        tostring(T and T.passes and T.passes.nineFade))
+    if state ~= tlLast then
+        timeline[#timeline + 1] = string.format("f%d %.3fs: %s", tlFrames, GetTime() - tlStart, state)
+        tlLast = state
+    end
+end
+sampler:SetScript("OnUpdate", function()
+    if not timeline or not tlStart then return end
+    tlFrames = tlFrames + 1
+    tlSample()
+    if GetTime() - tlStart > 0.5 then tlStart = nil end
+end)
+local tlEvents = CreateFrame("Frame")
+tlEvents:RegisterEvent("LOOT_OPENED")
+tlEvents:SetScript("OnEvent", function()
+    if not timeline then return end
+    tlStart, tlFrames, tlLast = GetTime(), 0, nil
+    timeline[#timeline + 1] = "LOOT_OPENED"
+    tlSample()
+end)
+local function tlBegin() timeline = {}; return true end
+local function tlRead(label)
+    return function()
+        local list = timeline or {}
+        record("LT." .. label, { timeline = table.concat(list, " ; ") })
+        for _, l in ipairs(list) do say("LT " .. label .. ": " .. l) end
+        timeline = nil
+        return #list > 0, #list .. " changes recorded"
+    end
+end
+
+Probe:Steps("loottimeline", {
+    title = "Glass UI: the loot window's frame, frame by frame (#109)",
+    rev = 2,
+    { text = "Type /reload, then don't loot before the next step.", reload = true },
+    { text = "Starts recording.", auto = true, run = tlBegin },
+    { text = "Out of combat, Shift + right-click a corpse. Press Next with the loot window open.",
+      check = tlRead("timeline first") },
+    { text = "Starts recording again.", auto = true, run = tlBegin },
+    { text = "Close it, Shift-loot another corpse. Press Next with the window open.", check = tlRead("timeline second") },
+    { text = "Switches the loot skin off, then on, and starts recording again.", auto = true,
+      run = function() ltSwitch("loot", false); ltSwitch("loot", true); return tlBegin() end },
+    { text = "Close it, Shift-loot another corpse. Press Next with the window open.", check = tlRead("timeline after") },
+    { text = "Type /reload to save the results.", reload = true },
+})
+
+Probe:Steps("lootshell", {
+    title = "Glass UI: the loot window's frame not faded (#109)",
+    rev = 1,
+    { text = "Type /reload, then don't loot before the next step.", reload = true },
+    { text = "Out of combat, Shift + right-click a corpse. Press Next with the loot window open.",
+      screenshot = "loot shell, first", check = shellRead("shell first") },
+    { text = "Close it, Shift-loot another corpse, press Next with the window open.", check = shellRead("shell second") },
+    { text = "Switches the loot skin off.", auto = true, run = function() return ltSwitch("loot", false) end },
+    { text = "Switches it on again.", auto = true, run = function() return ltSwitch("loot", true) end },
+    { text = "Press Next (the window still open).", check = shellRead("shell after off and on") },
+    { text = "Close it, Shift-loot another corpse, press Next with the window open.",
+      screenshot = "loot shell, after", check = shellRead("shell next loot") },
+    { text = "Type /reload to save the results.", reload = true },
 })
 
 skinChecks.ltState, skinChecks.ltOn, skinChecks.ltClosed, skinChecks.fakeCheck = ltState, ltOn, ltClosed, fakeCheck

@@ -227,3 +227,14 @@ Every round-1 finding is resolved, with nothing new:
   - **`test_contract`** loots in combat twice, with `/loot`, off and on.
   - **Mutation:** 22 mutants of the skin. Two survivors were redundant guards, now removed.
   - **The probe's loot checks:** 9 mutants, all killed (two after an added test).
+
+## Run 1 and #109 (2026-10-21)
+
+- **Passed:**
+  - the rows (every loot, in combat too);
+  - opening and closing in combat, with nothing blocked;
+  - `/loot`'s shell.
+- **Failed:** the loot window's frame stayed Blizzard's. Its `NineSlice`/`Bg` frames reset to alpha
+  1 within a frame of each open, past the kit's `SetAlpha` hook (FOREVER-PROBE, #109).
+- **The fix:** the shell's pieces are faded too.
+- **The fake row** wasn't built, because `/loot` was closed at that step. Rev 2 makes it a button.

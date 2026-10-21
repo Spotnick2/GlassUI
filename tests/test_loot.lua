@@ -38,6 +38,14 @@ check(h ~= nil, "built a frame later, in combat too")
 -- The shell.
 eq(LF.NineSlice:GetAlpha(), 0, "the NineSlice faded")
 eq(LF.Bg:GetAlpha(), 0, "the Bg frame faded")
+-- #109: in game the two frames' alpha came back within a frame of every open;
+-- their pieces are faded too, and hold through the frame's reset.
+for _, k in ipairs(L.NINE_PIECES) do eq(LF.NineSlice[k]:GetAlpha(), 0, "the NineSlice's " .. k .. " faded") end
+for _, k in ipairs(L.BG_PIECES) do eq(LF.Bg[k]:GetAlpha(), 0, "the Bg's " .. k .. " faded") end
+rawset(LF.NineSlice, "_alpha", 1)                           -- the reset, bypassing SetAlpha
+rawset(LF.Bg, "_alpha", 1)
+eq(LF.NineSlice.TopEdge:GetAlpha(), 0, "a frame reset leaves its pieces faded")
+eq(LF.Bg.TopSection:GetAlpha(), 0, "the Bg's too")
 eq(h.backing._color[4], GUI.Theme.WINDOW_BACKING, "the window floor")
 local hp
 for _, pt in ipairs(h.header._points) do if pt[1] == "BOTTOM" then hp = pt end end
@@ -107,6 +115,8 @@ local hh = L.wins[HF]
 check(hh ~= nil, "the history built at its show")
 eq(HF.NineSlice:GetAlpha(), 0, "its NineSlice faded")
 eq(HF.Bg:GetAlpha(), 0, "its Bg faded")
+eq(HF.NineSlice.Center:GetAlpha(), 0, "its NineSlice's pieces too")
+eq(HF.Bg.BottomEdge:GetAlpha(), 0, "and its Bg's")
 check(hh.closeX ~= nil, "its close button")
 for _, k in ipairs({ "Background", "Fill", "Border" }) do eq(HF.Timer[k]:GetAlpha(), 1, "the timer's " .. k .. " Blizzard's") end
 eq(HF.ResizeButton._regions[1]:GetAlpha(), 1, "the resize handle Blizzard's")
@@ -147,6 +157,8 @@ WoW.loot()
 GUI._test.slash("skin loot off")
 WoW.flushTimers(0)
 eq(LF.NineSlice:GetAlpha(), 1, "off: the NineSlice back")
+eq(LF.NineSlice.TopEdge:GetAlpha(), 1, "its pieces back")
+eq(LF.Bg.TopSection:GetAlpha(), 1, "the Bg's pieces back")
 local r1 = shown(WoW.lootPool, "item")[1]
 eq(r1.NameFrame:GetAlpha(), 1, "the plates back")
 eq(r1.Item._normal:GetAlpha(), 1, "the slots back")

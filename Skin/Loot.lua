@@ -22,6 +22,14 @@ local API = GUI.API
 local Kit = GUI.Kit
 
 local ROW_INSETS = { 0, 0, 0, 0 }
+-- The shell's own textures (NineSliceLayouts, FlatPanelBackgroundTemplate,
+-- SharedUIPanelTemplates.xml:404-433), faded as well as their two frames:
+-- in game the frames' alpha came back to 1 within a frame of every open
+-- (#109, SkinProbe loottimeline, 70450), with Fade's read-back at 0 and no
+-- SetAlpha seen; the rows' textures held. Ellesmere fades the pieces too.
+local NINE_PIECES = { "TopLeftCorner", "TopRightCorner", "BottomLeftCorner", "BottomRightCorner", "TopEdge",
+                      "BottomEdge", "LeftEdge", "RightEdge", "Center" }
+local BG_PIECES = { "BottomLeft", "BottomRight", "BottomEdge", "TopSection" }
 
 local wins = setmetatable({}, { __mode = "k" })   -- a window -> our pieces
 local rows = setmetatable({}, { __mode = "k" })   -- a pooled row -> { glass, g }
@@ -91,12 +99,19 @@ local function historyRow(kit, row)
     kit:Fade(tbl(art.BorderFrame))
 end
 
--- The shell both share (DefaultPanelFlatTemplate): the NineSlice frame (its
--- bottom corners re-cropped with SetTexture on every Resize: alpha holds,
--- a blank wouldn't), the Bg frame, the close button's states.
+-- The shell both share (DefaultPanelFlatTemplate): the NineSlice and its
+-- pieces (the bottom corners re-cropped with SetTexture on every Resize:
+-- alpha holds, a blank wouldn't), the Bg frame and its pieces, the close
+-- button's states.
+local function fadeAll(kit, host, keys)
+    if not host then return end
+    kit:Fade(host)
+    for _, key in ipairs(keys) do kit:Fade(tbl(host[key])) end
+end
+
 local function shell(kit, frame)
-    kit:Fade(tbl(frame.NineSlice))
-    kit:Fade(tbl(frame.Bg))
+    fadeAll(kit, tbl(frame.NineSlice), NINE_PIECES)
+    fadeAll(kit, tbl(frame.Bg), BG_PIECES)
     kit:CloseFades(tbl(frame.ClosePanelButton))
 end
 
@@ -159,4 +174,4 @@ GUI.Engine.Register({
     end,
 })
 
-GUI.Loot = { _test = { wins = wins, rows = rows } }
+GUI.Loot = { _test = { wins = wins, rows = rows, NINE_PIECES = NINE_PIECES, BG_PIECES = BG_PIECES } }
