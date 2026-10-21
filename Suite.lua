@@ -40,6 +40,9 @@ Suite.ROSTER = {
     { name = "GlassQuestTracker", title = "Glass Quest Tracker" },
     -- Not a Glass addon by name, but a LibGlass one, and a tenant of the guild skin (#92).
     { name = "GuildSpy", title = "GuildSpy" },
+    -- dynamic: listed only while loaded, never as "not installed" (#101, the
+    -- owner: "dynamically add you to the list if added only").
+    { name = "AltStable", title = "AltStable", dynamic = true },
 }
 local member = {}
 for _, m in ipairs(Suite.ROSTER) do member[m.name] = true end
@@ -120,6 +123,9 @@ local function copyReport(addon, state)
         reason = plain(state.reason, "string"),
         minor = plain(state.minor, "number"),
         options = plain(state.options, "function"),
+        -- false: it builds its look once (#101, AltStable): a later change
+        -- of the suite look takes a /reload.
+        live = plain(state.live, "boolean"),
     }
     local cc = state.clickCast
     if type(cc) == "table" then
@@ -401,7 +407,21 @@ function Suite.State(addon)
     if a and not a.ready then return "early", pending end
     if not r then return "silent", pending end
     if a and a.preset and r.built ~= a.preset then return "failed", pending end
+    if r.built and r.live == false and r.look then
+        -- A non-live follower (#101): built with the look it reported; the
+        -- suite's has changed since in a key it doesn't own.
+        local now = Suite.Look()
+        for _, k in ipairs(Suite.LOOK_KEYS) do
+            if now and r.look[k] and not (r.own and r.own[k]) and r.look[k] ~= now[k] then pending = true end
+        end
+    end
     return r.built and "following" or "own", pending
+end
+
+-- Listed on the page and in /glassui suite: every member, but a dynamic one
+-- only while it's loaded (#101).
+function Suite.Listed(m)
+    return not m.dynamic or presence(m.name) == "loaded"
 end
 
 Suite.STATE_TEXT = {

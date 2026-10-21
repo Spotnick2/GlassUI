@@ -637,6 +637,62 @@ GUI.Options._test.panel:Show()
 check(GUI.Options._test.rows.GlassChat.line:GetText():find("its own backing", 1, true), "and the card")
 GUI.Options._test.panel:Hide()
 
+-- A dynamic member (#101, AltStable): listed only while loaded, never as
+-- "not installed"; a non-live follower's pending reload after a look change.
+setup({})
+local alt
+for _, m in ipairs(Suite.ROSTER) do if m.name == "AltStable" then alt = m end end
+check(alt and alt.dynamic, "AltStable is a dynamic member")
+GUI._test.slash("suite")
+check(not chat():find("AltStable", 1, true), "not installed: no line in /glassui suite")
+eq(Suite.Listed(alt), false, "not listed")
+GUI.Options._test.panel:Show()
+check(not GUI.Options._test.list:GetText():find("AltStable", 1, true), "nor in the page's fold")
+GUI.Options._test.panel:Hide()
+WoW.installed.AltStable = 0
+eq(Suite.Listed(alt), false, "disabled: not listed either")
+WoW.installed.AltStable = 2
+eq(Suite.Listed(alt), false, "installed but not loaded: not listed")
+WoW.loaded.AltStable = true
+eq(Suite.Listed(alt), true, "loaded: listed")
+eq(Suite.Listed({ name = "GlassActionBars", title = "Glass Action Bars" }), true, "a static member: always listed")
+GUI._test.slash("suite")
+check(chat():find("AltStable: not yet integrated", 1, true), "loaded, silent: listed as not yet integrated")
+local at = ask("AltStable")
+check(at and at.preset == "pearl", "Theme answers it like any member, following by default")
+Suite.Report("AltStable", { api = 1, built = "pearl", live = false, look = { tint = "clear", accent = "gold" } })
+eq(Suite.ReportOf("AltStable").live, false, "live = false is copied")
+local as, apending = Suite.State("AltStable")
+eq(as, "following", "following")
+eq(apending, false, "the look unchanged: nothing pending")
+Suite.SetLook("accent", "ice")
+as, apending = Suite.State("AltStable")
+eq(apending, true, "the accent changed after it built: a reload pending")
+GUI._test.slash("suite")
+check(chat():find("AltStable: following Glass UI %(Pearl%).-/reload to apply"), "/glassui suite says reload to apply")
+GUI.Options._test.panel:Show()
+check(GUI.Options._test.rows.AltStable.line:GetText():find("reload to apply", 1, true), "and its card")
+GUI.Options._test.panel:Hide()
+Suite.Report("AltStable", { api = 1, built = "pearl", live = false, look = { tint = "clear", accent = "gold" },
+                            own = { accent = true } })
+eq(select(2, Suite.State("AltStable")), false, "a key it owns: no reload for it")
+Suite.Report("AltStable", { api = 1, built = "pearl", live = "no", look = { tint = "clear", accent = "gold" } })
+eq(Suite.ReportOf("AltStable").live, nil, "a junk live isn't copied")
+eq(select(2, Suite.State("AltStable")), false, "a live follower: never pending on a look change")
+Suite.Report("AltStable", { api = 1, live = false, look = { tint = "clear", accent = "gold" } })
+eq(select(2, Suite.State("AltStable")), false, "its own look (not built Pearl): nothing pending")
+Suite.SetLook("accent", "gold")
+-- Not following: its own look, built once; a suite look change isn't its business.
+setup({ suite = { follow = { AltStable = false } } })
+WoW.installed.AltStable, WoW.loaded.AltStable = 2, true
+ask("AltStable")
+Suite.Report("AltStable", { api = 1, live = false, look = { tint = "smoked", accent = "gold" } })
+Suite.SetLook("accent", "ice")
+local os2, op2 = Suite.State("AltStable")
+eq(os2, "own", "not following: its own look")
+eq(op2, false, "a suite look change: nothing pending for it")
+Suite.SetLook("accent", "gold")
+
 -- Never another addon's SavedVariables: the strict globals would throw on a
 -- read, and nothing was written.
 for _, name in ipairs({ "GlassUnitFramesDB", "GlassRaidFramesDB", "GlassRaidFramesCharDB" }) do

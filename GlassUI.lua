@@ -115,7 +115,7 @@ local function suite(a, b, c)
             .. (GUI.glassWhy == "library-too-old" and "LibGlass older than r11" or "it couldn't be built")
             .. "; /reload after updating)")
     end
-    for _, m in ipairs(Suite.ROSTER) do say(Suite.Line(m)) end
+    for _, m in ipairs(Suite.ROSTER) do if Suite.Listed(m) then say(Suite.Line(m)) end end
     for _, m in ipairs(Suite.ROSTER) do
         for _, t in ipairs(Suite.Tenants(m.name)) do say(t .. ": follows " .. m.title) end
     end

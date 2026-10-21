@@ -168,7 +168,19 @@ GlassUI.Suite.SkinPanel(owner, host, onSkin)  --> bool   (onSkin(on, { backing =
 The roster is a constant (docs/PLAN.md, the hub), and it only names the family. **A member is
 integrated when it speaks the API**, so the next addon to adopt it needs no Glass UI release. `Theme`
 answers any roster member, and anything else gets `"unknown"`. Each member shows the first state
-that applies:
+that applies.
+
+**Dynamic members (#101).** A roster entry with `dynamic = true` is listed (its card, the page's
+fold, `/glassui suite`) only while it is loaded, never as "not installed". The owner asked for this
+for AltStable: "dynamically add you to the list if added only". `Theme`, `Report` and `SetFollow`
+treat it as any member, and it follows by default (#82). `Suite.Listed(m)` decides.
+
+**Non-live followers (#101).** A follower that builds its look once and can't repaint reports
+`live = false`, with the look it built (`look`). While it follows, its line and card say "/reload to
+apply" as soon as the suite's look differs from that look in a key it doesn't own. It reports
+again only after a build, never on `LookChanged`.
+
+The states, in order:
 
 | State | When |
 |---|---|
