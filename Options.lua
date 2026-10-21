@@ -364,7 +364,7 @@ local function build()
                 prev = e.c
             else
                 e.c:Hide()
-                others[#others + 1] = (Suite.Line(e.m))
+                if Suite.Listed(e.m) then others[#others + 1] = (Suite.Line(e.m)) end
             end
         end
         restore:ClearAllPoints()
