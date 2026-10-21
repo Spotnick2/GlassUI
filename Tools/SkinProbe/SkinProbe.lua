@@ -2317,7 +2317,55 @@ Probe:Steps("maptracker", {
     { text = "Type /reload to save the results.", reload = true },
 })
 
-skinChecks.mpState, skinChecks.mpOn = mpState, mpOn
+-- The two acceptance checks left on PR #100 (Codex): minimise in combat with
+-- the skin off (is staying maximised Blizzard's?), and the Leatrix yield in
+-- game (its simple frame On: the skin steps aside, nothing of ours built).
+local function mpYield(label, want)
+    return function()
+        local G = glassUI()
+        local T = G and G.Map and G.Map._test
+        local wm = frameByName("WorldMapFrame")
+        local status = G and G.Engine and G.Engine.Status("map") or "?"
+        local built = T ~= nil and wm ~= nil and T.wins[wm] ~= nil
+        local rec = { status = status, built = built, shown = wm ~= nil and seen(wm) }
+        say("MP " .. label .. ": status " .. tostring(status) .. ", built " .. tostring(built))
+        record("MP." .. label, rec)
+        if want == "yield" then
+            local ok = rec.shown and not built and tostring(status):find("Leatrix_Maps", 1, true) ~= nil
+            return ok, ok and "the skin yields to Leatrix Maps" or ("status " .. tostring(status) .. ", built "
+                .. tostring(built))
+        end
+        return true, "status " .. tostring(status)
+    end
+end
+
+Probe:Steps("mapchecks", {
+    title = "Glass UI: the map's last two checks (#100)",
+    rev = 1,
+    { text = "Switches the map skin OFF for the next two steps.", auto = true,
+      run = function()
+          if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
+          return mpSwitch(false)
+      end },
+    { text = "Get into combat, press M, maximise the map, then minimise it. Press Next (in combat or out).",
+      check = function()
+          local r = mpState("skin off, combat minimise")
+          return true, "maximized " .. tostring(r.maximized) .. ", combat " .. tostring(r.combat)
+      end },
+    { text = "With the skin off and in combat: did the map stay maximised when you pressed minimise?", ask = true },
+    { text = "Switches the map skin back ON.", auto = true, run = function() return mpSwitch(true) end },
+    -- The Leatrix yield.
+    { text = "Open Leatrix Maps' options (/ltm), turn ON \"Simple map frame\", then type /reload (Leatrix reads "
+          .. "it at login).", reload = true },
+    { text = "Press M, then press Next: the map should be Leatrix's frame, with no glass of ours.",
+      screenshot = "map, Leatrix simple frame", check = mpYield("leatrix on", "yield") },
+    { text = "Open /ltm again, turn \"Simple map frame\" back OFF, then type /reload.", reload = true },
+    { text = "Press M, then press Next: the map in glass again.",
+      check = mpOn("leatrix off again", { log = true }) },
+    { text = "Type /reload to save the results.", reload = true },
+})
+
+skinChecks.mpState, skinChecks.mpOn, skinChecks.mpYield = mpState, mpOn, mpYield
 end
 
 --------------------------------------------------------------------------------
@@ -4200,7 +4248,7 @@ boot:SetScript("OnEvent", function(_, _, name)
     say("loaded (" .. SkinProbeDB.loads .. " loads). /fp skin for the commands, /fp steps skin wave1 to start")
 end)
 
-NS._test = { mpState = skinChecks.mpState, mpOn = skinChecks.mpOn, chState = skinChecks.chState, chOn = skinChecks.chOn, gdState = skinChecks.gdState, gdOn = skinChecks.gdOn, gmState = skinChecks.gmState, gmOn = skinChecks.gmOn, settingsReturn = skinChecks.settingsReturn, bagsState = skinChecks.bagsState,
+NS._test = { mpState = skinChecks.mpState, mpOn = skinChecks.mpOn, mpYield = skinChecks.mpYield, chState = skinChecks.chState, chOn = skinChecks.chOn, gdState = skinChecks.gdState, gdOn = skinChecks.gdOn, gmState = skinChecks.gmState, gmOn = skinChecks.gmOn, settingsReturn = skinChecks.settingsReturn, bagsState = skinChecks.bagsState,
     bagsOn = skinChecks.bagsOn, both = both, closeState = closeState, closeOn = closeOn, headerTry = headerTry, layoutState = layoutState, layoutOn = layoutOn, Probe = Probe, state = state, tree = tree, fade = fade, slashOwners = slashOwners,
              gamepad = gamepad, panelsOn = panelsOn, panelsOff = panelsOff, borderFade = borderFade,
              borderRestore = borderRestore, gradientOn = gradientOn, gradientOff = gradientOff,

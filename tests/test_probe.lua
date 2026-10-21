@@ -1355,6 +1355,21 @@ SkinProbeDB.suiteBlocked = 0
 GlassUI.Map._test.wins[wm] = nil
 okM, whyM = T.mpOn("t")()
 check(not okM and whyM:find("not installed", 1, true), "not installed fails")
+-- The Leatrix yield read in game: shown, nothing of ours built, the status naming it.
+local mstatus = "skipped: Leatrix_Maps rebuilds this window"
+GlassUI.Engine = { Status = function() return mstatus end }
+check(T.mpYield("y", "yield")(), "the yield: pass")
+GlassUI.Map._test.wins[wm] = h
+okM, whyM = T.mpYield("y", "yield")()
+check(not okM and whyM:find("built true", 1, true), "our glass built under Leatrix's frame fails")
+GlassUI.Map._test.wins[wm] = nil
+mstatus = "on"
+okM = T.mpYield("y", "yield")()
+check(not okM, "a status not naming Leatrix fails")
+wm:Hide()
+mstatus = "skipped: Leatrix_Maps rebuilds this window"
+check(not T.mpYield("y", "yield")(), "the map not shown fails")
+wm:Show()
 rawset(_G, "WorldMapFrame", nil)
 rawset(_G, "QuestScrollFrame", nil)
 rawset(_G, "GlassUI", savedGUI8)
