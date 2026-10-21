@@ -94,6 +94,7 @@ function loadAddon(opts)
     if not opts.noGuild then WoW.makeCommunities() end
     if not opts.noCharacter then WoW.makeCharacter() end
     if not opts.noMap then WoW.makeWorldMap() end
+    if not opts.noLoot then WoW.makeLoot() end
     if not opts.noTracker then WoW.makeTracker() end
     if not (opts.noTracker or opts.noTimer) then WoW.makeQuestTimer() end
     local ns = {}

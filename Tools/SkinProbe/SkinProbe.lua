@@ -2465,6 +2465,222 @@ skinChecks.describe, skinChecks.startWatch, skinChecks.readWatch, skinChecks.wat
 end
 
 --------------------------------------------------------------------------------
+-- The loot window and the loot roll history (#105, docs/LOOT.md): each
+-- window's shell, every shown row on glass (its plate faded, and for loot its
+-- slot faded and its strokes desaturated; for the history its glass at the
+-- art's level - 1), opened and closed in combat, blocked and forbidden
+-- actions; a fake history row the probe builds (the owner: "unless we fake
+-- it"). Saved as LT.<label>.
+--------------------------------------------------------------------------------
+
+do
+local opens = 0
+local lootEvents = CreateFrame("Frame")
+lootEvents:RegisterEvent("LOOT_OPENED")
+lootEvents:SetScript("OnEvent", function() opens = opens + 1 end)
+
+local function ltState(label, which)
+    local G = glassUI()
+    local T = G and G.Loot and G.Loot._test
+    local frame = frameByName(which == "history" and "GroupLootHistoryFrame" or "LootFrame")
+    local rec = { rows = 0, rowsRight = 0, opens = opens }
+    rec.shown = frame ~= nil and seen(frame)
+    local okC, c = pcall(InCombatLockdown)
+    rec.combat = okC and plain(c) == true
+    rec.installed = T ~= nil and frame ~= nil and T.wins[frame] ~= nil
+    if frame then
+        local okA, a = call(frame.NineSlice, "GetAlpha")
+        rec.shell = okA and plain(a) or nil
+        local target = type(frame.ScrollBox) == "table" and frame.ScrollBox.ScrollTarget
+        for _, row in ipairs(target and { target:GetChildren() } or {}) do
+            local art = which == "history" and type(row.BackgroundArtFrame) == "table" and row.BackgroundArtFrame or nil
+            local plate = art and art.NameFrame or (which ~= "history" and row.NameFrame)
+            if type(plate) == "table" and seen(row) then
+                rec.rows = rec.rows + 1
+                local st = T and T.rows[row]
+                local okP, pa = call(plate, "GetAlpha")
+                local right = st ~= nil and seen(st.glass) and okP and plain(pa) == 0
+                if art then
+                    local okL, al = call(art, "GetFrameLevel")
+                    right = right and okL and st.glass:GetFrameLevel() == plain(al) - 1
+                else
+                    local okN, normal = call(row.Item, "GetNormalTexture")
+                    local okNA, na = call(okN and normal or nil, "GetAlpha")
+                    local okD, d = call(row.HighlightNameFrame, "IsDesaturated")
+                    right = right and okNA and plain(na) == 0 and okD and plain(d) == true
+                end
+                if right then rec.rowsRight = rec.rowsRight + 1 end
+            end
+        end
+        if which == "history" then rec.noInfo = seen(frame.NoInfoString) end
+    end
+    rec.blocked = type(SkinProbeDB) == "table" and SkinProbeDB.suiteBlocked or 0
+    say("LT " .. label .. ": shown " .. tostring(rec.shown) .. ", combat " .. tostring(rec.combat) .. ", installed "
+        .. tostring(rec.installed) .. ", shell " .. tostring(rec.shell) .. ", rows " .. rec.rowsRight .. "/"
+        .. rec.rows .. ", opens " .. rec.opens .. ", blocked " .. rec.blocked)
+    record("LT." .. label, rec)
+    return rec
+end
+
+-- want.combat; want.rows: at least one row read; want.history.
+local function ltOn(label, want)
+    want = want or {}
+    return function()
+        local r = ltState(label, want.history and "history" or "loot")
+        local bad = {}
+        local function want_(cond, why) if not cond then bad[#bad + 1] = why end end
+        want_(r.shown, "the window not shown")
+        want_(r.installed, "not installed")
+        if want.combat ~= nil then want_(r.combat == want.combat, "combat " .. tostring(r.combat)) end
+        want_(r.shell == 0, "shell " .. tostring(r.shell))
+        if want.rows then want_(r.rows > 0, "no row read") end
+        want_(r.rowsRight == r.rows, "rows " .. r.rowsRight .. " of " .. r.rows)
+        want_(r.blocked == 0, r.blocked .. " blocked")
+        return #bad == 0, #bad == 0 and "as Blizzard shows it" or table.concat(bad, "; ")
+    end
+end
+
+-- Closed without a blocked action (in combat when the owner managed it).
+local function ltClosed(label)
+    return function()
+        local r = ltState(label, "loot")
+        local ok = not r.shown and r.blocked == 0
+        return ok, (r.shown and "still open" or "closed") .. ", combat " .. tostring(r.combat) .. ", " .. r.blocked
+            .. " blocked"
+    end
+end
+
+local function ltSwitch(key, on)
+    local G = glassUI()
+    if not (G and G.Engine) then return false, "Glass UI not loaded" end
+    return G.Engine.SetEnabled(key, on)
+end
+
+local function lootWait(n, wantCombat)
+    return function()
+        local G = glassUI()
+        local T = G and G.Loot and G.Loot._test
+        local lf = frameByName("LootFrame")
+        local okC, c = pcall(InCombatLockdown)
+        local fighting = okC and plain(c) == true
+        local ready = opens >= n and lf ~= nil and seen(lf) and T and T.wins[lf] ~= nil
+        if wantCombat and not fighting then return false, "waiting for combat" end
+        return ready, "waiting for the loot window"
+    end
+end
+
+-- The fake history row: the probe's, never the skin's. Blizzard's own
+-- template, a cached item (Hearthstone), a winner and a roll; the list shown
+-- (an empty history hides it, LootHistory.lua:461-467); the skin's style pass
+-- by off and on. It taints the history: the procedure ends with a /reload.
+local HEARTHSTONE = "|cffffffff|Hitem:6948::::::::1:::::::::|h[Hearthstone]|h|r"
+local fake
+
+local function fakeRow()
+    local hf = frameByName("GroupLootHistoryFrame")
+    if not (hf and seen(hf)) then return false, "type /loot first" end
+    local sb = hf.ScrollBox
+    local ok, err = pcall(function()
+        sb:Show()
+        hf.NoInfoString:Hide()
+        local row = CreateFrame("Frame", nil, sb.ScrollTarget, "LootHistoryElementTemplate")
+        row:SetPoint("TOPLEFT", sb.ScrollTarget, "TOPLEFT", 7, -7)
+        row:SetPoint("RIGHT", sb.ScrollTarget, "RIGHT", -7, 0)
+        row:SetHeight(58)
+        local states = Enum and Enum.EncounterLootDropRollState
+        local _, class = UnitClass("player")
+        row:Init({ itemHyperlink = HEARTHSTONE, playerRollState = states and states.NeedMainSpec or 0,
+                   winner = { playerName = UnitName("player"), playerClass = class }, rollInfos = {} })
+        row:Show()
+        fake = row
+    end)
+    if not ok then return false, tostring(err) end
+    ltSwitch("loothistory", false)
+    return ltSwitch("loothistory", true)
+end
+
+local function fakeCheck()
+    local G = glassUI()
+    local T = G and G.Loot and G.Loot._test
+    local st = T and fake and T.rows[fake]
+    local art = fake and fake.BackgroundArtFrame
+    local okP, pa = call(art and art.NameFrame, "GetAlpha")
+    local okL, al = call(art, "GetFrameLevel")
+    local rec = { styled = st ~= nil, glassShown = st ~= nil and seen(st.glass), plate = okP and plain(pa) or nil,
+                  level = st and st.glass:GetFrameLevel() or nil, artLevel = okL and plain(al) or nil }
+    record("LT.fake row", rec)
+    local ok = rec.styled and rec.glassShown and rec.plate == 0 and rec.level == (rec.artLevel or 0) - 1
+    return ok, ok and ("the fake row in glass at " .. tostring(rec.level)) or ("styled " .. tostring(rec.styled)
+        .. ", glass " .. tostring(rec.glassShown) .. ", plate " .. tostring(rec.plate) .. ", level "
+        .. tostring(rec.level) .. "/" .. tostring(rec.artLevel))
+end
+
+Probe:Steps("lootglass", {
+    title = "Glass UI: the loot window and /loot in glass (#105)",
+    rev = 1,
+    { text = "Turns on script errors, the taint log off, and counts blocked actions from now.", auto = true,
+      run = function()
+          if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
+          return setCVar("scriptErrors", "1"), setCVar("taintLog", "0")
+      end },
+    { text = "Type /reload, then don't loot anything before the next step: its first loot has to be in combat.",
+      reload = true },
+    { text = "Get into combat (two mobs: kill one while the other hits you), then Shift + right-click the corpse "
+          .. "(Shift stops auto-loot). This step goes on by itself once the loot window is open in combat; a "
+          .. "screenshot is taken.", timeout = 300, screenshot = "loot, first in combat",
+      wait = lootWait(1, true), check = ltOn("first in combat", { combat = true, rows = true }) },
+    { text = "Close it, still in combat if you can: take everything, or the X, or Esc. Press Next.",
+      check = ltClosed("closed in combat") },
+    { text = "Loot a second corpse in combat the same way (Shift + right-click). This step goes on by itself.",
+      timeout = 300, wait = lootWait(2, true), check = ltOn("second in combat", { combat = true, rows = true }) },
+    { text = "Close it in combat another way than before (the X or Esc). Press Next.",
+      check = ltClosed("closed in combat again") },
+    -- The look.
+    { text = "Out of combat, Shift-loot a corpse and press Next with the window open, for a screenshot.",
+      screenshot = "loot", check = ltOn("look", { combat = false, rows = true }) },
+    { text = "Does it read as the template: dark glass, the smoky band with the title, the close button on its glass "
+          .. "disc, each item on a glass row with no bronze plate, the icons and names in their colours, the "
+          .. "hover outline white? Anything off: the Note.", ask = true },
+    { text = "Take one item by clicking it, then take the rest (money too if any). Press Next.",
+      check = function() local r = ltState("taken", "loot"); return r.blocked == 0, r.blocked .. " blocked" end },
+    { text = "Loot a corpse with plain right-click (auto-loot): the window flashes, its rows sliding out. Press "
+          .. "Next.", check = function() local r = ltState("auto-loot", "loot"); return r.blocked == 0, r.blocked .. " blocked" end },
+    -- The other positioning paths.
+    { text = "In Options > Controls, turn on \"Open Loot Window at Mouse\", Shift-loot a corpse, press Next with the "
+          .. "window open.", check = ltOn("at mouse", { rows = true }) },
+    { text = "Turn \"Open Loot Window at Mouse\" back off. Then open Edit Mode, move the Loot Window, Save, close "
+          .. "Edit Mode, Shift-loot a corpse. Press Next with the window open.", check = ltOn("edit mode saved", { rows = true }) },
+    { text = "Open Edit Mode, move the Loot Window again, then Revert Changes (or close without saving), close "
+          .. "Edit Mode, Shift-loot a corpse. Press Next with the window open.", check = ltOn("edit mode discarded", { rows = true }) },
+    { text = "With the loot window open: switches the skin off (Blizzard's look).", button = "Skin off",
+      run = function() return ltSwitch("loot", false) end, screenshot = "loot, skin off",
+      check = function()
+          local r = ltState("off", "loot")
+          local ok = r.shown and r.shell == 1 and r.rowsRight == 0
+          return ok, ok and "Blizzard's look, nothing of ours" or "something of ours while off"
+      end },
+    { text = "Switches the skin on again.", button = "Skin on", run = function() return ltSwitch("loot", true) end,
+      check = ltOn("on again", { rows = true }) },
+    { text = "Did every loot open and close, with no 'Interface action failed' message? If a master-looted group "
+          .. "loot happened, say how it went in the Note; else answer Unsure.", ask = true },
+    -- /loot.
+    { text = "Close the loot window and type /loot. Press Next.", screenshot = "loot rolls, empty",
+      check = ltOn("history empty", { history = true }) },
+    { text = "Drag the handle under the window to make it taller, then close it and type /loot again. Press Next.",
+      check = ltOn("history resized", { history = true }) },
+    { text = "Builds a fake roll row in the history (the probe's own, from Blizzard's template, a Hearthstone), "
+          .. "then switches the skin off and on.", auto = true, run = fakeRow },
+    { text = "Press Next for a screenshot of the fake row.", screenshot = "loot rolls, fake row", check = fakeCheck },
+    { text = "Does the fake row read right: a glass row, the Hearthstone and its name, your name as the winner, the "
+          .. "roll icon? Anything off: the Note.", ask = true },
+    taintOff(),
+    { text = "Type /reload: it saves the results and clears the fake row.", reload = true },
+})
+
+skinChecks.ltState, skinChecks.ltOn, skinChecks.ltClosed, skinChecks.fakeCheck = ltState, ltOn, ltClosed, fakeCheck
+end
+
+--------------------------------------------------------------------------------
 -- The suite theme (#24, docs/SUITE.md "In-game validation", S.1-S.8): Glass
 -- UI coordinating Glass Unit Frames and Glass Raid Frames. It reads only
 -- public state: Glass UI's Suite record, each addon's glass instance (its
@@ -4344,7 +4560,8 @@ boot:SetScript("OnEvent", function(_, _, name)
     say("loaded (" .. SkinProbeDB.loads .. " loads). /fp skin for the commands, /fp steps skin wave1 to start")
 end)
 
-NS._test = { mpState = skinChecks.mpState, mpOn = skinChecks.mpOn, mpYield = skinChecks.mpYield,
+NS._test = { ltState = skinChecks.ltState, ltOn = skinChecks.ltOn, ltClosed = skinChecks.ltClosed,
+    mpState = skinChecks.mpState, mpOn = skinChecks.mpOn, mpYield = skinChecks.mpYield,
     mpDescribe = skinChecks.describe, mpStartWatch = skinChecks.startWatch, mpReadWatch = skinChecks.readWatch,
     mpWatchTick = skinChecks.watchTick, chState = skinChecks.chState, chOn = skinChecks.chOn, gdState = skinChecks.gdState, gdOn = skinChecks.gdOn, gmState = skinChecks.gmState, gmOn = skinChecks.gmOn, settingsReturn = skinChecks.settingsReturn, bagsState = skinChecks.bagsState,
     bagsOn = skinChecks.bagsOn, both = both, closeState = closeState, closeOn = closeOn, headerTry = headerTry, layoutState = layoutState, layoutOn = layoutOn, Probe = Probe, state = state, tree = tree, fade = fade, slashOwners = slashOwners,

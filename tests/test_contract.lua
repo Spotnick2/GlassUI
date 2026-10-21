@@ -112,6 +112,24 @@ WoW.guildMode("ROSTER")
 GUI._test.slash("skin guild on")
 WoW.hideGuild()
 eq(#WoW.rosterHooks, 0, "no script hook on any roster frame (#92)")
+-- The loot window and history (#105): looted in combat twice, a row
+-- re-coloured, /loot, off and on.
+WoW.combat = true
+WoW.loot()
+WoW.flushTimers(0)
+WoW.closeLoot()
+WoW.loot()
+WoW.flushTimers(0)
+WoW.combat = false
+WoW.lootHistory(true)
+WoW.flushTimers(0)
+GUI._test.slash("skin loot off")
+GUI._test.slash("skin loot on")
+GUI._test.slash("skin loothistory off")
+GUI._test.slash("skin loothistory on")
+WoW.flushTimers(0)
+WoW.closeLoot()
+WoW.lootHistory(false)
 -- The world map (#99): opened in combat, maximised, a map change, a quest
 -- log update, scrolled, off and on.
 WoW.combat = true
