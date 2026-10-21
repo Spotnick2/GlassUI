@@ -157,6 +157,9 @@ GlassUI.Suite.SkinPanel(owner, host, onSkin)  --> bool   (onSkin(on, { backing =
   - `onSkin(false)` at registration unless applied; `onSkin(true)` only once applied; `onSkin(false)`
     once when an applied treatment ends (the switch, the master switch, a handover, through the
     engine's `def.restored`).
+  - **`onSkin(true)` may repeat while applied:** a tint, accent or floor change calls it again
+    with the fresh `look` (#96, found by GuildSpy's session), so an owner's `onSkin` must be
+    idempotent (a repaint, not a toggle).
   - A failing callback is recorded as `tenant:<owner>:onSkin`, and never fails the skin.
 - That's tenant styling, separate from a member's own `Theme`/`Report` participation.
 
