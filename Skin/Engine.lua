@@ -9,6 +9,8 @@
 --   yields   { [addon] = predicate }: a third-party addon that rebuilds the
 --            frame; read once at login, and a true predicate skips the skin
 --   risk     "plain", or "protected": deferred a frame, first pass out of combat
+--   defer    true: install and style a frame after the show, in combat too:
+--            for a window shown from a secure call chain (the world map, #99)
 --   frames   function returning the window(s)
 --   install  function(kit, frame), once per frame: our panels and hooks
 --   style    function(kit, frame), repeatable: the touches
@@ -137,7 +139,7 @@ end
 
 local function onShow(s, frame)
     if not Engine.Active(s.def.key) then return end
-    if s.def.risk == "protected" then
+    if s.def.risk == "protected" or s.def.defer then
         Engine.Defer(s, "show", function() apply(s, frame) end)
     else
         apply(s, frame)
