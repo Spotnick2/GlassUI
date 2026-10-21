@@ -1922,6 +1922,158 @@ end
 function WoW.questScroll(a)
     WoW.asBlizzard(function() QuestScrollFrame.BorderFrame.Shadow:SetAlpha(a) end)
 end
+-- The loot window and the loot roll history (#105, docs/LOOT.md; Mainline
+-- LootFrame.xml and LootHistory.xml, origin/forever 70450). Each a
+-- DefaultPanelFlatTemplate shell (NineSlice, a Bg frame of four pieces, the
+-- title, ClosePanelButton) and a ScrollBox whose Update acquires rows from
+-- WoW.lootRows (item, money, base) or WoW.historyRows (drop, header, pad).
+-- LootFrame:Open as Blizzard's: the list built, then shown. Hidden.
+WoW.lootRows = { "item", "item", "money", "base" }
+WoW.historyRows = { "drop", "header", "pad", "drop" }
+local function lootRegion(parent, layer)
+    local r = blizz("Texture", parent, nil, layer)
+    table.insert(parent._regions, r)
+    return r
+end
+
+local function flatShell(name)
+    local f = blizz("Frame", UIParent, name)
+    f._shown, f._level, f._strata = false, 1, "HIGH"
+    f.NineSlice = nineSlice(f)
+    local bg = blizz("Frame", f)
+    bg._level = 0
+    for _, k in ipairs({ "BottomLeft", "BottomRight", "BottomEdge", "TopSection" }) do
+        bg[k] = lootRegion(bg, "BACKGROUND")
+    end
+    f.Bg = bg
+    f.TitleContainer = blizz("Frame", f)
+    f.TitleContainer._level = 510
+    f.TitleContainer.TitleText = blizz("FontString", f.TitleContainer, nil, "OVERLAY")
+    f.ClosePanelButton = blizzButton(f, "RedButton-Exit", "RedButton-exit-pressed", "RedButton-Highlight",
+                                     "RedButton-Exit-Disabled")
+    f.ClosePanelButton._level, f.ClosePanelButton._width = 510, 28
+    local sb = blizz("Frame", f)
+    sb._level = 2
+    sb.ScrollTarget = blizz("Frame", sb)
+    sb.ScrollTarget._level = 3
+    sb.Shadows = blizz("Frame", sb)
+    sb.Shadows.Upper = blizz("Texture", sb.Shadows, nil, "OVERLAY")
+    sb.Shadows.Lower = blizz("Texture", sb.Shadows, nil, "OVERLAY")
+    f.ScrollBox = sb
+    f.ScrollBar = blizz("Frame", f)
+    return f, sb
+end
+
+function WoW.makeLoot()
+    WoW.asBlizzard(function()
+        local lf, sb = flatShell("LootFrame")
+        local pool = {}
+        WoW.lootPool = pool
+        local function lootRow(kind)
+            local r = blizz("Frame", sb.ScrollTarget)
+            r._level, r._kind = 3, kind
+            if kind ~= "base" then
+                local item = blizz("Button", r)
+                item._level = 3                                    -- useParentLevel
+                item.icon = blizz("Texture", item, nil, "BORDER")
+                item.IconBorder = blizz("Texture", item, nil, "OVERLAY")
+                item._normal = blizz("Texture", item, nil, "ARTWORK")
+                r.Item = item
+                r.NameFrame = blizz("Texture", r, nil, "BACKGROUND")
+                r.BorderFrame = blizz("Texture", r, nil, "BORDER")
+                r.IconQuestTexture = blizz("Texture", r, nil, "OVERLAY")
+                r.HighlightNameFrame = blizz("Texture", r, nil, "OVERLAY")
+                r.HighlightNameFrame._shown = false
+                r.PushedNameFrame = blizz("Texture", r, nil, "OVERLAY")
+                r.PushedNameFrame._shown = false
+                r.Text = blizz("FontString", r, nil, "OVERLAY")
+                if kind == "item" then
+                    r.QualityStripe = blizz("Texture", r, nil, "BACKGROUND")
+                    r.QualityText = blizz("FontString", r, nil, "OVERLAY")
+                end
+            end
+            return r
+        end
+        luaMethod(sb, "Update", function(self)
+            for _, r in ipairs(pool) do r:Hide() end
+            for i, kind in ipairs(WoW.lootRows) do
+                local r = pool[i]
+                if not r or r._kind ~= kind then
+                    r = lootRow(kind)
+                    pool[i] = r
+                end
+                -- Init (LootFrame.lua:482-519): the plate and the slot re-coloured.
+                if rawget(r, "NameFrame") then r.NameFrame:SetVertexColor(1, 1, 1) end
+                if rawget(r, "Item") then r.Item._normal:SetVertexColor(1, 1, 1) end
+                r:Show()
+            end
+        end)
+        luaMethod(lf, "Open", function(self)
+            self.ScrollBox:Update()
+            self:Show()                                            -- ShowUIPanel
+        end)
+        -- The other overlay-like pieces to keep: the master looter frame.
+        local ml = blizz("Frame", lf, "MasterLooterFrame")
+        ml._shown = false
+        local hf, hsb = flatShell("GroupLootHistoryFrame")
+        hf.EncounterDropdown = blizz("Button", hf)
+        hf.Timer = blizz("Frame", hf)
+        for _, k in ipairs({ "Background", "Fill", "Border" }) do hf.Timer[k] = blizz("Texture", hf.Timer, nil, "ARTWORK") end
+        hf.ResizeButton = blizz("Button", hf)
+        hf.ResizeButton._level = 600
+        lootRegion(hf.ResizeButton, "OVERLAY")
+        hf.NoInfoString = blizz("FontString", hf, nil, "OVERLAY")
+        local function element(parent)
+            local r = blizz("Frame", parent)
+            r._level = 500
+            r.Item = blizz("Button", r)
+            r.Item.icon = blizz("Texture", r.Item, nil, "BORDER")
+            r.Item.IconBorder = blizz("Texture", r.Item, nil, "OVERLAY")
+            local art = blizz("Frame", r)
+            art._level = 400
+            art.NameFrame = blizz("Texture", art, nil, "BACKGROUND")
+            art.BorderFrame = blizz("Texture", art, nil, "BORDER")
+            r.BackgroundArtFrame = art
+            r.ItemName = blizz("FontString", r, nil, "OVERLAY")
+            r.PlayerRoll = blizz("Frame", r)
+            r.PlayerRoll.PlayerRollIcon = blizz("Texture", r.PlayerRoll, nil, "ARTWORK")
+            return r
+        end
+        hf.PerfectAnimFrame = element(hf)                         -- an element outside the list
+        hf.PerfectAnimFrame._shown = false
+        local hpool = {}
+        WoW.historyPool = hpool
+        luaMethod(hsb, "Update", function(self)
+            for _, r in ipairs(hpool) do r:Hide() end
+            for i, kind in ipairs(WoW.historyRows) do
+                local r = hpool[i]
+                if not r or r._kind ~= kind then
+                    if kind == "drop" then
+                        r = element(self.ScrollTarget)
+                    else
+                        r = blizz("Frame", self.ScrollTarget)
+                        if kind == "header" then lootRegion(r, "OVERLAY") end
+                    end
+                    r._kind = kind
+                    hpool[i] = r
+                end
+                r:Show()
+            end
+        end)
+        WoW.snapshot()
+    end)
+end
+
+-- LOOT_OPENED: Blizzard's Open (the list, then the show).
+function WoW.loot() WoW.asBlizzard(function() LootFrame:Open() end) end
+function WoW.closeLoot() WoW.asBlizzard(function() LootFrame:Hide() end) end
+-- /loot: ToggleLootHistoryFrame's SetShown, the list filled.
+function WoW.lootHistory(show)
+    WoW.asBlizzard(function()
+        GroupLootHistoryFrame:SetShown(show)
+        if show then GroupLootHistoryFrame.ScrollBox:Update() end
+    end)
+end
 function WoW.hideMerchant() WoW.asBlizzard(function() MerchantFrame:Hide() end) end
 
 --------------------------------------------------------------------------------

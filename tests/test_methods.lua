@@ -41,6 +41,9 @@ WoW.showCharacter()
 WoW.characterMode(2)
 WoW.showMap()
 WoW.flushTimers(0)
+WoW.loot()
+WoW.lootHistory(true)
+WoW.flushTimers(0)
 WoW.mapMaximize(true)
 WoW.flushTimers(0)
 WoW.characterPane("StatisticsFrame")
@@ -54,7 +57,8 @@ GUI.Options._test.lookPanel:Show()
 GUI.Options._test.lookRows["Tint"][2]:Click()
 for _, cmd in ipairs({ "failures", "version", "help", "", "skins", "skin merchant off", "skin merchant on",
                        "skin bags off", "skin bags on", "skin gamemenu off", "skin gamemenu on",
-                       "skin guild off", "skin guild on", "skin character off", "skin character on", "skin map off", "skin map on",
+                       "skin guild off", "skin guild on", "skin character off", "skin character on", "skin map off", "skin map on", "skin loot off", "skin loot on", "skin loothistory off",
+                       "skin loothistory on",
                        "off", "on", "theme smoked", "theme class", "theme clear",
                        "suite", "suite follow glassunitframes on", "options",
                        "look", "look tint class", "look preset soft" }) do

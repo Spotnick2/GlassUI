@@ -45,6 +45,25 @@ The look is judged from the procedure's screenshots; `Logs\taint.log` is read af
 |---|---|---|
 | Merchant (#4) | `/fp steps skin merchant`: the looks side by side (clear at 0.85, 0.6 and 0.35 backing, smoked, class); buy, sell, buyback, repair; skin off and on live; after /reload; in combat (optional) | **70425: passes.** Buy, sell and buyback work; repair not tested (nothing to repair). The screenshots show the gold shell gone, glass under the window and tabs, and the item rows keeping Blizzard's red. Off live: exactly stock (owner: yes); on live: faded again; after /reload: on, faded at the first show. No `ADDON_ACTION_BLOCKED`/`FORBIDDEN` in the three sessions. Combat skipped (a plain, unprotected window). **Looks:** all five read well, and 0.35 looks the most like glass (owner): clear and class now use backing 0.35, smoked keeps 0.92. **Taint pass on 70450 (typed `/console taintLog 1`, buy/sell/buyback, full exit):** the log was on (BugGrabber: the bag-bar error 84 times that session, see the facts below), and `Logs\taint.log` was not rewritten. At level 1 the client writes only when something is blocked, so nothing was. A level-2 pass over every wave-1 skin goes into the v0.1.0 release check (#9). |
 
+### The loot window and the loot roll history (#105, docs/LOOT.md)
+
+`/fp steps skin lootglass`. Each check reads:
+- the shell (the NineSlice's alpha);
+- every shown row: its glass, its plate faded; for loot, its slot faded and its hover stroke
+  desaturated; for the history, its glass at the art's level − 1;
+- opening and closing in combat;
+- blocked and forbidden actions.
+
+A fake history row is built by the probe from Blizzard's template; a `/reload` clears it. Saved as
+`SkinProbeDB.results["LT.<label>"]`.
+
+| # | Question | Result |
+|---|---|---|
+| LT.1 | The first loot of the session in combat, styled a frame later; closed in combat; a second loot in combat through the installed hook, closed another way | not run yet |
+| LT.2 | The look; taking items one by one; money; an auto-loot sliding out | not run yet |
+| LT.3 | "Open Loot Window at Mouse"; Edit Mode save and discard; off and on | not run yet |
+| LT.4 | `/loot`: empty, resized, reopened; the fake row in glass at 399; real rows, master loot and the roll-100 effect when group content allows (else unverified) | not run yet |
+
 ### The world map and quest log (#99, docs/MAP.md)
 
 `/fp steps skin mapglass`. Each check reads:
