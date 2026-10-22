@@ -243,7 +243,7 @@ eq(rows.GlassUnitFrames.line:GetText(), "Glass UI preset: Pearl", "a follower's 
 eq(rows.GlassRaidFrames.line:GetText(), "Using addon settings", "a non-follower's card: Using addon settings")
 eq(rows.GlassUnitFrames.follow:GetChecked(), true, "Use Glass UI appearance is checked when it follows")
 eq(rows.GlassUnitFrames.open:IsShown(), true, "a Settings button when it reported one")
-eq(O.foldText:GetText(), "Theme sync unavailable (8)", "the other eight are folded (GuildSpy joined, #92)")
+eq(O.foldText:GetText(), "Theme sync unavailable (9)", "the other nine are folded (GuildSpy #92, Glass Nameplates #157)")
 eq(O.list:IsShown(), false, "folded at first")
 O.fold:Click()
 eq(O.list:IsShown(), true, "a click unfolds them")
@@ -693,6 +693,16 @@ WoW.installed.PortalRoulette, WoW.loaded.PortalRoulette = 2, true
 eq(Suite.Listed(pr), true, "loaded: listed")
 local prt = ask("PortalRoulette")
 check(prt and prt.preset == "pearl", "Theme answers it, following by default")
+-- Glass Nameplates (#157): a family member, always listed ("not installed"
+-- until it exists); Theme answers it, following by default.
+setup({})
+local gn
+for _, m in ipairs(Suite.ROSTER) do if m.name == "GlassNameplates" then gn = m end end
+check(gn and gn.title == "Glass Nameplates" and not gn.dynamic, "Glass Nameplates is a listed member")
+eq(Suite.Listed(gn), true, "listed even when not installed")
+eq(Suite.State("GlassNameplates"), "missing", "shown as not installed")
+local gnt = Suite.Theme("GlassNameplates")
+check(gnt and gnt.preset == "pearl", "Theme answers it, following by default")
 -- Stakeout (#152): dynamic; its own look by the player's choice in it is
 -- "chosen", never "failed", nothing pending, no "set to follow".
 setup({})
