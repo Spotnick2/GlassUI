@@ -130,6 +130,22 @@ GUI._test.slash("skin loothistory on")
 WoW.flushTimers(0)
 WoW.closeLoot()
 WoW.lootHistory(false)
+-- The trade window (#113): opened in combat, an unusable item offered and
+-- taken back, off and on.
+WoW.combat = true
+WoW.trade()
+WoW.flushTimers(0)
+WoW.combat = false
+WoW.tradeOffer.Recipient[2] = { icon = 5500, usable = false }
+WoW.tradeSlot("Recipient", 2)
+WoW.flushTimers(0)
+WoW.tradeOffer.Recipient[2] = nil
+WoW.tradeSlot("Recipient", 2)
+WoW.flushTimers(0)
+GUI._test.slash("skin trade off")
+GUI._test.slash("skin trade on")
+WoW.flushTimers(0)
+WoW.closeTrade()
 -- The world map (#99): opened in combat, maximised, a map change, a quest
 -- log update, scrolled, off and on.
 WoW.combat = true
