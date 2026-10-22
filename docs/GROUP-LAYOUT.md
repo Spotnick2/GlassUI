@@ -28,6 +28,7 @@ the state. Nothing here depends on Glass UI.
   - player and target are 60 high with their tops at 800, left and right of the footprint, 24
     apart.
 - **Cast bars:** two 360x22 cast bars sit above the grid, with their tops at grid top - 84 and - 52.
+  (Superseded on 2026-10-21: the link no longer places them, section 4.)
 - **No movement in combat:** the reference says "hold geometry in combat" (what this can mean is in
   section 1).
 - **The animation bar:** moves animate at the quality of GUF's combat zoom (owner, 2026-10-18).
@@ -272,19 +273,28 @@ blocked, and after combat everything glides once to the new footprint. The owner
       onto the chat box's tabs. At its own height it stays clear of the chat, even at 40, where it
       moves far left.
     - Party pets and the grid's size therefore never move it vertically either.
-  - **the player and target cast bars**, detached, 360x22, centred on the union: centres at
-    `top + 73` and `top + 41`.
-    - The override goes into `Castbar.EffectiveGeometry`, covering detached state, size, scale and
-      position.
-    - Precedence: **the combat zoom first** (the owner loves it; it moves only insecure hosts, as
-      today), then the link override, then the saves.
-    - One controller writes each host: the zoom while zooming, the link glide otherwise.
+- **The player and target cast bars: never placed or locked by the link** (the owner, 2026-10-21,
+  GUF #141/#142, PR #143, after the stress-test screenshots).
+  - Each keeps its own spot: docked (every bar's default), detached (its saves), or the zoom's spot
+    in combat. Nothing of theirs is set aside, and all their controls stay live while linked.
+  - **The lift:** while linked, a detached or zoomed pair is only lifted, by one shared amount so the
+    pair keeps its spacing, until the lowest bar's bottom clears the grid's top by `Link.CLEAR` = 6
+    (GUF `Castbar.Lift`, `Link.GridTop`). A docked bar stays docked.
+  - **Precedence:** the zoom, then the saves, then the lift.
+  - **Movers** for a lifted bar work in displayed coordinates; a drop subtracts only the partner's
+    lift (Codex review of #143).
+  - **Why:** GUF's new default frame height is y = -272 (GUF #141, the owner's tested setup), so the
+    old spot (the grid's top + 73) landed on the target's target-of-target row; and the owner wanted
+    the bars movable while linked.
+  - **Until then (v1, 2026-10-18 to 10-21):** detached, 360x22, centred on the union at `top + 73`
+    and `top + 41`, through a link override in `Castbar.EffectiveGeometry`, with their saves set
+    aside and their controls disabled.
 - **Set aside, and kept intact:**
-  - `db.pos` for player and target, and the two cast bars' saves, are never written while linked;
+  - `db.pos` for player and target is never written while linked;
   - `Frames.NormalizeSaves()` skips frames whose positions are set aside, so it never measures a
     linked rectangle;
-  - Reset, nudge, Center X and drag are disabled for them, with "placed by the group layout (Glass
-    Raid Frames)";
+  - Reset, nudge, Center X and drag are disabled for the player and target frames (not their cast
+    bars), with "placed by the group layout (Glass Raid Frames)";
   - unlinking re-applies each frame's **original validated anchor tuple** through a non-saving path,
     then canonical placement.
 - **Followers:** pet, target of target and focus ride their leader when they are anchored to it, as
@@ -462,8 +472,8 @@ settings.
   - it ends on its button, on combat start (before the lockdown) and on any real roster change, and
     then announces the real state again, so GUF returns;
   - real large-roster rendering stays marked unmeasured.
-- **Readability:** names at 80 wide (shortened), the cast bars clear of the grid, and the zoom still
-  working on the linked cast bars.
+- **Readability:** names at 80 wide (shortened), the cast bars clear of the grid (lifted when
+  needed, since 2026-10-21), and the zoom still working on them.
 
 ## Out of scope (v1)
 
@@ -547,6 +557,14 @@ GRF FOREVER-PROBE item 17):**
 - **Combat** ends the preview at once. Nothing was blocked, and nothing was announced in combat.
 - **Still to check in game, with GRF's real grid:** both load orders, GRF absent, and a /reload in
   combat (GUF's side).
+
+## Changed (2026-10-21): the cast bars
+
+GUF PR #143 (66bf53a, GUF #141/#142, the owner's decision after stress-test screenshots): the link
+no longer places the player's and target's cast bars; it only lifts a detached or zoomed pair clear
+of the grid (section 4). New GUF defaults with it (GUF #141): the combat zoom on for player and
+target at scale 1.5, spots (0, -182) and (0, -152); player and target at (∓304, -272). The link
+still places the frames horizontally, exactly as before.
 
 ## Done (2026-10-19)
 
