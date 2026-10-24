@@ -38,6 +38,8 @@ Suite.ROSTER = {
     { name = "GlassMiniMapBar", title = "Glass MiniMap Bar" },
     { name = "GlassPanel", title = "Glass Panel" },
     { name = "GlassQuestTracker", title = "Glass Quest Tracker" },
+    -- Forever's nameplates, look only; Glass UI has no nameplate skin (#157).
+    { name = "GlassNameplates", title = "Glass Nameplates" },
     -- Not a Glass addon by name, but a LibGlass one, and a tenant of the guild skin (#92).
     { name = "GuildSpy", title = "GuildSpy" },
     -- dynamic: listed only while loaded, never as "not installed" (#101, the
