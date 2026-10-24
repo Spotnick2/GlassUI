@@ -140,3 +140,30 @@ skin's in-game acceptance. **`test_probe` runs locally only:** ForeverProbe is p
   measured.
 - `GlassUI.failures` is the one failure record (`API.Fail`, `API.Try`); `/glassui failures` reads it.
 - `GlassUIDB` saves only what differs from `DEFAULTS`.
+
+## Consulting Codex
+
+The shared `codex-consult` skill (user level) has the invocation and the gotchas. For this repo:
+
+For Glass UI, good things to hand Codex:
+- any skin: the skin contract in `CLAUDE.md` and docs/PLAN.md, whether a hook could run our code
+  inside a secure path, whether every callback checks `Engine.Active`, and whether `live` is honest
+  (only fades and our own panels);
+- the protected windows (spellbook and talents, guild, the Escape menu, the group finder) and the
+  audited exceptions (tooltip backdrop, menu style mixins);
+- owners and yields: a sibling or a third-party addon (Leatrix Maps, Auctionator, Skilled) touching
+  the same window;
+- the hub: anything that would make a sibling depend on Glass UI, or Glass UI read a sibling's
+  SavedVariables;
+- anything that writes to SavedVariables.
+
+**Always hand it `CLAUDE.md` and `docs/PLAN.md` alongside the diff or plan**, plus
+`C:/Projects/WoW/References/Docs/PORTING-TBC-TO-FOREVER.md` and `docs/FOREVER-PROBE.md`. Those findings
+were measured on the live client. Without them, a cold reviewer argues from Classic-era or Retail
+behaviour that doesn't hold here (that Classic's `SpellBookFrame` or `PVEFrame` exist, that a
+Blizzard window's own methods are harmless to call).
+`C:/Projects/WoW/References/Forever/api/forever-api-<version>.<build>.md` (take the highest build) is the full API surface when a question
+turns on whether something exists, and `C:/Projects/WoW/wow-ui-source` (branch `forever`) is the
+client's own FrameXML. The design references are
+`C:/Projects/WoW/References/Addons/UISuites/EllesmereUI/EllesmereUIBlizzardSkin` and
+`C:/Projects/WoW/References/Addons/UISuites/ElvUI`: behaviour references only, their code is never copied.
