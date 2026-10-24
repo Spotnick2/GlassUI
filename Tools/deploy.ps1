@@ -17,11 +17,11 @@
         pwsh Tools/deploy.ps1               # GlassUI
         pwsh Tools/deploy.ps1 -Probe        # ...and SkinProbe
         pwsh Tools/deploy.ps1 -ProbeOnly    # just SkinProbe
-        pwsh Tools/deploy.ps1 -AddOnsPath "D:\...\_classic_beta_\Interface\AddOns"
+        pwsh Tools/deploy.ps1 -AddOnsPath "D:\...\_forever_\Interface\AddOns"
 #>
 
 param(
-    [string]$AddOnsPath = "C:\Program Files (x86)\World of Warcraft\_classic_beta_\Interface\AddOns",
+    [string]$AddOnsPath = "C:\Program Files (x86)\World of Warcraft\_forever_\Interface\AddOns",
     [switch]$Probe,
     [switch]$ProbeOnly
 )
