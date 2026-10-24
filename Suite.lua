@@ -45,6 +45,7 @@ Suite.ROSTER = {
     -- dynamic: listed only while loaded, never as "not installed" (#101, the
     -- owner: "dynamically add you to the list if added only").
     { name = "AltStable", title = "AltStable", dynamic = true },
+    { name = "Buffy", title = "Buffy", dynamic = true },
     -- A mage's teleport and portal wheel, built once (live = false) (#106).
     { name = "PortalRoulette", title = "Portal Roulette", dynamic = true },
     -- Follows by default like every member; turned off in its own settings it
