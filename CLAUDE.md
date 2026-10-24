@@ -105,7 +105,9 @@ pwsh Tools\deploy.ps1                                                # copy the 
 pwsh Tools\deploy.ps1 -Probe                                         # ...plus ForeverProbe and SkinProbe
 ```
 
-- Default AddOns path: `C:\Program Files (x86)\World of Warcraft\_classic_beta_\Interface\AddOns`.
+- Default AddOns path: `C:\Program Files (x86)\World of Warcraft\_forever_\Interface\AddOns`, the live
+  client. The beta closed for good on 2026-10-23; Forever launches on 2026-11-04, and no in-game
+  testing is possible until then.
 - In game: `/console scriptErrors 1`, `/console taintLog 1`, then `/reload`.
 - **Shell heredocs here collapse `\\` to `\`** (and `\n` escapes): write files that contain Lua
   escapes or Windows paths with the Write/Edit tools.
