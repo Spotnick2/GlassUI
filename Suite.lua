@@ -46,6 +46,8 @@ Suite.ROSTER = {
     -- owner: "dynamically add you to the list if added only").
     { name = "AltStable", title = "AltStable", dynamic = true },
     { name = "Buffy", title = "Buffy", dynamic = true },
+    -- The disenchanting addon; live, its Flat look reported as declined (#164).
+    { name = "Shatter", title = "Shatter", dynamic = true },
     -- A mage's teleport and portal wheel, built once (live = false) (#106).
     { name = "PortalRoulette", title = "Portal Roulette", dynamic = true },
     -- Follows by default like every member; turned off in its own settings it
