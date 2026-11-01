@@ -75,7 +75,8 @@ jobs:
       # The zip is what players install, so assert its SHAPE: the TOC, every
       # Lua file it loads, LICENSE, and under Libs/LibGlass-1.0 exactly what
       # the library ships (its XML, every file the XML loads, LICENSE,
-      # Media/*.tga). NOTHING else. No Media of our own: the glass is LibGlass's.
+      # Media/*.tga), and our own Media/*.tga (Tools/make_media.py's, #56).
+      # NOTHING else.
       - name: The package is exactly the addon and its library
         run: |
           zip=$(ls .release/*.zip | head -1)
@@ -85,6 +86,7 @@ jobs:
             echo GlassUI/GlassUI.toc
             echo GlassUI/LICENSE
             tr -d '\r' < GlassUI.toc | grep -v '^#' | grep '\.lua$' | tr '\\' '/' | sed 's|^|GlassUI/|'
+            ls Media/*.tga | sed 's|^|GlassUI/|'
             echo "$lib/LibGlass-1.0.xml"
             echo "$lib/LICENSE"
             tr -d '\r' < "$LIBGLASS/LibGlass-1.0.xml" | perl -0pe 's/<!--.*?-->//gs' |

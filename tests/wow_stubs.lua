@@ -62,6 +62,8 @@ local function record(w, name)
     -- A call on a Blizzard object from addon code (not from the simulated
     -- Blizzard side): test_contract checks each against the C-only allowlist.
     if rawget(w, "_blizz") and not WoW.inBlizzard then WoW.blizzCalls[name] = (WoW.blizzCalls[name] or 0) + 1 end
+    -- RestedXP's objects (WoW.makeRestedXP), recorded apart too.
+    if rawget(w, "_rxp") and not WoW.inBlizzard then WoW.rxpCalls[name] = (WoW.rxpCalls[name] or 0) + 1 end
 end
 
 -- The shared method table: any Capitalised name is a method (a no-op unless
@@ -354,6 +356,25 @@ function Methods.GetShadowOffset(fs)
 end
 function Methods.SetShadowColor(fs, r, g, b, a) fs._shadowColor = { r, g, b, a } end
 function Methods.SetRotation(t, r) t._rotation = r end
+function Methods.GetRotation(t) return t._rotation or 0 end
+-- A string's size: half its font size per character of its longest line, its
+-- font size per line (10 until SetFont).
+local function textLines(fs)
+    local longest, n = 0, 0
+    for line in tostring(fs._text or ""):gmatch("[^\n]+") do
+        n = n + 1
+        if #line > longest then longest = #line end
+    end
+    return longest, n, (type(fs._font) == "table" and fs._font[2]) or 10
+end
+function Methods.GetStringWidth(fs)
+    local longest, _, size = textLines(fs)
+    return longest * size / 2
+end
+function Methods.GetStringHeight(fs)
+    local _, n, size = textLines(fs)
+    return n * size
+end
 function Methods.SetColorTexture(t, r, g, b, a) t._color = { r, g, b, a } end
 function Methods.AddMaskTexture(t, m) t._masks = t._masks or {}; table.insert(t._masks, m) end
 function Methods.RemoveMaskTexture(t, m)
@@ -2101,6 +2122,214 @@ function WoW.lootHistory(show)
     end)
 end
 function WoW.hideMerchant() WoW.asBlizzard(function() MerchantFrame:Hide() end) end
+
+-- RestedXP v4.11.26 (#56, docs/RESTEDXP.md): RXPFrame (GuideWindow.lua) and
+-- RXPG_ARROW (map.lua), its default window ("V1"). A third-party addon's
+-- objects, under the same contract record as Blizzard's: its function fields
+-- and the Backdrop mixin's methods are Lua methods (a call from addon code is
+-- recorded). WoW.makeRestedXP() before the login: installed and loaded.
+--
+-- A backdrop (Backdrop.lua, NineSlice.lua): SetBackdrop makes its pieces
+-- once, fields of the frame, and reuses them, setting only their textures;
+-- ClearBackdrop sets each texture to nil; SetBackdropColor the vertex colour.
+-- A theme change brings each piece's alpha back (QS.2, 954 on 70450): past
+-- the SetAlpha hook, as measured (WoW.rxpTheme).
+WoW.rxpSteps = { "done", "current", "building", "building", "hidden" }
+WoW.rxpCards = { { title = "Step 13" } }
+local RXP_ROW_ALPHA = { done = 0.5, current = 1, building = 0.66, hidden = 0 }
+-- RestedXP's side writes fields as it goes (the pieces, the pooled rows and
+-- cards): each of its steps first keeps what addon code changed since the
+-- last one (WoW.fieldWrites), then takes a new snapshot of its objects.
+local function rxpBlizz(...)
+    local w = blizz(...)
+    rawset(w, "_rxp", true)
+    table.insert(WoW.rxpObjs, w)
+    return w
+end
+local function rxpSide(fn)
+    for _, w in ipairs(WoW.rxpObjs) do
+        local snap, hooked = WoW.snap[w] or {}, WoW.hookedKeys[w] or {}
+        for k, v in pairs(w) do
+            if (type(k) ~= "string" or k:sub(1, 1) ~= "_") and not hooked[k] and snap[k] ~= v then
+                table.insert(WoW.fieldWrites, tostring(k))
+            end
+        end
+    end
+    WoW.asBlizzard(fn)
+    for _, w in ipairs(WoW.rxpObjs) do WoW.snap[w] = nil end
+    WoW.snapshot()
+end
+local function rxpBackdrop(f, pieces)
+    luaMethod(f, "SetBackdrop", function(self)
+        for _, k in ipairs(pieces) do
+            if not rawget(self, k) then self[k] = rxpBlizz("Texture", self, nil, "BACKGROUND") end
+            self[k]:SetTexture("Interface/AddOns/RXPGuides/Textures/rxp-borders")
+        end
+    end)
+    luaMethod(f, "ClearBackdrop", function(self)
+        for _, k in ipairs(pieces) do if rawget(self, k) then self[k]:SetTexture(nil) end end
+    end)
+    luaMethod(f, "SetBackdropColor", function(self, r, g, b, a)
+        for _, k in ipairs(pieces) do if rawget(self, k) then self[k]:SetVertexColor(r, g, b, a) end end
+    end)
+end
+local function rxpApply(f, r, g, b)
+    f:ClearBackdrop()
+    f:SetBackdrop()
+    f:SetBackdropColor(r or 0.1, g or 0.1, b or 0.1, 1)
+end
+
+function WoW.makeRestedXP()
+    WoW.installed.RXPGuides, WoW.loaded.RXPGuides = 2, true
+    WoW.rxpObjs, WoW.rxpCalls = {}, {}
+    rxpSide(function()
+        local rxp = rxpBlizz("Frame", UIParent, "RXPFrame")
+        rxp._level, rxp._strata = 1, "BACKGROUND"
+        local list = rxpBlizz("Frame", rxp)
+        list._level = 2
+        local name = rxpBlizz("Frame", rxp)
+        name._level = 6
+        local footer = rxpBlizz("Frame", rxp)
+        footer._level = 6
+        for _, f in ipairs({ list, name, footer }) do rxpBackdrop(f, NINE) end
+        name.bg = rxpBlizz("Texture", name, nil, "BACKGROUND")
+        name.text = rxpBlizz("FontString", name, nil, "OVERLAY")
+        name.icon = rxpBlizz("Texture", name, nil, "ARTWORK")
+        name.classIcon = rxpBlizz("Texture", name, nil, "OVERLAY")
+        footer.bg = rxpBlizz("Texture", footer, nil, "BACKGROUND")
+        footer.text = rxpBlizz("FontString", name, nil, "OVERLAY")
+        footer.icon = rxpBlizz("Button", footer)
+        footer.cog = rxpBlizz("Button", rxp, "RXPFrameCogwheel")
+        local scroll = rxpBlizz("ScrollFrame", list)
+        scroll.ScrollBar = rxpBlizz("Slider", scroll)
+        scroll.ScrollBar.ScrollUpButton = rxpBlizz("Button", scroll.ScrollBar)
+        scroll.ScrollBar.ScrollDownButton = rxpBlizz("Button", scroll.ScrollBar)
+        local child = rxpBlizz("Frame", list)
+        child.framePool = {}
+        local steps = rxpBlizz("Frame", rxp)
+        steps.framePool = {}
+        rxp.BottomFrame, rxp.GuideName, rxp.Footer = list, name, footer
+        rxp.CurrentStepFrame, rxp.ScrollFrame, rxp.ScrollChild = steps, scroll, child
+        luaMethod(rxp, "UpdateVisuals", function(self)
+            for _, f in ipairs({ list, name, footer }) do rxpApply(f) end
+            name.bg:SetTexture("Interface/AddOns/RXPGuides/Textures/rxp-banner")
+            footer.bg:SetTexture("Interface/AddOns/RXPGuides/Textures/rxp-banner")
+        end)
+        -- Each row's alpha is RestedXP's state; its backdrop a fill alone
+        -- (backdrop.bottom: no edge file).
+        luaMethod(list, "UpdateFrame", function()
+            for i, state in ipairs(WoW.rxpSteps) do
+                child.framePool[i]:SetAlpha(RXP_ROW_ALPHA[state])
+            end
+        end)
+        luaMethod(steps, "UpdateText", function() end)
+        -- The arrow: hidden until RestedXP shows it.
+        local af = rxpBlizz("Frame", UIParent, "RXPG_ARROW")
+        af._shown, af._level, af._width, af._height = false, 1, 32, 32
+        af.texture = rxpBlizz("Texture", af, nil, "ARTWORK")
+        af.text = rxpBlizz("FontString", af, nil, "OVERLAY")
+        luaMethod(af, "UpdateVisuals", function(self)
+            self.texture:SetTexture("Interface/AddOns/RXPGuides/Textures/rxp_navigation_arrow-1")
+        end)
+    end)
+end
+
+-- RenderFrame: a theme applied, each piece's alpha back (QS.2).
+function WoW.rxpTheme(r, g, b)
+    rxpSide(function()
+        RXPFrame:UpdateVisuals(true)
+        for _, f in ipairs({ RXPFrame.BottomFrame, RXPFrame.GuideName, RXPFrame.Footer }) do
+            for _, k in ipairs(NINE) do if rawget(f, k) then rawset(f[k], "_alpha", 1) end end
+        end
+        if r then for _, f in ipairs({ RXPFrame.GuideName }) do f:SetBackdropColor(r, g, b, 1) end end
+    end)
+end
+
+-- LoadGuide: the list's rows (pooled), then its UpdateFrame.
+function WoW.rxpLoadGuide()
+    rxpSide(function()
+        local child = RXPFrame.ScrollChild
+        for i in ipairs(WoW.rxpSteps) do
+            local row = child.framePool[i]
+            if not row then
+                row = rxpBlizz("Frame", child)
+                rxpBackdrop(row, { "Center" })
+                row.text = rxpBlizz("FontString", row, nil, "OVERLAY")
+                row.number = rxpBlizz("FontString", row, nil, "OVERLAY")
+                child.framePool[i] = row
+            end
+            row:Show()
+            row:SetAlpha(0.66)
+            rxpApply(row)
+        end
+        for i = #WoW.rxpSteps + 1, #child.framePool do child.framePool[i]:Hide() end
+        child.f1 = child.f1 or rxpBlizz("Frame", child)
+        child.f1._shown = false
+        RXPFrame.BottomFrame.UpdateFrame()
+    end)
+end
+
+-- A row hovered and left (its OnEnter/OnLeave): alpha 1 and the highlight
+-- colour, then both back.
+function WoW.rxpHover(row)
+    WoW.asBlizzard(function()
+        local was = row:GetAlpha()
+        row:SetAlpha(1)
+        row:SetBackdropColor(0.3, 0.3, 0.3, 1)
+        row:SetBackdropColor(0.1, 0.1, 0.1, 1)
+        row:SetAlpha(was)
+    end)
+end
+
+-- SetStep: the current step's cards (pooled), a tip anchored to UIParent at
+-- MEDIUM (still a child), the number tab's alpha 0 when untitled; a card's
+-- backdrop set when the theme changed; then UpdateText.
+function WoW.rxpSetStep(cards)
+    WoW.rxpCards = cards or WoW.rxpCards
+    rxpSide(function()
+        local steps = RXPFrame.CurrentStepFrame
+        for _, card in ipairs(steps.framePool) do card:Hide() end
+        for i, spec in ipairs(WoW.rxpCards) do
+            local card = steps.framePool[i]
+            if not card then
+                card = rxpBlizz("Frame", steps)
+                rxpBackdrop(card, NINE)
+                card.elements = {}
+                card.number = rxpBlizz("Frame", card)
+                rxpBackdrop(card.number, NINE)
+                card.number.text = rxpBlizz("FontString", card.number, nil, "OVERLAY")
+                steps.framePool[i] = card
+                rxpApply(card)
+                rxpApply(card.number)
+            end
+            card:Show()
+            card:SetFrameStrata(spec.tip and "MEDIUM" or "BACKGROUND")
+            card:ClearAllPoints()
+            card:SetPoint("BOTTOMLEFT", spec.tip and UIParent or steps, 0, 0)
+            card.number:SetAlpha(spec.title == "" and 0 or 1)
+            card.number.text:SetText(spec.title)
+        end
+        steps.UpdateText()
+    end)
+end
+
+-- V1's collapse (or a hidewindow guide): BottomFrame hidden, the header and
+-- footer kept. V2 on: the four hidden.
+function WoW.rxpCollapse(on) WoW.asBlizzard(function() RXPFrame.BottomFrame:SetShown(not on) end) end
+function WoW.rxpV2(on)
+    WoW.asBlizzard(function()
+        for _, k in ipairs({ "GuideName", "BottomFrame", "Footer", "CurrentStepFrame" }) do RXPFrame[k]:SetShown(not on) end
+    end)
+end
+function WoW.rxpShow() WoW.asBlizzard(function() RXPFrame:Show() end) end
+
+-- DrawArrow: the turn (SetRotation past the pi/64 throttle) and the text
+-- when the distance changes; the arrow text size setting: SetFont alone.
+function WoW.rxpArrowShow() WoW.asBlizzard(function() RXPG_ARROW:UpdateVisuals(); RXPG_ARROW:Show() end) end
+function WoW.rxpTurn(rad) WoW.asBlizzard(function() RXPG_ARROW.texture:SetRotation(rad) end) end
+function WoW.rxpArrowText(s) WoW.asBlizzard(function() RXPG_ARROW.text:SetText(s) end) end
+function WoW.rxpArrowFont(size) WoW.asBlizzard(function() RXPG_ARROW.text:SetFont("Fonts\\FRIZQT__.TTF", size, "OUTLINE") end) end
+function WoW.rxpArrowAlpha(a) WoW.asBlizzard(function() RXPG_ARROW:SetAlpha(a) end) end
 
 --------------------------------------------------------------------------------
 -- Driving

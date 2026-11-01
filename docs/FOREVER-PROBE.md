@@ -354,6 +354,24 @@ Questie 12.1.0 (`Questie_Camelot.toc`) and RestedXP v4.11.26, the versions the p
 | QS.3 | Questie's tracker and Blizzard's: both shown, or does Questie hide Blizzard's? | **70450: Questie hides Blizzard's** (`ObjectiveTrackerFrame` not shown, alpha 1, so hidden, not faded; the owner: "only questie's"). Glass UI's tracker skin and a Questie skin never share the screen. |
 | QS.4 | The arrow: rotated by `SetRotation`, angle in `orientation`; where it sits against Glass Panel | **70450:** turned by its texture's `SetRotation` (7 calls while the owner turned), and `orientation` holds the last angle (-0.06 both). It is anchored `TOP` to the screen's `TOP` at (-9.4, -127.8): 128 px from the top. Glass Panel's bar edge is at 109, so it clears the bar by 19 px; the owner: not over it. Its black colour is the owner's own RestedXP arrow skin, not a fault. Nothing else looked broken (the owner). |
 
+### RestedXP in glass (#56, docs/RESTEDXP.md)
+
+`/fp steps skin rxpglass`, run after launch (2026-11-04). It turns on RXPGuides for this character
+only (its state saved in `SkinProbeDB.rxpWas[GUID]`, put back by its Restore step or
+`/fp skin rxpglass restore`). Each check reads `RX.<label>`: our glass shown, the backdrop pieces of
+GuideName, BottomFrame and Footer at 0, the header's banner at 0, every shown row's pieces at 0 with
+our host (a row at alpha 0 is RestedXP's hidden step), every shown card on our glass with its and
+its tab's pieces at 0, the list and track, combat, blocked actions. `RA.<label>`: RestedXP's arrow
+texture at 0, ours shown, both angles equal (`GetRotation` on both), ours in the accent, the pill's
+width the text's plus its padding.
+
+| # | Question | Result |
+|---|---|---|
+| RX.1 | The look against the mockup; a new step and its card a frame later; rows hovered; RestedXP's theme changed and back (QS.2's 954) | not run |
+| RX.2 | Resized while scrolling; the list collapsed (the glass shrinks to the header and footer, the track hides) and back | not run |
+| RX.3 | The arrow turning with RestedXP's (equal angles), the accent ice and gold, the pill after the arrow text size changes standing still, another continent (both at 0) | not run |
+| RX.4 | Both skins off (RestedXP's look) and on; in combat; nothing broken in RestedXP | not run |
+
 ## The accent on the yellow titles (#71, docs/PLAN.md "The accent on Blizzard's titles")
 
 `/fp steps skin accent`, with the tracker and the meter on screen. Each check reads the tracker's
