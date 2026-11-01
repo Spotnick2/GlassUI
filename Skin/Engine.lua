@@ -268,7 +268,13 @@ function Engine.Status(key)
         if next(s.installed) and not s.def.live then return "off after a /reload" end
         return "off"
     end
-    if s.def.addon and not API.IsAddOnLoaded(s.def.addon) then return "on (waits for " .. s.def.addon .. ")" end
+    if s.def.addon and not API.IsAddOnLoaded(s.def.addon) then
+        -- A third-party addon (RestedXP, #56) may not be there at all: then
+        -- there's nothing to wait for.
+        local ok, there = pcall(C_AddOns.DoesAddOnExist, s.def.addon)
+        if not ok or API.Plain(there) ~= true then return "on (" .. s.def.addon .. " not installed)" end
+        return "on (waits for " .. s.def.addon .. ")"
+    end
     return "on"
 end
 

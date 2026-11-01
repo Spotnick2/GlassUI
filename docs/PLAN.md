@@ -199,6 +199,18 @@ lines in each TOC are the authoritative list of Forever-only variants (FV below)
     - a meter window made later;
     - the handover;
     - in combat.
+- **Third-party windows get the same contract** (RestedXP, #56): getters, `SetAlpha` held, our
+  own frames, `hooksecurefunc` on an instance's own function field (`RXPFrame.UpdateVisuals`,
+  `BottomFrame.UpdateFrame`, `CurrentStepFrame.UpdateText`), never a call to the addon's
+  functions, a field written or its saved variables read.
+- **Our own arrow over RestedXP's** (the owner, 2026-11-01, #56; docs/RESTEDXP.md): the one
+  "never replace" exception. RestedXP's waypoint arrow texture (`RXPG_ARROW.texture`) is faded
+  and held, and Glass UI draws its own arrow (`Media\Arrow.tga`, in the suite accent) on a child
+  frame over it, at the angle RestedXP sets: a `hooksecurefunc` on that texture's `SetRotation`
+  copies the angle to ours. RestedXP still owns everything else: where the arrow is, whether it
+  shows (its frame's alpha and visibility, which ours follows as a child), its rotation, its
+  distance and text, and dragging it. Ours only mirrors; nothing of RestedXP's is driven. Tinting
+  RestedXP's texture instead couldn't colour the owner's black arrow theme. This arrow only.
 - **Never:** `Show`/`Hide`/`SetShown`/`SetPoint`/`SetParent`/`SetSize`/`SetScale`/`SetText`/
   `SetFont*`/`SetTextColor` (except the audited title accent above), mixin methods, `UIFrameFade*`,
   field writes on Blizzard tables, reassigning a Blizzard global or method, opening or closing

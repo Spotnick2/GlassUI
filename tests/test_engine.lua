@@ -192,6 +192,8 @@ local d13 = { key = "m", title = "m", live = true, addon = "Blizzard_Test", n = 
               frames = function() return f13 end, style = function() end }
 d13.style = function() d13.n = d13.n + 1 end
 GUI = session({ d13 })
+eq(GUI.Engine.Status("m"), "on (Blizzard_Test not installed)", "its addon not on this client: nothing to wait for")
+WoW.installed.Blizzard_Test = 2
 eq(GUI.Engine.Status("m"), "on (waits for Blizzard_Test)", "waits for its addon")
 f13 = window("TestM")
 f13:Show()

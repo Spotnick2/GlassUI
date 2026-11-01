@@ -255,6 +255,10 @@ All mutation-checked. The stubs don't model strata, so the drawing order is the 
 
 ## Part 3: Questie's tracker and RestedXP's guide window and arrow (#56)
 
+**RestedXP is done in [RESTEDXP.md](RESTEDXP.md)** (2026-11-01, from the owner's mockup; Codex
+consensus in round 2), and Questie is set aside for now (the owner: "ignore questie for now"). What
+follows is the earlier plan; RESTEDXP.md supersedes it for RestedXP.
+
 **Optional by construction.**
 - Each skin has `addon = "Questie"` or `"RXPGuides"`, so the engine attaches only once that addon has
   loaded, and never otherwise. Neither is ever a dependency.

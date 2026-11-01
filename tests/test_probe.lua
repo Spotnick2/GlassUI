@@ -1620,9 +1620,87 @@ a = T.arrowState("t")
 eq(a.calls, 1, "its texture's rotation calls counted, from a hook on that texture")
 eq(a.last, 1.25, "with the angle")
 
+-- RestedXP in glass (#56): the window's and the arrow's reads, against a
+-- Glass UI whose skin state the test sets.
+local function backdrop(parent)
+    local f = CreateFrame("Frame", nil, parent)
+    for _, k in ipairs({ "TopEdge", "Center" }) do
+        f[k] = f:CreateTexture()
+        f[k]:SetAlpha(0)
+    end
+    return f
+end
+rxp.GuideName, rxp.BottomFrame, rxp.Footer = backdrop(rxp), backdrop(rxp), backdrop(rxp)
+rxp.GuideName.bg = rxp.GuideName:CreateTexture()
+rxp.GuideName.bg:SetAlpha(0)
+rxp.ScrollChild = CreateFrame("Frame", nil, rxp.BottomFrame)
+local xrow, xhidden = backdrop(rxp.ScrollChild), backdrop(rxp.ScrollChild)
+xhidden.Center:SetAlpha(1)
+xhidden:SetAlpha(0)
+rxp.ScrollChild.framePool = { xrow, xhidden }
+rxp.CurrentStepFrame = CreateFrame("Frame", nil, rxp)
+local xcard = backdrop(rxp.CurrentStepFrame)
+xcard.number = backdrop(xcard)
+rxp.CurrentStepFrame.framePool = { xcard }
+local xtrack = { fill = rxp.BottomFrame:CreateTexture() }
+arrow.texture:SetAlpha(0)
+arrow.text = arrow:CreateFontString()
+arrow.text:SetText("Step 1\n(10yd)")
+local ourArrow = CreateFrame("Frame", nil, arrow)
+local ourTex = ourArrow:CreateTexture()
+ourTex:SetRotation(arrow.texture:GetRotation())
+ourTex:SetVertexColor(1, 0.82, 0)
+local pill = CreateFrame("Frame", nil, arrow)
+pill:SetSize(arrow.text:GetStringWidth() + 16, 20)
+local xaccent = { 1, 0.82, 0 }
+rawset(_G, "GlassUI", { Suite = { Accent = function() return xaccent end, SetLook = function() end },
+    Engine = { SetEnabled = function() end },
+    RestedXP = { _test = { PILL_PAD = { 8, 4 },
+        wins = { [rxp] = { win = CreateFrame("Frame", nil, rxp.GuideName), track = xtrack, list = rxp.BottomFrame,
+                           name = rxp.GuideName, footer = rxp.Footer } },
+        rows = { [xrow] = CreateFrame("Frame", nil, xrow) },
+        cards = { [xcard] = { glass = CreateFrame("Frame", nil, xcard) } },
+        arrows = { [arrow] = { frame = ourArrow, arrow = ourTex, text = arrow.text, pill = pill } } } } })
+SkinProbeDB.suiteBlocked = 0
+local okX, whyX = T.rxOn("x", { rows = true })()
+check(okX, "the guide in glass: pass: " .. tostring(whyX))
+eq(SkinProbeDB.results["RX.x"].rows, 2, "both shown rows read")
+eq(SkinProbeDB.results["RX.x"].rowsRight, 2, "a hidden step (alpha 0, RestedXP's) counts as right")
+local function fails(label, fn, undo)
+    fn()
+    local ok = T.rxOn("x", { rows = true })()
+    check(not ok, "fails: " .. label)
+    undo()
+end
+fails("a header piece up", function() rxp.GuideName.TopEdge:SetAlpha(1) end, function() rxp.GuideName.TopEdge:SetAlpha(0) end)
+fails("the banner up", function() rxp.GuideName.bg:SetAlpha(1) end, function() rxp.GuideName.bg:SetAlpha(0) end)
+fails("a row's fill up", function() xrow.Center:SetAlpha(1) end, function() xrow.Center:SetAlpha(0) end)
+fails("a card's tab up", function() xcard.number.Center:SetAlpha(1) end, function() xcard.number.Center:SetAlpha(0) end)
+fails("our glass hidden", function() GlassUI.RestedXP._test.wins[rxp].win:Hide() end,
+      function() GlassUI.RestedXP._test.wins[rxp].win:Show() end)
+fails("a blocked action", function() SkinProbeDB.suiteBlocked = 1 end, function() SkinProbeDB.suiteBlocked = 0 end)
+check(not T.rxOn("x", { collapsed = true })(), "the list shown: not collapsed")
+rxp.BottomFrame:Hide()
+check(T.rxOn("x", { collapsed = true })(), "the list hidden, the track with it: collapsed")
+rxp.BottomFrame:Show()
+local okA, whyA = T.raOn("a")()
+check(okA, "the arrow in glass: pass: " .. tostring(whyA))
+local function arrowFails(label, fn, undo)
+    fn()
+    check(not T.raOn("a")(), "the arrow fails: " .. label)
+    undo()
+end
+arrowFails("RestedXP's texture up", function() arrow.texture:SetAlpha(1) end, function() arrow.texture:SetAlpha(0) end)
+arrowFails("angles apart", function() ourTex:SetRotation(0.3) end, function() ourTex:SetRotation(arrow.texture:GetRotation()) end)
+arrowFails("not the accent", function() xaccent = { 0.6, 0.85, 1 } end, function() xaccent = { 1, 0.82, 0 } end)
+arrowFails("the pill too small", function() pill:SetWidth(10) end, function() pill:SetWidth(arrow.text:GetStringWidth() + 16) end)
+arrowFails("ours hidden", function() ourArrow:Hide() end, function() ourArrow:Show() end)
+rawset(_G, "GlassUI", nil)
+
 -- The procedures are defined and every step's run, wait and check works here.
 for _, name in ipairs({ "wave1", "map", "gradient", "merchant", "card", "suite", "suitecombat", "meter",
-                        "meterskin", "meterbars", "suitepanel", "pearl", "tracker", "questing", "accent" }) do
+                        "meterskin", "meterbars", "suitepanel", "pearl", "tracker", "questing", "accent",
+                        "rxpglass" }) do
     local p = FP.procedures["SkinProbe/" .. name]
     check(p ~= nil, "procedure " .. name .. " is defined")
     if p then

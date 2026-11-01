@@ -24,7 +24,7 @@ end
 f:close()
 
 WoW.methodsCalled = {}
-local GUI = loadAddon()
+local GUI = loadAddon({ before = WoW.makeRestedXP })
 
 -- Every command and every skin's pass; later milestones add theirs here.
 WoW.showMerchant()
@@ -46,6 +46,14 @@ WoW.lootHistory(true)
 WoW.flushTimers(0)
 WoW.mapMaximize(true)
 WoW.flushTimers(0)
+WoW.rxpTheme()
+WoW.rxpLoadGuide()
+WoW.rxpSetStep()
+WoW.rxpTurn(0.5)
+WoW.rxpArrowText("Step 13\n(300yd)")
+WoW.rxpArrowShow()
+WoW.rxpArrowFont(12)
+WoW.flushTimers(0)
 WoW.characterPane("StatisticsFrame")
 WoW.clickTab(CommunitiesFrame.ChatTab)
 WoW.openBag(ContainerFrameCombinedBags, { 133784, "empty" })
@@ -58,7 +66,7 @@ GUI.Options._test.lookRows["Tint"][2]:Click()
 for _, cmd in ipairs({ "failures", "version", "help", "", "skins", "skin merchant off", "skin merchant on",
                        "skin bags off", "skin bags on", "skin gamemenu off", "skin gamemenu on",
                        "skin guild off", "skin guild on", "skin character off", "skin character on", "skin map off", "skin map on", "skin loot off", "skin loot on", "skin loothistory off",
-                       "skin loothistory on",
+                       "skin loothistory on", "skin rxp off", "skin rxp on", "skin rxparrow off", "skin rxparrow on",
                        "off", "on", "theme smoked", "theme class", "theme clear",
                        "suite", "suite follow glassunitframes on", "options",
                        "look", "look tint class", "look preset soft" }) do
