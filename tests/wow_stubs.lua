@@ -1,320 +1,137 @@
--- wow_stubs.lua: a minimal WoW: Forever mock for Lua 5.1 unit tests.
+-- wow_stubs.lua: Glass UI's WoW: Forever mock for Lua 5.1 unit tests.
 -- dofile("tests/wow_stubs.lua") FIRST in every test; drive it via the WoW table.
--- Glass MiniMap's stubs (themselves Glass MiniMap Bar's, GlassUnitFrames' and
--- GlassPanel's), trimmed to the widgets and the globals this addon reads.
 --
--- What it models, on purpose:
--- - STRICT globals: reading any global it does not define is an error. The
---   stub is the allowlist of APIs verified present in the API dump.
--- - EVENT names: RegisterEvent throws on a name the API dump does not declare.
--- - METHOD calls: every widget method called is recorded (WoW.methodsCalled)
---   so test_methods.lua can check each against the dump's widget methods.
--- - The widget METATABLE is a real method table, like the client's.
--- - BLIZZARD objects (WoW.makeMerchant): every method addon code calls on
+-- The mechanics come from WowTestKit (tests/kit.lua loads the commit
+-- tests/kit.pin names; its README is the reference): strict globals, event
+-- names checked against the pinned build, widgets that record every method
+-- called (WoW.methodsCalled, which test_methods checks with
+-- Kit.checkMethods), print (with the stray-"|" check done() fails on),
+-- timers, hooksecurefunc, fire / fireAllRegistered / tick. This file adds
+-- Glass UI's own:
+-- - the client APIs the addon reads, each verified in the dump;
+-- - the widget methods the core doesn't have, and the few it replaces (each
+--   says why);
+-- - BLIZZARD objects (WoW.makeMerchant...): every method addon code calls on
 --   one is recorded (WoW.blizzCalls), with SetTexture/SetAtlas's argument
 --   (WoW.textureArgs) and what addon code read from that texture with
---   GetTexture/GetAtlas (WoW.readBack); a Lua method is recorded apart (WoW.luaCalls); a field
---   written is trapped (WoW.fieldChanges). Glass Quest Tracker's contract
---   machinery. WoW.asBlizzard runs code as Blizzard's own.
+--   GetTexture/GetAtlas (WoW.readBack); a Lua method is recorded apart
+--   (WoW.luaCalls); a field written is trapped (WoW.fieldChanges). Glass
+--   Quest Tracker's contract machinery. WoW.asBlizzard runs code as
+--   Blizzard's own.
 
-WoW = {}
-WoW.DUMP = os.getenv("GLASSQT_API_DUMP") or "C:/Projects/WoW/References/Forever/api/forever-api-1.60.1.70450.md"
+dofile("tests/kit.lua")
+local Methods = WoW.Methods
+local coreNewWidget = WoW.newWidget
+-- The core's method dispatch (record the call, then run WoW.Methods[k]),
+-- which Blizzard's objects wrap below to keep the contract record.
+local coreDispatch = getmetatable(coreNewWidget("Frame")).__index
 
---------------------------------------------------------------------------------
--- Known events (from the dump when present)
---------------------------------------------------------------------------------
-
-WoW.KNOWN_EVENTS = {}
-do
-    local f = io.open(WoW.DUMP, "r")
-    if f then
-        local inEvents = false
-        for line in f:lines() do
-            if line:match("^## Documented events") then inEvents = true
-            elseif line:match("^## ") then inEvents = false
-            elseif inEvents then
-                local name = line:match("^([A-Z][A-Z0-9_]+)%s+%(")
-                if name then WoW.KNOWN_EVENTS[name] = true end
-            end
-        end
-        f:close()
-    end
-    if next(WoW.KNOWN_EVENTS) == nil then
-        -- CI has no dump: the events this addon registers, checked locally against it.
-        for _, e in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD",
-                             "EDIT_MODE_LAYOUTS_UPDATED",
-                             "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED", "CVAR_UPDATE",
-                             "PLAYER_LOGOUT", "ADDON_ACTION_BLOCKED", "ADDON_ACTION_FORBIDDEN" }) do
-            WoW.KNOWN_EVENTS[e] = true
-        end
-    end
-end
-
---------------------------------------------------------------------------------
--- Widgets
---------------------------------------------------------------------------------
-
-local Methods = {}   -- implementations, by method name
-WoW.Methods = Methods
-
-local function record(w, name)
-    WoW.methodsCalled[(rawget(w, "_type") or "?") .. ":" .. name] = true
-    -- A call on a Blizzard object from addon code (not from the simulated
-    -- Blizzard side): test_contract checks each against the C-only allowlist.
-    if rawget(w, "_blizz") and not WoW.inBlizzard then WoW.blizzCalls[name] = (WoW.blizzCalls[name] or 0) + 1 end
-    -- RestedXP's objects (WoW.makeRestedXP), recorded apart too.
-    if rawget(w, "_rxp") and not WoW.inBlizzard then WoW.rxpCalls[name] = (WoW.rxpCalls[name] or 0) + 1 end
-end
-
--- The shared method table: any Capitalised name is a method (a no-op unless
--- implemented below); anything else reads as nil, like a missing field.
-local MethodTable = setmetatable({}, {
-    __index = function(_, k)
-        if type(k) ~= "string" or not k:match("^%u") then return nil end
-        return function(self, ...)
-            record(self, k)
-            local impl = Methods[k]
-            if impl then return impl(self, ...) end
-            return nil
-        end
-    end,
-})
-local widgetMT = { __index = MethodTable }
-
+-- The stub's own objects (Blizzard's, a template's pieces) start with the
+-- fields the tests read directly: their children and regions as lists, alpha
+-- and scale 1, the mouse off.
 local function newWidget(wtype, parent, name)
-    local w = setmetatable({ _type = wtype, _parent = parent, _shown = true, _points = {},
-                             _scripts = {}, _events = {}, _children = {}, _regions = {},
-                             _level = parent and parent._level and (parent._level + 1) or 1,
-                             _width = 0, _height = 0, _name = name, _scale = 1, _alpha = 1,
-                             _mouse = false }, widgetMT)
+    local w = coreNewWidget(wtype, parent, name)
+    w._children, w._regions, w._scale, w._alpha, w._mouse = {}, {}, 1, 1, false
     return w
 end
-WoW.newWidget = newWidget
+
+-- WowTestKit #TBD2: every frame too. A test lists a frame's children or
+-- regions with ipairs(f._children) whether it has any or not, and the core
+-- makes those lists only with the first child or region.
+local coreCreateFrame = CreateFrame
+function CreateFrame(...)
+    local w = coreCreateFrame(...)
+    w._children, w._regions = w._children or {}, w._regions or {}
+    return w
+end
 
 local function adopt(parent, w)
-    if parent and parent._children then table.insert(parent._children, w) end
+    if parent then
+        parent._children = parent._children or {}
+        table.insert(parent._children, w)
+    end
 end
 
-local SCRIPTED = { Frame = true, Button = true, CheckButton = true, StatusBar = true, GameTooltip = true,
-                   EditBox = true }
+--------------------------------------------------------------------------------
+-- Templates (WoW.templates: what each adds to the frame CreateFrame makes)
+--------------------------------------------------------------------------------
 
-function CreateFrame(ftype, name, parent, template)
-    local w = newWidget(ftype, parent, name)
-    w._template = template
-    adopt(parent, w)
-    table.insert(WoW.frames, w)
-    if name then rawset(_G, name, w) end
-    if template == "UICheckButtonTemplate" or template == "UIPanelButtonTemplate" then
-        w.Text = newWidget("FontString", w)
-    end
-    -- RightSideTabTemplate (Blizzard_SharedXML/Shared/Tabs/RightSideTab.xml):
-    -- its BORDER frame texture, the Icon, the checked and highlight textures.
-    if template == "RightSideTabTemplate" then
-        w._width, w._height = 32, 32
-        local border = newWidget("Texture", w)
-        border._layer = "BORDER"
-        table.insert(w._regions, border)
-        w.Icon = newWidget("Texture", w)
-        w.Icon._layer = "ARTWORK"
-        table.insert(w._regions, w.Icon)
-        w._checkedTex = newWidget("Texture", w)
-        w._highlight = newWidget("Texture", w)
-    end
-    if template == "UIRadioButtonTemplate" then w.text = newWidget("FontString", w) end
-    -- UIPanelScrollFrameTemplate's bar, as its ScrollBar key.
-    if template == "UIPanelScrollFrameTemplate" then w.ScrollBar = newWidget("Slider", w) end
-    return w
+-- The button and checkbox templates' label (parentKey "Text").
+local function label(w) w.Text = newWidget("FontString", w) end
+WoW.templates.UICheckButtonTemplate = label
+WoW.templates.UIPanelButtonTemplate = label
+-- RightSideTabTemplate (Blizzard_SharedXML/Shared/Tabs/RightSideTab.xml):
+-- its BORDER frame texture, the Icon, the checked and highlight textures.
+WoW.templates.RightSideTabTemplate = function(w)
+    w._width, w._height = 32, 32
+    local border = newWidget("Texture", w)
+    border._layer = "BORDER"
+    WoW.addRegion(w, border)
+    w.Icon = newWidget("Texture", w)
+    w.Icon._layer = "ARTWORK"
+    WoW.addRegion(w, w.Icon)
+    w._checkedTex = newWidget("Texture", w)
+    w._highlight = newWidget("Texture", w)
 end
+WoW.templates.UIRadioButtonTemplate = function(w) w.text = newWidget("FontString", w) end
+-- UIPanelScrollFrameTemplate's bar, as its ScrollBar key.
+WoW.templates.UIPanelScrollFrameTemplate = function(w) w.ScrollBar = newWidget("Slider", w) end
 
-function Methods.Show(w) if not w._shown then w._shown = true; if w._scripts.OnShow then w._scripts.OnShow(w) end end end
-function Methods.Hide(w) if w._shown then w._shown = false; if w._scripts.OnHide then w._scripts.OnHide(w) end end end
-function Methods.SetShown(w, v) if v then Methods.Show(w) else Methods.Hide(w) end end
-function Methods.IsShown(w) return w._shown end
-function Methods.IsVisible(w)
-    local p = w
-    while p do if not p._shown then return false end; p = p._parent end
-    return true
-end
-function Methods.SetPoint(w, ...) table.insert(w._points, { ... }) end
-function Methods.ClearAllPoints(w) w._points = {} end
-function Methods.GetPoint(w, i)
-    local p = w._points[i or 1]
-    if p then return p[1], p[2], p[3], p[4], p[5] end
-end
-function Methods.GetNumPoints(w) return #w._points end
-function Methods.SetAllPoints(w, rel) table.insert(w._points, { "ALL", rel }) end
-function Methods.SetSize(w, x, y) w._width, w._height = x, y end
-function Methods.SetWidth(w, x) w._width = x end
-function Methods.SetHeight(w, y) w._height = y end
-function Methods.GetWidth(w) return w._width end
-function Methods.GetHeight(w) return w._height end
-function Methods.GetSize(w) return w._width, w._height end
-function Methods.GetCenter(w) return w._cx, w._cy end
--- Rects: what a test sets (nil until laid out, as before the first frame).
-function Methods.GetTop(w) return w._top end
-function Methods.GetBottom(w) return w._bottom end
--- ScrollFrame: the range a test sets (w._yrange).
-function Methods.GetVerticalScrollRange(w) return w._yrange or 0 end
-function Methods.GetEffectiveScale(w) return w._effScale or 1 end
-function Methods.SetScale(w, s) w._scale = s end
-function Methods.GetScale(w) return w._scale end
--- A texture painted with SetGradient ignores a later SetAlpha, and GetAlpha
--- keeps reading 1 (porting guide section 3, measured on 70374 twice; an image
--- texture too, SkinProbe W1.6 square C). Tests passed against that bug until
--- Glass Quest Tracker's stub behaved like this.
-function Methods.SetAlpha(w, a)
-    if w._gradient then return end
-    w._alpha = a
-end
-function Methods.GetAlpha(w) return w._alpha end
-function Methods.GetFrameLevel(w) return w._level end
-function Methods.SetFrameLevel(w, l) w._level = l end
-function Methods.SetFrameStrata(w, s) w._strata = s end
-function Methods.GetFrameStrata(w) return w._strata or "MEDIUM" end
-function Methods.GetName(w) return w._name end
-function Methods.GetParentKey(w) return w._parentKey end
-function Methods.GetParent(w) return w._parent end
-function Methods.SetAttribute(w, k, v) w._attrs = w._attrs or {}; w._attrs[k] = v end
-function Methods.GetAttribute(w, k) return w._attrs and w._attrs[k] end
-function Methods.SetParent(w, p)
-    if w._parent and w._parent._children then
-        for i, c in ipairs(w._parent._children) do
-            if c == w then table.remove(w._parent._children, i); break end
-        end
-    end
-    w._parent = p
-    adopt(p, w)
-end
-function Methods.GetChildren(w) return unpack(w._children) end
-function Methods.GetRegions(w) return unpack(w._regions) end
-function Methods.IsObjectType(w, t)
-    if w._type == t then return true end
-    return t == "Frame" and (w._type == "Button" or w._type == "CheckButton")
-end
-function Methods.GetObjectType(w) return w._type end
-function Methods.GetDrawLayer(w) return w._layer, w._sub or 0 end
-function Methods.IsForbidden(w) return false end
-function Methods.IsProtected(w) return w._protected == true end
-function Methods.EnableMouse(w, v) w._mouse = v and true or false end
-function Methods.IsMouseEnabled(w) return w._mouse == true end
-function Methods.RegisterForClicks(w, ...) w._clicks = { ... } end
-function Methods.RegisterForDrag(w, ...) w._drag = { ... } end
-function Methods.IsMouseOver(w) return WoW.mouseOver[w] == true end
-function Methods.GetChecked(w) return w._checked == true end
+--------------------------------------------------------------------------------
+-- Widget methods the core replaces here
+--------------------------------------------------------------------------------
+
+-- Enabled state in _enabled: here _disabled is a button's disabled texture
+-- (GetDisabledTexture; the Blizzard buttons below, and the tests read the
+-- state textures by their keys _normal, _pushed, _disabled, _highlight).
+-- The core's Enable/Disable keep the state in _disabled and would replace it.
 function Methods.SetEnabled(w, v) w._enabled = v and true or false end
 function Methods.Enable(w) w._enabled = true end
 function Methods.Disable(w) w._enabled = false end
 function Methods.IsEnabled(w) return w._enabled ~= false end
-function Methods.SetChecked(w, v) w._checked = v and true or false end
-function Methods.SetText(w, t) w._text = t end
-function Methods.GetText(w) return w._text end
--- RGBA, read back; a call from addon code on a Blizzard string is recorded
--- with its receiver (WoW.textColorCalls) for test_contract's audited list.
-function Methods.SetTextColor(w, r, g, b, a)
-    if rawget(w, "_blizz") and not WoW.inBlizzard then table.insert(WoW.textColorCalls, w) end
-    w._textColor = { r, g, b, a or 1 }
+-- The tests read a texture's sublevel as _sub (GetDrawLayer below); the
+-- core keeps it as _sublevel.
+local coreCreateTexture = Methods.CreateTexture
+function Methods.CreateTexture(w, name, layer, template, sub)
+    local t = coreCreateTexture(w, name, layer, template, sub)
+    t._sub = sub
+    return t
 end
-function Methods.GetTextColor(w)
-    local c = w._textColor or { 1, 1, 1, 1 }
-    return c[1], c[2], c[3], c[4]
+-- The tests read it as _desat (the core: _desaturated).
+function Methods.SetDesaturated(t, v) t._desat = v and true or false end
+-- A texture painted with SetGradient ignores a later SetAlpha, and GetAlpha
+-- keeps reading 1 (porting guide section 3, measured on 70374 twice; an image
+-- texture too, SkinProbe W1.6 square C): the core's SetAlpha models that.
+-- WowTestKit #TBD1: an alpha set BEFORE the gradient doesn't survive it
+-- either, the texture shows and reads 1 (70374, SkinProbe W1.6 square B),
+-- and this API takes colour objects; the core's SetGradient does neither.
+function Methods.SetGradient(t, orientation, c1, c2)
+    assert(type(c1) == "table" and type(c2) == "table", "SetGradient takes color objects on this API")
+    t._gradient = { orientation, c1, c2 }
+    t._alpha = 1
 end
-function Methods.GetAnimationGroups(w) return unpack(w._anims or {}) end
-function Methods.UnregisterAllEvents(w) w._events = {} end
-function Methods.SetHighlightTexture(w, file, blend)
-    w._highlight = newWidget("Texture", w)
-    w._highlight._file = file
-    return true
-end
-function Methods.GetHighlightTexture(w) return w._highlight end
-function Methods.SetNormalTexture(w, file) w._normal = newWidget("Texture", w); w._normal._file = file end
-function Methods.GetNormalTexture(w) return w._normal end
-function Methods.GetPushedTexture(w) return w._pushed end
-function Methods.GetDisabledTexture(w) return w._disabled end
--- "NORMAL" or "PUSHED"; a test sets w._buttonState.
-function Methods.GetButtonState(w) return w._buttonState or "NORMAL" end
-function Methods.SetCheckedTexture(w, file) w._checkedTex = newWidget("Texture", w) end
-function Methods.GetCheckedTexture(w) return w._checkedTex end
-
--- Animations: Play marks a group playing; WoW.finishAnimations() completes
--- every playing group (OnFinished), as the client would after its duration.
-function Methods.CreateAnimationGroup(w)
-    local ag = newWidget("AnimationGroup", w)
-    ag._animations = {}
-    w._anims = w._anims or {}
-    table.insert(w._anims, ag)
-    table.insert(WoW.animGroups, ag)
-    return ag
-end
-function Methods.CreateAnimation(ag, atype)
-    local a = newWidget(atype or "Animation", ag)
-    table.insert(ag._animations, a)
-    return a
-end
-function Methods.GetAnimations(ag) return unpack(ag._animations) end
-function Methods.GetTarget(a) return a._parent and a._parent._parent end
-function Methods.Play(ag) ag._playing = true; ag._plays = (ag._plays or 0) + 1 end
-function Methods.Stop(ag) ag._playing = false end
-function Methods.IsPlaying(ag) return ag._playing == true end
-function Methods.SetOrigin(a, point) a._origin = point end
-function Methods.SetScaleFrom(a, x, y) a._from = { x, y } end
-function Methods.SetScaleTo(a, x, y) a._to = { x, y } end
-function WoW.finishAnimations()
-    for _, ag in ipairs(WoW.animGroups) do
-        if ag._playing then
-            ag._playing = false
-            if ag._scripts.OnFinished then ag._scripts.OnFinished(ag) end
-        end
-    end
-end
-
--- Scripts. HasScript: every scripted widget type knows these handlers.
-local HANDLERS = { OnClick = true, OnMouseUp = true, OnMouseDown = true, OnEnter = true, OnLeave = true,
-                   OnShow = true, OnHide = true, OnUpdate = true, OnEvent = true, OnDragStart = true, OnDragStop = true,
-                   OnDoubleClick = true, OnMouseWheel = true }
-function Methods.HasScript(w, name) return SCRIPTED[w._type] == true and HANDLERS[name] == true end
-function Methods.SetScript(w, name, fn) w._scripts[name] = fn end
-function Methods.GetScript(w, name) return w._scripts[name] end
+-- The hook is addon code, even when Blizzard's side fired the script (the
+-- contract record).
 function Methods.HookScript(w, name, fn)
     local old = w._scripts[name]
     w._scripts[name] = function(...)
         if old then old(...) end
-        -- The hook is addon code, even when Blizzard's side fired the script.
         local was = WoW.inBlizzard
         WoW.inBlizzard = false
         fn(...)
         WoW.inBlizzard = was
     end
 end
-function Methods.Click(w, mouse)
-    if w._scripts.OnClick then w._scripts.OnClick(w, mouse or "LeftButton", false) end
+-- RGBA, read back; a call from addon code on a Blizzard string is recorded
+-- with its receiver (WoW.textColorCalls) for test_contract's audited list.
+local coreSetTextColor = Methods.SetTextColor
+function Methods.SetTextColor(w, ...)
+    if rawget(w, "_blizz") and not WoW.inBlizzard then table.insert(WoW.textColorCalls, w) end
+    return coreSetTextColor(w, ...)
 end
-function Methods.RegisterEvent(w, e)
-    if not WoW.KNOWN_EVENTS[e] then error("Attempt to register unknown event \"" .. e .. "\"", 2) end
-    w._events[e] = true
-    return true
-end
-function Methods.UnregisterEvent(w, e) w._events[e] = nil end
 
--- Regions.
-local function region(w, wtype, layer)
-    local r = newWidget(wtype, w)
-    r._layer = layer
-    if wtype ~= "MaskTexture" then table.insert(w._regions, r) end
-    return r
-end
-function Methods.CreateTexture(w, _, layer, _, sub)
-    local r = region(w, "Texture", layer)
-    r._sub = sub
-    return r
-end
-function Methods.CreateMaskTexture(w) return region(w, "MaskTexture") end
-function Methods.CreateFontString(w, _, layer, template)
-    local r = region(w, "FontString", layer)
-    r._font = template
-    return r
-end
--- On a Blizzard object, addon code's argument is kept: the contract allows
--- only nil, or giving back the value read before.
+-- Textures. On a Blizzard object, addon code's argument is kept: the
+-- contract allows only nil, or giving back the value read before.
 local function textureArg(t, method, v)
     if rawget(t, "_blizz") and not WoW.inBlizzard then table.insert(WoW.textureArgs, { t, method, v }) end
 end
@@ -333,22 +150,77 @@ function WoW.readBack(t, setter, v)
     local r = WoW.reads[t]
     return r ~= nil and r[getter] ~= nil and r[getter][v] == true
 end
-function Methods.SetTexture(t, file) textureArg(t, "SetTexture", file); t._file = file; t._atlas = nil; return true end
+local coreSetTexture, coreSetAtlas = Methods.SetTexture, Methods.SetAtlas
+function Methods.SetTexture(t, file) textureArg(t, "SetTexture", file); return coreSetTexture(t, file) end
+function Methods.SetAtlas(t, atlas) textureArg(t, "SetAtlas", atlas); return coreSetAtlas(t, atlas) end
+
+--------------------------------------------------------------------------------
+-- Widget methods the core doesn't have
+--------------------------------------------------------------------------------
+
+function Methods.GetNumPoints(w) return #w._points end
+function Methods.GetSize(w) return w._width, w._height end
+function Methods.GetCenter(w) return w._cx, w._cy end
+-- Rects: what a test sets (nil until laid out, as before the first frame).
+function Methods.GetTop(w) return w._top end
+function Methods.GetBottom(w) return w._bottom end
+-- ScrollFrame: the range a test sets (w._yrange).
+function Methods.GetVerticalScrollRange(w) return w._yrange or 0 end
+function Methods.GetEffectiveScale(w) return w._effScale or 1 end
+function Methods.SetScale(w, s) w._scale = s end
+function Methods.GetScale(w) return w._scale or 1 end
+function Methods.GetParentKey(w) return w._parentKey end
+function Methods.IsObjectType(w, t)
+    if w._type == t then return true end
+    return t == "Frame" and (w._type == "Button" or w._type == "CheckButton")
+end
+function Methods.GetDrawLayer(w) return w._layer, w._sub or 0 end
+function Methods.IsProtected(w) return w._protected == true end
+function Methods.RegisterForClicks(w, ...) w._clicks = { ... } end
+function Methods.RegisterForDrag(w, ...) w._drag = { ... } end
+function Methods.IsMouseOver(w) return WoW.mouseOver[w] == true end
+function Methods.SetHighlightTexture(w, file, blend)
+    w._highlight = newWidget("Texture", w)
+    w._highlight._file = file
+    return true
+end
+function Methods.GetHighlightTexture(w) return w._highlight end
+function Methods.SetNormalTexture(w, file) w._normal = newWidget("Texture", w); w._normal._file = file end
+function Methods.GetNormalTexture(w) return w._normal end
+function Methods.GetPushedTexture(w) return w._pushed end
+function Methods.GetDisabledTexture(w) return w._disabled end
+-- "NORMAL" or "PUSHED"; a test sets w._buttonState.
+function Methods.GetButtonState(w) return w._buttonState or "NORMAL" end
+function Methods.SetCheckedTexture(w, file) w._checkedTex = newWidget("Texture", w) end
+function Methods.GetCheckedTexture(w) return w._checkedTex end
+
+-- Scripts. HasScript: every scripted widget type knows these handlers.
+local SCRIPTED = { Frame = true, Button = true, CheckButton = true, StatusBar = true, GameTooltip = true,
+                   EditBox = true }
+local HANDLERS = { OnClick = true, OnMouseUp = true, OnMouseDown = true, OnEnter = true, OnLeave = true,
+                   OnShow = true, OnHide = true, OnUpdate = true, OnEvent = true, OnDragStart = true, OnDragStop = true,
+                   OnDoubleClick = true, OnMouseWheel = true }
+function Methods.HasScript(w, name) return SCRIPTED[w._type] == true and HANDLERS[name] == true end
+function Methods.Click(w, mouse)
+    if w._scripts.OnClick then w._scripts.OnClick(w, mouse or "LeftButton", false) end
+end
+
+-- Textures.
 function Methods.GetTexture(t) return readBy(t, "GetTexture", t._file) end
-function Methods.SetAtlas(t, atlas) textureArg(t, "SetAtlas", atlas); t._atlas = atlas; t._file = nil; return true end
 function Methods.GetAtlas(t) return readBy(t, "GetAtlas", t._atlas) end
 function Methods.SetTexCoord(t, ...) t._coords = { ... } end
 function Methods.GetTexCoord(t)
     local c = t._coords or { 0, 0, 0, 1, 1, 0, 1, 1 }
     return unpack(c)
 end
-function Methods.SetVertexColor(t, r, g, b, a) t._vertex = { r, g, b, a } end
 function Methods.GetVertexColor(t)
     local v = t._vertex or { 1, 1, 1, 1 }
     return v[1], v[2], v[3], v[4] or 1
 end
-function Methods.SetDesaturated(t, v) t._desat = v and true or false end
 function Methods.IsDesaturated(t) return t._desat == true end
+function Methods.RemoveMaskTexture(t, m)
+    for i, x in ipairs(t._masks or {}) do if x == m then table.remove(t._masks, i); return end end
+end
 function Methods.SetShadowOffset(fs, x, y) fs._shadowOffset = { x, y } end
 function Methods.GetShadowOffset(fs)
     local o = fs._shadowOffset or { 0, 0 }
@@ -375,19 +247,6 @@ function Methods.GetStringHeight(fs)
     local _, n, size = textLines(fs)
     return n * size
 end
-function Methods.SetColorTexture(t, r, g, b, a) t._color = { r, g, b, a } end
-function Methods.AddMaskTexture(t, m) t._masks = t._masks or {}; table.insert(t._masks, m) end
-function Methods.RemoveMaskTexture(t, m)
-    for i, x in ipairs(t._masks or {}) do if x == m then table.remove(t._masks, i); return end end
-end
-function Methods.SetGradient(t, orientation, c1, c2)
-    assert(type(c1) == "table" and type(c2) == "table", "SetGradient takes color objects on this API")
-    t._gradient = { orientation, c1, c2 }
-    -- An alpha set BEFORE the gradient doesn't survive it either: the texture
-    -- shows and reads 1 (70374, SkinProbe W1.6 square B).
-    t._alpha = 1
-end
-function Methods.SetFont(fs, file, size, flags) fs._font = { file, size, flags }; return true end
 
 -- GameTooltip: records its lines.
 function Methods.SetOwner(tt, owner) tt._owner = owner; tt._lines = {} end
@@ -404,17 +263,13 @@ function Methods.AddDoubleLine(tt, l, r) table.insert(tt._lines, tostring(l) .. 
 -- Globals
 --------------------------------------------------------------------------------
 
-function WoW.reset()
-    WoW.frames = {}
-    WoW.chat = {}
-    WoW.methodsCalled = WoW.methodsCalled or {}
-    WoW.timers = {}
+-- A fresh session (the core's WoW.reset clears the frames, chat, method
+-- calls, timers and combat first).
+table.insert(WoW.onReset, function()
     WoW.mouseOver = {}
-    WoW.animGroups = {}
     WoW.settingsOpened = nil
     WoW.cvars = {}
     WoW.class = "MAGE"
-    WoW.combat = false
     WoW.loaded = {}
     -- Installed addons and their enable state for this character
     -- ([name] = 0 none, 1 some, 2 all); the GUID the state was asked for.
@@ -428,7 +283,7 @@ function WoW.reset()
     WoW.textColorCalls = {}
     -- A fresh session: the last one's callbacks are gone with it (a stale
     -- skin's LookChanged would otherwise touch this session's frames).
-    if EventRegistry then EventRegistry.callbacks = {} end
+    if rawget(_G, "EventRegistry") then EventRegistry.callbacks = {} end
     WoW.hookedKeys = setmetatable({}, { __mode = "k" })
     WoW.snap = setmetatable({}, { __mode = "k" })
     WoW.inBlizzard = false
@@ -439,16 +294,25 @@ function WoW.reset()
     UIParent._width, UIParent._height = 1024, 768
     GameTooltip = newWidget("GameTooltip", UIParent, "GameTooltip")
     UISpecialFrames = {}
-end
+end)
 
-function print(...)
-    local parts = {}
-    for i = 1, select("#", ...) do parts[#parts + 1] = tostring((select(i, ...))) end
-    table.insert(WoW.chat, table.concat(parts, " "))
+-- A hook on a Blizzard object is addon code, even when Blizzard's side made
+-- the call, and the wrapper it leaves is the client's own field, not an addon
+-- write (WoW.hookedKeys: test_contract skips it). The core's hooksecurefunc
+-- does the rest.
+local coreHooksecurefunc = hooksecurefunc
+function hooksecurefunc(t, name, fn)
+    if type(t) == "string" then return coreHooksecurefunc(t, name, fn) end
+    if rawget(t, "_blizz") then WoW.hookedKeys[t] = WoW.hookedKeys[t] or {}; WoW.hookedKeys[t][name] = true end
+    coreHooksecurefunc(t, name, function(...)
+        local was = WoW.inBlizzard
+        WoW.inBlizzard = false
+        fn(...)
+        WoW.inBlizzard = was
+    end)
 end
 
 SlashCmdList = {}
-strmatch = string.match
 function wipe(t) for k in pairs(t) do t[k] = nil end; return t end
 Enum = { UITextureSliceMode = { Stretched = 0, Tiled = 1 } }
 function CreateColor(r, g, b, a) return { r = r, g = g, b = b, a = a } end
@@ -483,32 +347,8 @@ WoW.itemIcons = { [5500] = 134122 }
 -- The buyback count (MerchantFrame.lua:416, 547): WoW.buybackCount.
 function GetNumBuybackItems() return WoW.buybackCount or 0 end
 function UnitGUID(unit) return unit == "player" and WoW.GUID or nil end
--- Seconds since the client started: what a test sets.
+-- Seconds since the client started (the core's GetTime): what a test sets.
 WoW.now = 0
-function GetTime() return WoW.now end
-function issecretvalue(v) return false end
-function InCombatLockdown() return WoW.combat end
--- hooksecurefunc(table, name, fn) or hooksecurefunc(globalName, fn).
-function hooksecurefunc(t, name, fn)
-    if type(t) == "string" then
-        local gname, f = t, name
-        local orig = rawget(_G, gname)
-        rawset(_G, gname, function(...) local r = orig(...); f(...); return r end)
-        return
-    end
-    local orig = t[name]
-    -- The client's own field: not an addon write (test_contract skips it).
-    if rawget(t, "_blizz") then WoW.hookedKeys[t] = WoW.hookedKeys[t] or {}; WoW.hookedKeys[t][name] = true end
-    rawset(t, name, function(self, ...)
-        local r = orig(self, ...)
-        -- The hook is addon code, even when Blizzard's side made the call.
-        local was = WoW.inBlizzard
-        WoW.inBlizzard = false
-        fn(self, ...)
-        WoW.inBlizzard = was
-        return r
-    end)
-end
 
 -- EventUtil (Blizzard_SharedXML\EventUtil.lua:67): now if loaded, else at its
 -- ADDON_LOADED. WoW.loadAddOn(name) loads one mid-session.
@@ -528,20 +368,6 @@ end
 -- The interface style, as read on 70374 (SkinProbe W1.4: {Gamepad=1, Mkb=0}).
 Enum.InputDeviceInterfaceType = { Mkb = 0, Gamepad = 1 }
 C_InputInterfaceStyle = { GetCurrentStyle = function() return WoW.style end }
-
--- Timers keep their delay: WoW.flushTimers(upTo) runs those due within upTo.
-C_Timer = { After = function(s, fn) table.insert(WoW.timers, { s = s, fn = fn }) end }
-function WoW.flushTimers(upTo)
-    for _ = 1, 10 do   -- timers may schedule timers; settle them
-        local run, keep = {}, {}
-        for _, t in ipairs(WoW.timers) do
-            if upTo == nil or t.s <= upTo then run[#run + 1] = t else keep[#keep + 1] = t end
-        end
-        WoW.timers = keep
-        if #run == 0 then return end
-        for _, t in ipairs(run) do t.fn() end
-    end
-end
 
 -- Settings (Options > AddOns): the canvas category API.
 Settings = {
@@ -569,8 +395,22 @@ end }
 -- A Blizzard object: a NEW key written from addon code is trapped here;
 -- a changed EXISTING key is caught by WoW.fieldChanges() against the
 -- snapshot. Keys starting with "_" are the stub's own bookkeeping.
+-- Its methods are the core's, and a call from addon code (not from the
+-- simulated Blizzard side) is also counted in WoW.blizzCalls, which
+-- test_contract checks against the C-only allowlist; RestedXP's objects
+-- (WoW.makeRestedXP) in WoW.rxpCalls too.
 local blizzMT = {
-    __index = MethodTable,
+    __index = function(t, k)
+        local method = coreDispatch(t, k)
+        if not method then return nil end
+        return function(self, ...)
+            if not WoW.inBlizzard then
+                if rawget(self, "_blizz") then WoW.blizzCalls[k] = (WoW.blizzCalls[k] or 0) + 1 end
+                if rawget(self, "_rxp") then WoW.rxpCalls[k] = (WoW.rxpCalls[k] or 0) + 1 end
+            end
+            return method(self, ...)
+        end
+    end,
     __newindex = function(t, k, v)
         if type(k) == "string" and k:sub(1, 1) == "_" then return rawset(t, k, v) end
         if not WoW.inBlizzard then table.insert(WoW.fieldWrites, tostring(k)) end
@@ -2331,38 +2171,9 @@ function WoW.rxpArrowText(s) WoW.asBlizzard(function() RXPG_ARROW.text:SetText(s
 function WoW.rxpArrowFont(size) WoW.asBlizzard(function() RXPG_ARROW.text:SetFont("Fonts\\FRIZQT__.TTF", size, "OUTLINE") end) end
 function WoW.rxpArrowAlpha(a) WoW.asBlizzard(function() RXPG_ARROW:SetAlpha(a) end) end
 
---------------------------------------------------------------------------------
--- Driving
---------------------------------------------------------------------------------
-
--- Fire an event at every frame registered for it. Errors are NOT caught.
-function WoW.fire(event, ...)
-    local list = {}
-    for _, w in ipairs(WoW.frames) do list[#list + 1] = w end
-    for _, w in ipairs(list) do
-        local handler = w._scripts.OnEvent
-        if handler and w._events[event] then handler(w, event, ...) end
-    end
-end
-
--- One rendered frame: OnUpdate on every visible frame.
-function WoW.tick(elapsed)
-    elapsed = elapsed or 0.02
-    local list = {}
-    for _, w in ipairs(WoW.frames) do list[#list + 1] = w end
-    for _, w in ipairs(list) do
-        local fn = w._scripts.OnUpdate
-        if fn and Methods.IsVisible(w) then fn(w, elapsed) end
-    end
-end
-
 WoW.reset()
 
--- Strict globals.
+-- Strict globals (the core's), as the last line: everything above is built.
 -- LibStub: the embedded library's own loader reads _G.LibStub before creating it.
-local allowNil = { GlassUI = true, GlassUIDB = true, SkinProbeDB = true,
-                   SLASH_GLASSUI1 = true, SLASH_GLASSUI2 = true, LibStub = true }
-setmetatable(_G, { __index = function(_, k)
-    if allowNil[k] then return nil end
-    error("read of undefined global '" .. tostring(k) .. "' (not stubbed: is it in the API dump?)", 2)
-end })
+Kit.strict({ GlassUI = true, GlassUIDB = true, SkinProbeDB = true,
+             SLASH_GLASSUI1 = true, SLASH_GLASSUI2 = true, LibStub = true })

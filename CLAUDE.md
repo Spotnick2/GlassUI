@@ -100,8 +100,9 @@ docs/FOREVER-PROBE.md says how to run it.
 Lua 5.1 at `C:\Program Files (x86)\Lua\5.1\` (`lua.exe`, `luac.exe`). No build step.
 
 ```powershell
-pwsh tests\run.ps1                                                   # luac -p on the TOC files (+ probe), then every tests\test_*.lua (needs ..\LibGlass and ..\ForeverProbe, or $env:LIBGLASS / $env:FOREVERPROBE)
-& 'C:\Program Files (x86)\Lua\5.1\lua.exe' tests\test_boot.lua      # one test, from the repo root
+pwsh tests\run.ps1                                                   # luac -p on the TOC files (+ probe), then every tests\test_*.lua, through WowTestKit at its pin (needs ..\LibGlass and ..\ForeverProbe, or $env:LIBGLASS / $env:FOREVERPROBE)
+pwsh tests\run.ps1 -KitDev                                           # the same against the ..\WowTestKit working copy, not the pin
+& 'C:\Program Files (x86)\Lua\5.1\lua.exe' tests\test_boot.lua      # one test, from the repo root, once run.ps1 has fetched the kit
 pwsh Tools\deploy.ps1                                                # copy the addon into AddOns
 pwsh Tools\deploy.ps1 -Probe                                         # ...plus ForeverProbe and SkinProbe
 ```
@@ -115,11 +116,24 @@ pwsh Tools\deploy.ps1 -Probe                                         # ...plus F
 
 ## Testing
 
-Glass Quest Tracker's harness: `tests\wow_stubs.lua` (strict globals as an allowlist of APIs verified
-in the dump, event names validated against the dump, every widget method recorded),
-`tests\harness.lua` (`check`, `eq`, `near`, `loadAddon`), `test_methods.lua` (every method called
-exists on this client). The contract test arrives with the engine (#3). **Mutation-test every new
-test.** Offline tests can't cover taint, rendering or the live client: that's the probe and each
+The test scaffolding is WowTestKit (`C:\Projects\WoW\WowTestKit`; its README is the reference)
+at the commit and client build `tests\kit.pin` names. `tests\run.ps1` puts that commit in
+`%LOCALAPPDATA%\WowTestKit\<sha>` and hands off to the kit's runner; CI fetches it with
+`tests\fetch_kit.sh`. `tests\kit.lua`, `kit.ps1` and `fetch_kit.sh` are the kit's bootstrap
+copies: never edit them here. A kit need is an issue on the kit, worked around in
+`tests\wow_stubs.lua` with a `-- WowTestKit #N:` comment meanwhile. `tests\run.ps1 -KitDev`
+runs against the `..\WowTestKit` working copy instead of the pin.
+
+The kit's core (strict globals as an allowlist of APIs verified in the dump, event names validated
+against the pinned build, every widget method recorded, timers, `print` with the stray-`|` check
+`done()` fails on), plus Glass UI's own in `tests\wow_stubs.lua`: the client APIs it reads, the
+Blizzard windows with Glass Quest Tracker's contract record (`WoW.blizzCalls`, `textureArgs`,
+`fieldChanges`, `luaCalls`), and the few `WoW.Methods` entries it replaces, each saying why.
+`tests\harness.lua` has `near`, `loadAddon` and `acceptKnownStrays` (the help's known bare-`|`
+lines); `check`, `eq` and `done` are the kit's. `test_methods.lua` exercises every skin and command,
+then `Kit.checkMethods` fails on any widget method the pinned build lacks on that type: a new skin's
+window or command goes in its exercise. The contract test arrives with the engine (#3).
+**Mutation-test every new test.** Offline tests can't cover taint, rendering or the live client: that's the probe and each
 skin's in-game acceptance. **`test_probe` runs locally only:** ForeverProbe is private, so CI sets
 `FOREVERPROBE_OPTIONAL=1` and it skips there (ForeverProbe GUIDE section 8). Run
 `tests\run.ps1` before every PR that touches the probe.

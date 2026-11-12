@@ -2,9 +2,11 @@
 dofile("tests/wow_stubs.lua")
 dofile("tests/harness.lua")
 
-local toc = io.open("GlassUI.toc"):read("*a")
-check(toc:find("## Interface: 16001", 1, true), "interface 16001 (1.60.1; 11601 is the transposed-digit bug)")
-check(toc:find("## Version: @project-version@", 1, true), "packager version token kept")
+-- WowTestKit's: interface 16001, the version token, every listed .lua file
+-- exists, every entry (the library's XML line too) is listed once.
+Kit.checkToc(TOC)
+
+local toc = io.open(TOC):read("*a")
 check(toc:find("## SavedVariables: GlassUIDB", 1, true), "saved variables declared")
 check(toc:find("## X-License: MIT", 1, true), "MIT, like its siblings")
 -- The AddOn list's header for the family (Blizzard_AddOnList AddonList.lua:456). Never a
@@ -15,9 +17,6 @@ check(not tocLF:find("\n## Group:", 1, true), "no Group line")
 check(not tocLF:find("\n## Dependencies:", 1, true) and not tocLF:find("\n## RequiredDeps:", 1, true),
       "no hard dependency: every Glass addon stands alone")
 check(io.open("LICENSE"):read("*a"):find("MIT License", 1, true), "LICENSE is MIT")
-for _, f in ipairs(tocFiles()) do
-    check(io.open(f, "r") ~= nil, "TOC file exists: " .. f)
-end
 eq(tocLines()[1], LIBGLASS_XML, "LibGlass-1.0 loads first")
 eq(tocFiles()[1], "Compat.lua", "Compat is the first addon file")
 eq(tocFiles()[#tocFiles()], "GlassUI.lua", "bootstrap loads last")
@@ -26,11 +25,6 @@ for _, f in ipairs(tocFiles()) do
     local src = io.open(f, "rb"):read("*a")
     local token = src:match("@project%-[%w-]+@") or src:match("@file%-[%w-]+@")
     check(not token, f .. " holds no packager token (found " .. tostring(token) .. ")")
-end
-local seen = {}
-for _, f in ipairs(tocFiles()) do
-    check(not seen[f], "TOC lists each file once: " .. f)
-    seen[f] = true
 end
 
 local GUI = loadAddon()
