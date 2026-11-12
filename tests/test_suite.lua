@@ -779,4 +779,7 @@ end
 eq(next(GUI.failures), nil, "no failures")
 for k, v in pairs(GUI.failures) do io.write("    " .. k .. ": " .. v .. "\n") end
 
+-- FINDING: the usage lines' bare "|" (harness.lua, acceptKnownStrays).
+check(acceptKnownStrays() > 0, "the usage lines' known bare-| lines, let through until they're doubled")
+
 done("test_suite")
