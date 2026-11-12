@@ -54,7 +54,16 @@ jobs:
           echo "checking $count files"
           find . -name '*.lua' -not -path './.git/*' -not -path './Libs/*' -print0 | xargs -0 luac5.1 -p
 
-      # Without the API dump (local only), test_methods skips the method check.
+      # The tests' scaffolding (WowTestKit) at the commit tests/kit.pin names,
+      # outside the checkout (the syntax check above never sees it), checked to
+      # BE that commit. Its data for the pinned build stands in for the API
+      # dump, which is local only: event names and widget methods are checked
+      # here as strictly as on the owner's machine.
+      - name: Fetch WowTestKit at its pin
+        run: |
+          bash tests/fetch_kit.sh "$RUNNER_TEMP/WowTestKit"
+          echo "WOWTESTKIT=$RUNNER_TEMP/WowTestKit" >> "$GITHUB_ENV"
+
       # SkinProbe's test needs ForeverProbe, which is private and local: it
       # runs locally only, and skips here (ForeverProbe GUIDE section 8).
       - name: Unit tests
@@ -75,7 +84,8 @@ jobs:
       # The zip is what players install, so assert its SHAPE: the TOC, every
       # Lua file it loads, LICENSE, and under Libs/LibGlass-1.0 exactly what
       # the library ships (its XML, every file the XML loads, LICENSE,
-      # Media/*.tga). NOTHING else. No Media of our own: the glass is LibGlass's.
+      # Media/*.tga), and our own Media/*.tga (Tools/make_media.py's, #56).
+      # NOTHING else.
       - name: The package is exactly the addon and its library
         run: |
           zip=$(ls .release/*.zip | head -1)
@@ -85,6 +95,7 @@ jobs:
             echo GlassUI/GlassUI.toc
             echo GlassUI/LICENSE
             tr -d '\r' < GlassUI.toc | grep -v '^#' | grep '\.lua$' | tr '\\' '/' | sed 's|^|GlassUI/|'
+            ls Media/*.tga | sed 's|^|GlassUI/|'
             echo "$lib/LibGlass-1.0.xml"
             echo "$lib/LICENSE"
             tr -d '\r' < "$LIBGLASS/LibGlass-1.0.xml" | perl -0pe 's/<!--.*?-->//gs' |

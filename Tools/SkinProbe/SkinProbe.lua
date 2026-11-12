@@ -1346,13 +1346,75 @@ local function glassMemory()
     return ok and plain(kb) or nil
 end
 
+-- A button's (bag, slot) as Blizzard's GetBagID reads them (ContainerFrame.lua:1845,
+-- 70888): its bagID field, else its parent's ID; the slot is its own ID. Fields and
+-- native getters only.
+local function bagSlot(b)
+    local bag = plain(b.bagID)
+    if bag == nil then
+        local okP, p = call(b, "GetParent")
+        local okI, id = call(okP and p or nil, "GetID")
+        bag = okI and plain(id) or nil
+    end
+    local okS, slot = call(b, "GetID")
+    return bag, okS and plain(slot) or nil
+end
+
+-- Empty by the client, not by the skin's own reading (#170: a check that read the
+-- skin's key passed as 0 of 0 once the key was gone): true, false, or nil unread.
+local function slotEmpty(bag, slot)
+    local cc = rawget(_G, "C_Container")
+    if bag == nil or slot == nil or type(cc) ~= "table" or type(cc.GetContainerItemInfo) ~= "function" then
+        return nil
+    end
+    local ok, info = pcall(cc.GetContainerItemInfo, bag, slot)
+    if not ok then return nil end
+    return info == nil
+end
+
+-- Free slots in the bags seen on visible buttons, the keyring left out (it shows a
+-- computed part of its size, MainMenuBarBagButtons.lua:64): closed bags don't count.
+local function freeIn(bags)
+    local cc = rawget(_G, "C_Container")
+    if type(cc) ~= "table" or type(cc.GetContainerNumFreeSlots) ~= "function" then return 0 end
+    local index = rawget(_G, "Enum") and Enum.BagIndex
+    local keyring = type(index) == "table" and index.Keyring or nil
+    local n = 0
+    for bag in pairs(bags) do
+        if bag ~= keyring then
+            local ok, free = pcall(cc.GetContainerNumFreeSlots, bag)
+            free = ok and plain(free) or nil
+            if type(free) == "number" then n = n + free end
+        end
+    end
+    return n
+end
+
+-- An icon set from a file reads no atlas (the bag skin's empty test rests on it,
+-- #170): measured on a texture of ours.
+local function atlasRoundTrip()
+    local f = CreateFrame("Frame")
+    local t = f:CreateTexture()
+    t:SetAtlas("bags-item-slot64")
+    local before = plain(t:GetAtlas())
+    t:SetTexture(134400)
+    local after = plain(t:GetAtlas())
+    f:Hide()
+    record("BG.atlas", { before = before, after = after })
+    local ok = before ~= nil and after == nil
+    say("BG atlas: after SetAtlas " .. tostring(before) .. ", after SetTexture " .. tostring(after))
+    return ok, ok and "a file texture reads no atlas" or ("after SetTexture the atlas reads " .. tostring(after))
+end
+
 -- Every open window: ours shown, Blizzard's shell faded; each shown item
--- button: our glass seen, its rim faded, an empty slot (its icon on the
--- button's own empty atlas) dimmed to 0, a filled one not.
+-- button: our glass seen, its rim faded, an empty slot (empty by the client)
+-- dimmed to 0, its greyed bag icon (the combined window's) faded, a filled
+-- one shown.
 local function bagsState(label)
     local B, G = bagsUI()
     local rec = { windows = 0, slots = 0, glass = 0, rimsFaded = 0, empty = 0, emptyDimmed = 0, filled = 0,
-                  filledShown = 0, shellFaded = 0, headers = 0 }
+                  filledShown = 0, shellFaded = 0, headers = 0, unread = 0, ghost = 0, ghostFaded = 0, free = 0 }
+    local bags = {}
     for _, name in ipairs(BAG_WINDOWS) do
         local f = frameByName(name)
         if f and seen(f) then
@@ -1370,12 +1432,22 @@ local function bagsState(label)
                     local okN, rim = call(b, "GetNormalTexture")
                     local okR, ra = call(okN and rim or nil, "GetAlpha")
                     if okR and plain(ra) == 0 then rec.rimsFaded = rec.rimsFaded + 1 end
-                    local okT, atlas = call(b.icon, "GetAtlas")
                     local okI, ia = call(b.icon, "GetAlpha")
                     ia = okI and plain(ia) or nil
-                    if okT and plain(atlas) ~= nil and plain(atlas) == plain(b.emptyBackgroundAtlas) then
+                    local bag, slot = bagSlot(b)
+                    local empty = slotEmpty(bag, slot)
+                    if bag ~= nil and empty ~= nil then bags[bag] = true end
+                    if empty == nil then
+                        rec.unread = rec.unread + 1
+                    elseif empty then
                         rec.empty = rec.empty + 1
                         if ia == 0 then rec.emptyDimmed = rec.emptyDimmed + 1 end
+                        local okG, gs = call(b.EmptyBagIcon, "IsShown")
+                        if okG and plain(gs) == true then
+                            rec.ghost = rec.ghost + 1
+                            local okGA, ga = call(b.EmptyBagIcon, "GetAlpha")
+                            if okGA and plain(ga) == 0 then rec.ghostFaded = rec.ghostFaded + 1 end
+                        end
                     else
                         rec.filled = rec.filled + 1
                         if type(ia) == "number" and ia > 0 then rec.filledShown = rec.filledShown + 1 end
@@ -1384,6 +1456,7 @@ local function bagsState(label)
             end
         end
     end
+    rec.free = freeIn(bags)
     rec.combined = frameByName("ContainerFrameCombinedBags") ~= nil and seen(frameByName("ContainerFrameCombinedBags"))
     rec.header = G and G.Bags and G.Bags.HeaderHeight and G.Bags.HeaderHeight() or nil
     rec.memoryKB = glassMemory()
@@ -1394,19 +1467,28 @@ local function bagsState(label)
     say("BG " .. label .. ": " .. rec.windows .. " windows (" .. tostring(rec.open) .. "), " .. rec.slots
         .. " slots, glass " .. rec.glass .. ", rims faded " .. rec.rimsFaded .. ", empty " .. rec.empty
         .. " (dimmed " .. rec.emptyDimmed .. "), filled " .. rec.filled .. " (shown " .. rec.filledShown
-        .. "), memory " .. tostring(rec.memoryKB) .. " KB, fps " .. tostring(rec.fps) .. ", blocked "
+        .. "), bag icons " .. rec.ghost .. " (faded " .. rec.ghostFaded .. "), free " .. rec.free .. ", unread "
+        .. rec.unread .. ", memory " .. tostring(rec.memoryKB) .. " KB, fps " .. tostring(rec.fps) .. ", blocked "
         .. rec.blocked)
     record("BG." .. label, rec)
     return rec
 end
 
 -- A check: at least `want.windows` open; every open window and slot as above;
--- `want.combined` if given; nothing blocked.
+-- `want.combined` if given; free slots in the bags shown but no empty slot
+-- found is a FAIL (the check would pass on nothing); nothing blocked. What the
+-- step couldn't exercise (no empty slot, no bag icon, unread slots) is said, not
+-- failed.
 local function bagsOn(label, want)
     return function()
         local r = bagsState(label)
-        local bad = {}
+        local bad, notes = {}, {}
         local function want_(cond, why) if not cond then bad[#bad + 1] = why end end
+        want_(not (r.free > 0 and r.empty == 0), r.free .. " free slots but no empty slot found")
+        want_(r.ghostFaded == r.ghost, "bag icon faded on " .. r.ghostFaded .. " of " .. r.ghost)
+        if r.empty == 0 then notes[#notes + 1] = "empty slots not exercised" end
+        if want.combined and r.ghost == 0 then notes[#notes + 1] = "the bag icon not exercised (no empty slot)" end
+        if r.unread > 0 then notes[#notes + 1] = r.unread .. " slots unread" end
         want_(r.windows >= (want.windows or 1), r.windows .. " windows open")
         if want.combined ~= nil then want_(r.combined == want.combined, "combined " .. tostring(r.combined)) end
         want_(r.shellFaded == r.windows, "shell faded on " .. r.shellFaded .. " of " .. r.windows)
@@ -1416,7 +1498,8 @@ local function bagsOn(label, want)
         want_(r.emptyDimmed == r.empty, "empty dimmed " .. r.emptyDimmed .. " of " .. r.empty)
         want_(r.filledShown == r.filled, "filled shown " .. r.filledShown .. " of " .. r.filled)
         want_(r.blocked == 0, r.blocked .. " blocked")
-        return #bad == 0, #bad == 0 and "as Blizzard shows them" or table.concat(bad, "; ")
+        local note = #notes > 0 and (" (" .. table.concat(notes, "; ") .. ")") or ""
+        return #bad == 0, (#bad == 0 and "as Blizzard shows them" or table.concat(bad, "; ")) .. note
     end
 end
 
@@ -1450,6 +1533,8 @@ Probe:Steps("bags", {
           record("BG.memory before", glassMemory())
           return setCVar("scriptErrors", "1"), setCVar("taintLog", "1")
       end },
+    { text = "Checks that an icon set from a file reads no atlas (the empty-slot test rests on it).", auto = true,
+      run = function() return true end, check = atlasRoundTrip },
     -- Separate bags.
     { text = "Close every bag. If your bags open as one 'Combined Backpack' window, click its portrait (top left) "
           .. "and untick the combine option first. Then open ALL your bags (Shift+B): this step goes on by itself.",
@@ -1487,7 +1572,7 @@ Probe:Steps("bags", {
       end },
     { text = "Press Next for a screenshot.", screenshot = "bags, combined",
       check = bagsOn("combined", { windows = 1, combined = true }) },
-    { text = "The combined window as glass too? Back to separate bags afterwards if you prefer them (the portrait's "
+    { text = "The combined window as glass too, its empty slots plain glass with no greyed bag icon? Back to separate bags afterwards if you prefer them (the portrait's "
           .. "menu).", ask = true },
     -- Off and on.
     { text = "Open your bags. Switches the bags skin off: Blizzard's look.", button = "Skin off",
@@ -1495,6 +1580,7 @@ Probe:Steps("bags", {
       check = function()
           local r = bagsState("off")
           local ok = r.windows >= 1 and r.glass == 0 and r.shellFaded == 0 and r.rimsFaded == 0 and r.emptyDimmed == 0
+              and r.ghostFaded == 0
           return ok, ok and "Blizzard's look, nothing of ours" or "something of ours while off"
       end },
     { text = "Move an item (a slot empties), then switch the skin on.", button = "Skin on",
@@ -1508,7 +1594,7 @@ Probe:Steps("bags", {
     { text = "Type /reload to save the results.", reload = true },
 })
 
-skinChecks.bagsState, skinChecks.bagsOn = bagsState, bagsOn
+skinChecks.bagsState, skinChecks.bagsOn, skinChecks.atlasRoundTrip = bagsState, bagsOn, atlasRoundTrip
 end
 
 --------------------------------------------------------------------------------
@@ -4969,6 +5055,270 @@ Probe:Command("questing", function(args)
 end, "#56: Questie and RestedXP: first seen, side by side, the arrow (restore: enable states; unfade: textures)")
 
 --------------------------------------------------------------------------------
+-- Acceptance: RestedXP's guide window and arrow in glass (#56,
+-- docs/RESTEDXP.md), run after launch (2026-11-04). Saved as RX.<label>
+-- (the window) and RA.<label> (the arrow). RestedXP is switched on for this
+-- character only, its state saved in SkinProbeDB.rxpWas[GUID] and put back by
+-- the last step (/fp skin rxpglass restore).
+--------------------------------------------------------------------------------
+
+local RXP_PIECES = { "TopLeftCorner", "TopRightCorner", "BottomLeftCorner", "BottomRightCorner", "TopEdge",
+                     "BottomEdge", "LeftEdge", "RightEdge", "Center" }
+
+local function rxpEnable(on)
+    if type(SkinProbeDB) ~= "table" then return false, "no saved table" end
+    local g = guid()
+    if not g then return false, "no character GUID" end
+    if type(SkinProbeDB.rxpWas) ~= "table" then SkinProbeDB.rxpWas = {} end
+    if on then
+        if SkinProbeDB.rxpWas[g] == nil then SkinProbeDB.rxpWas[g] = enableState("RXPGuides") or 0 end
+        setEnabled("RXPGuides", true)
+        local s = enableState("RXPGuides")
+        return s ~= nil and s > 0, "RXPGuides=" .. show(s)
+    end
+    local was = SkinProbeDB.rxpWas[g]
+    if type(was) ~= "number" then return true, "nothing to restore for this character" end
+    setEnabled("RXPGuides", was > 0)
+    SkinProbeDB.rxpWas[g] = nil
+    return true, "RXPGuides=" .. show(enableState("RXPGuides"))
+end
+
+-- Pieces of a backdrop frame not at alpha 0 (those that exist).
+local function piecesUp(f)
+    local n = 0
+    for _, k in ipairs(RXP_PIECES) do
+        local p = f and rawget(f, k)
+        local ok, a = call(p, "GetAlpha")
+        if ok and plain(a) ~= 0 then n = n + 1 end
+    end
+    return n
+end
+
+-- The guide window: our glass, the three's pieces, the shown rows' fills and
+-- hosts, the shown cards' glass and pieces, the track, V2 and the collapse.
+local function rxState(label)
+    local G = glassUI()
+    local T = G and G.RestedXP and G.RestedXP._test
+    local f = frameByName("RXPFrame")
+    local rec = { shown = visible(f), installed = false, piecesUp = 0, rows = 0, rowsRight = 0, cards = 0,
+                  cardsRight = 0 }
+    rec.blocked = type(SkinProbeDB) == "table" and SkinProbeDB.suiteBlocked or 0
+    local okC, c = pcall(InCombatLockdown)
+    rec.combat = okC and plain(c) == true
+    local h = T and f and T.wins[f]
+    if h then
+        rec.installed = true
+        rec.glass = visible(h.win)
+        rec.track = h.track ~= nil and visible(h.track.fill)
+        rec.list = visible(h.list)
+        rec.header = visible(h.name)
+        for _, p in ipairs({ h.name, h.list, h.footer }) do rec.piecesUp = rec.piecesUp + piecesUp(p) end
+        local okB, b = call(h.name.bg, "GetAlpha")
+        rec.banner = okB and plain(b) or nil
+    end
+    local child = f and rawget(f, "ScrollChild")
+    for _, row in ipairs(type(child) == "table" and type(rawget(child, "framePool")) == "table" and child.framePool or {}) do
+        if visible(row) then
+            rec.rows = rec.rows + 1
+            local okA, a = call(row, "GetAlpha")
+            if piecesUp(row) == 0 and T and T.rows[row] ~= nil and okA and plain(a) ~= 0 then
+                rec.rowsRight = rec.rowsRight + 1
+            elseif okA and plain(a) == 0 then
+                rec.rowsRight = rec.rowsRight + 1                     -- RestedXP's hidden step: its alpha 0
+            end
+        end
+    end
+    local steps = f and rawget(f, "CurrentStepFrame")
+    for _, card in ipairs(type(steps) == "table" and type(rawget(steps, "framePool")) == "table" and steps.framePool or {}) do
+        if visible(card) then
+            rec.cards = rec.cards + 1
+            local st = T and T.cards[card]
+            local number = rawget(card, "number")
+            if st and visible(st.glass) and piecesUp(card) == 0 and piecesUp(number) == 0 then
+                rec.cardsRight = rec.cardsRight + 1
+            end
+        end
+    end
+    say("RX " .. label .. ": shown " .. tostring(rec.shown) .. ", installed " .. tostring(rec.installed) .. ", glass "
+        .. tostring(rec.glass) .. ", pieces up " .. rec.piecesUp .. ", banner " .. num(rec.banner) .. ", rows "
+        .. rec.rowsRight .. "/" .. rec.rows .. ", cards " .. rec.cardsRight .. "/" .. rec.cards .. ", track "
+        .. tostring(rec.track) .. ", list " .. tostring(rec.list) .. ", combat " .. tostring(rec.combat) .. ", "
+        .. rec.blocked .. " blocked")
+    record("RX." .. label, rec)
+    return rec
+end
+
+-- want: rows (some read), collapsed (the list hidden: the track with it).
+local function rxOn(label, want)
+    want = want or {}
+    return function()
+        local r = rxState(label)
+        local bad = {}
+        local function want_(cond, why) if not cond then bad[#bad + 1] = why end end
+        want_(r.shown, "the window not shown")
+        want_(r.installed, "not installed")
+        want_(r.glass, "our glass not shown")
+        want_(r.piecesUp == 0, r.piecesUp .. " backdrop pieces up")
+        want_(r.banner == 0, "the banner " .. num(r.banner))
+        if want.rows then want_(r.rows > 0, "no row read") end
+        want_(r.rowsRight == r.rows, "rows " .. r.rowsRight .. " of " .. r.rows)
+        want_(r.cardsRight == r.cards, "cards " .. r.cardsRight .. " of " .. r.cards)
+        if want.collapsed then
+            want_(not r.list and not r.track, "the list or track still shown")
+        elseif want.collapsed == false then
+            want_(r.list and r.track, "the list or track hidden")
+        end
+        want_(r.blocked == 0, r.blocked .. " blocked")
+        return #bad == 0, #bad == 0 and "in glass" or table.concat(bad, "; ")
+    end
+end
+
+-- The arrow: RestedXP's texture, ours, both angles, our colour against the
+-- accent, the pill against the text.
+local function raState(label)
+    local G = glassUI()
+    local T = G and G.RestedXP and G.RestedXP._test
+    local af = frameByName("RXPG_ARROW")
+    local rec = { shown = visible(af) }
+    local okF, fa = call(af, "GetAlpha")
+    rec.frameAlpha = okF and plain(fa) or nil
+    local tex = af and rawget(af, "texture")
+    local okT, ta = call(tex, "GetAlpha")
+    rec.theirs = okT and plain(ta) or nil
+    local okR, rad = call(tex, "GetRotation")
+    rec.theirAngle = okR and plain(rad) or nil
+    local st = T and af and T.arrows[af]
+    if st then
+        rec.ours = visible(st.frame)
+        local okO, o = call(st.arrow, "GetRotation")
+        rec.ourAngle = okO and plain(o) or nil
+        local okV, r, g, b = call(st.arrow, "GetVertexColor")
+        local c = G.Suite and G.Suite.Accent and G.Suite.Accent()
+        rec.accent = okV and type(c) == "table" and math.abs((plain(r) or -1) - c[1]) < 0.01
+            and math.abs((plain(g) or -1) - c[2]) < 0.01 and math.abs((plain(b) or -1) - c[3]) < 0.01
+        if st.pill then
+            local okW, w = call(st.text, "GetStringWidth")
+            local okP, pw = call(st.pill, "GetWidth")
+            w, pw = okW and plain(w) or nil, okP and plain(pw) or nil
+            rec.textWidth, rec.pillWidth = w, pw
+            rec.pillFits = type(w) == "number" and type(pw) == "number" and math.abs(pw - w - 2 * T.PILL_PAD[1]) < 1
+        end
+    end
+    say("RA " .. label .. ": shown " .. tostring(rec.shown) .. " (alpha " .. num(rec.frameAlpha) .. "), theirs "
+        .. num(rec.theirs) .. " at " .. num(rec.theirAngle) .. ", ours " .. tostring(rec.ours) .. " at "
+        .. num(rec.ourAngle) .. ", accent " .. tostring(rec.accent) .. ", pill " .. num(rec.pillWidth) .. " for "
+        .. num(rec.textWidth))
+    record("RA." .. label, rec)
+    return rec
+end
+
+local function raOn(label)
+    return function()
+        local r = raState(label)
+        local bad = {}
+        local function want_(cond, why) if not cond then bad[#bad + 1] = why end end
+        want_(r.shown, "the arrow not shown")
+        want_(r.theirs == 0, "RestedXP's arrow at " .. num(r.theirs))
+        want_(r.ours, "ours not shown")
+        want_(type(r.ourAngle) == "number" and type(r.theirAngle) == "number"
+              and math.abs(r.ourAngle - r.theirAngle) < 0.001, "angles " .. num(r.ourAngle) .. " / " .. num(r.theirAngle))
+        want_(r.accent, "not the accent")
+        want_(r.pillFits, "the pill " .. num(r.pillWidth) .. " for text " .. num(r.textWidth))
+        return #bad == 0, #bad == 0 and "ours, turned with RestedXP's" or table.concat(bad, "; ")
+    end
+end
+
+local function rxSwitch(key, on)
+    local G = glassUI()
+    if not (G and G.Engine) then return false, "Glass UI not loaded" end
+    G.Engine.SetEnabled(key, on)
+    return true, key .. " " .. (on and "on" or "off")
+end
+
+local function rxAccent(name)
+    return function()
+        local G = glassUI()
+        if not (G and G.Suite and G.Suite.SetLook) then return false, "Glass UI not loaded" end
+        G.Suite.SetLook("accent", name)
+        return true, name
+    end
+end
+
+Probe:Steps("rxpglass", {
+    title = "Glass UI: RestedXP's guide window and arrow in glass (#56)",
+    rev = 1,
+    { text = "Turns on script errors and counts blocked actions from now.", auto = true,
+      run = function()
+          if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
+          return setCVar("scriptErrors", "1")
+      end },
+    { text = "Turns on RestedXP for this character (its state is saved first, and put back at the end).",
+      button = "Enable", run = function() return rxpEnable(true) end },
+    { text = "Reload. If RestedXP opens a welcome or setup window, close it or pick the defaults.", reload = true },
+    { text = "Pick a leveling guide in RestedXP so its guide window shows (its default window, not the beta "
+          .. "\"V2\" one).", timeout = 600,
+      wait = function() return shownName("RXPFrame"), "RestedXP's window isn't shown" end },
+    { text = "Press Next for a screenshot of the window.", screenshot = "rxp, the window",
+      check = rxOn("look", { rows = true }) },
+    { text = "Does it read like the mockup: the current step on its own smoky glass, the window in smoky glass with "
+          .. "a band under the guide's title and a hairline, a hairline between steps, the scroll bar on a dark "
+          .. "track, the footer under a hairline? Anything off: the Note.", ask = true },
+    { text = "Complete or skip a step (right-click a step > Go to step, or RestedXP's skip). Then press Next.",
+      check = rxOn("new step", { rows = true }) },
+    { text = "Move the mouse over a few steps in the list and away. Press Next.", check = rxOn("hovered") },
+    { text = "In RestedXP's options, change its theme (or window colour) and change it back. Press Next.",
+      check = rxOn("theme") },
+    { text = "Resize the window by its bottom-right corner while the list scrolls, then scroll it. Press Next.",
+      check = rxOn("resized") },
+    { text = "Collapse the list (RestedXP's option to show the step list off, or a guide that hides it). Press "
+          .. "Next with only the header and footer showing.", screenshot = "rxp, collapsed",
+      check = rxOn("collapsed", { collapsed = true }) },
+    { text = "Show the list again. Press Next.", check = rxOn("expanded", { collapsed = false }) },
+    -- The arrow.
+    { text = "Follow a step with a destination so RestedXP's arrow shows, and turn around a few times.",
+      timeout = 600, screenshot = "rxp, the arrow",
+      wait = function()
+          local r = raState("waiting")
+          return r.shown and r.ours == true, "the arrow isn't shown"
+      end, check = raOn("turning") },
+    { text = "Does the arrow read like the mockup: a glassy arrowhead in the suite accent, the step and distance on "
+          .. "a smoky pill under it? Does it turn smoothly with you? The Note.", ask = true },
+    { text = "Standing still, change RestedXP's arrow text size in its options. Press Next.",
+      check = raOn("text size") },
+    { text = "Switches the suite accent to ice.", button = "Ice", run = rxAccent("ice"), check = raOn("ice") },
+    { text = "And back to gold.", button = "Gold", run = rxAccent("gold"), check = raOn("gold") },
+    { text = "If you can, go to another continent than the step's destination (a portal, a boat): RestedXP sets "
+          .. "the arrow straight up. Press Next (Skip if you can't).", check = raOn("other continent") },
+    -- Off and on, combat.
+    { text = "Switches both skins off (RestedXP's look).", button = "Skins off", screenshot = "rxp, skins off",
+      run = function() rxSwitch("rxp", false); return rxSwitch("rxparrow", false) end,
+      check = function()
+          local w, a = rxState("off"), raState("off")
+          local ok = w.piecesUp > 0 and not w.glass and a.theirs ~= 0 and not a.ours
+          return ok, ok and "RestedXP's look, nothing of ours" or "something of ours while off"
+      end },
+    { text = "Switches both on again.", button = "Skins on",
+      run = function() rxSwitch("rxp", true); return rxSwitch("rxparrow", true) end },
+    { text = "Wait a second, then press Next.", check = function()
+          local okW, whyW = rxOn("on again")()
+          local okA, whyA = raOn("on again")()
+          return okW and okA, whyW .. "; " .. whyA
+      end },
+    { text = "Get into combat with the window and the arrow up, and complete a step if you can. Press Next while "
+          .. "still in combat.", check = rxOn("combat") },
+    { text = "Did anything look broken in RestedXP during this run (beyond its look)? The Note.", ask = true },
+    { text = "Puts back whether RestedXP was enabled for this character.", button = "Restore",
+      run = function() return rxpEnable(false) end },
+    { text = "Type /reload to save the results (and unload RestedXP, if it was off before).", reload = true },
+})
+
+Probe:Command("rxpglass", function(args)
+    if (args or ""):match("restore") then rxpEnable(false) return end
+    rxState("now")
+    raState("now")
+end, "#56: RestedXP in glass: the window and arrow now (restore: RestedXP's enable state)")
+
+--------------------------------------------------------------------------------
 -- Boot
 --------------------------------------------------------------------------------
 
@@ -4989,7 +5339,7 @@ NS._test = { ltState = skinChecks.ltState, ltOn = skinChecks.ltOn, ltClosed = sk
     mpState = skinChecks.mpState, mpOn = skinChecks.mpOn, mpYield = skinChecks.mpYield,
     mpDescribe = skinChecks.describe, mpStartWatch = skinChecks.startWatch, mpReadWatch = skinChecks.readWatch,
     mpWatchTick = skinChecks.watchTick, chState = skinChecks.chState, chOn = skinChecks.chOn, gdState = skinChecks.gdState, gdOn = skinChecks.gdOn, gmState = skinChecks.gmState, gmOn = skinChecks.gmOn, settingsReturn = skinChecks.settingsReturn, bagsState = skinChecks.bagsState,
-    bagsOn = skinChecks.bagsOn, both = both, closeState = closeState, closeOn = closeOn, headerTry = headerTry, layoutState = layoutState, layoutOn = layoutOn, Probe = Probe, state = state, tree = tree, fade = fade, slashOwners = slashOwners,
+    bagsOn = skinChecks.bagsOn, atlasRoundTrip = skinChecks.atlasRoundTrip, both = both, closeState = closeState, closeOn = closeOn, headerTry = headerTry, layoutState = layoutState, layoutOn = layoutOn, Probe = Probe, state = state, tree = tree, fade = fade, slashOwners = slashOwners,
              gamepad = gamepad, panelsOn = panelsOn, panelsOff = panelsOff, borderFade = borderFade,
              borderRestore = borderRestore, gradientOn = gradientOn, gradientOff = gradientOff,
              panels = panels, faded = faded, cardAtlas = cardAtlas, cardOn = cardOn, cardOff = cardOff,
@@ -5003,4 +5353,5 @@ NS._test = { ltState = skinChecks.ltState, ltOn = skinChecks.ltOn, ltClosed = sk
              questingRestore = questingRestore, holdOn = holdOn, holdCheck = holdCheck, holdOff = holdOff,
              coexist = coexist, arrowState = arrowState, seen = seen, lookFor = lookFor, accentState = accentState,
              timerState = timerState, timerOn = timerOn, fakeOn = fakeOn, fakeOff = fakeOff, fakeTimers = fakeTimers,
-             merchantRows = merchantRows, rowsOn = rowsOn, floorTry = floorTry, floorRestore = floorRestore }
+             merchantRows = merchantRows, rowsOn = rowsOn, floorTry = floorTry, floorRestore = floorRestore,
+             rxState = rxState, rxOn = rxOn, raState = raState, raOn = raOn, rxpEnable = rxpEnable }

@@ -915,18 +915,40 @@ bw.NineSlice:SetAlpha(0)
 local bslots, bwins = {}, {}
 local hdrTex = bw:CreateTexture()
 bwins[bw] = { header = hdrTex }
-local function bagButton(empty)
+-- The client's answer, keyed by (bag, slot), independent of the buttons' state
+-- and art (#170): items[bag][slot] = itemID; free[bag] = free slots.
+local items, free = {}, {}
+local savedCC = rawget(_G, "C_Container")
+rawset(_G, "C_Container", {
+    GetContainerItemInfo = function(bag, slot)
+        local id = items[bag] and items[bag][slot]
+        return id and { itemID = id } or nil
+    end,
+    GetContainerNumFreeSlots = function(bag) return free[bag] or 0, 0 end,
+})
+local function bagButton(bag, slot, empty)
     local b = CreateFrame("Button", nil, bw)
+    b:SetID(slot)
+    b.bagID = bag
     b.icon = b:CreateTexture()
     b.IconBorder = b:CreateTexture()
     b._normal = b:CreateTexture()
     b._normal:SetAlpha(0)
-    b.emptyBackgroundAtlas = "bags-item-slot64"
-    if empty then b.icon:SetAtlas("bags-item-slot64"); b.icon:SetAlpha(0) else b.icon:SetTexture(1) end
+    b.EmptyBagIcon = b:CreateTexture()
+    b.EmptyBagIcon:Hide()
+    items[bag] = items[bag] or {}
+    if empty then
+        b.icon:SetAtlas("bags-item-slot64"); b.icon:SetAlpha(0)
+        free[bag] = (free[bag] or 0) + 1
+    else
+        items[bag][slot] = 1000 + slot
+        b.icon:SetTexture(1)
+    end
     bslots[b] = { glass = CreateFrame("Frame", nil, b) }
     return b
 end
-local be, bf = bagButton(true), bagButton(false)
+-- Two bags, the same slot number in each: the backpack's empty, bag 1's filled.
+local be, bf = bagButton(0, 1, true), bagButton(1, 1, false)
 local bandH = 26
 rawset(_G, "GlassUI", { Bags = { _test = { wins = bwins, slots = bslots }, HeaderHeight = function() return bandH end } })
 SkinProbeDB.suiteBlocked = 0
@@ -964,14 +986,47 @@ hdrTex:Hide()
 okB, whyB = T.bagsOn("t", { windows = 1 })()
 check(not okB and whyB:find("header on 0 of 1", 1, true), "no header fails")
 hdrTex:Show()
+eq(br.free, 1, "the free slots of the bags shown")
 bf.icon:SetAtlas("some-item-atlas")
-check(T.bagsOn("t", { windows = 1 })(), "an item given as an atlas is counted filled, not empty")
+check(T.bagsOn("t", { windows = 1 })(), "an item shown as an atlas is still filled: the client says so")
 bf.icon:SetTexture(1)
+-- The client decides, not the icon: the backpack's slot reads as an item's icon
+-- but the client says empty, so it must be dimmed.
+be.icon:SetTexture(1)
+okB, whyB = T.bagsOn("t", { windows = 1 })()
+check(okB, "the client's empty slot counted empty whatever its icon: " .. tostring(whyB))
+eq(SkinProbeDB.results["BG.t"].empty, 1, "one empty, by the client")
+be.icon:SetAtlas("bags-item-slot64")
+-- The vacuous pass (#170): free slots in a bag shown, but no empty slot found.
+items[0][1] = 5
+be.icon:SetAlpha(1)
+okB, whyB = T.bagsOn("t", { windows = 1 })()
+check(not okB and whyB:find("1 free slots but no empty slot found", 1, true), "free slots, none found fails")
+-- A full bag shown with free space in a closed bag: passes, and says so.
+free[0], free[3] = 0, 4
+okB, whyB = T.bagsOn("t", { windows = 1 })()
+check(okB and whyB:find("empty slots not exercised", 1, true), "a closed bag's free space doesn't count: " .. tostring(whyB))
+items[0][1], free[0], free[3] = nil, 1, nil
+be.icon:SetAlpha(0)
+-- The combined window's greyed bag icon on an empty slot: faded, or it fails.
+be.EmptyBagIcon:Show()
+okB, whyB = T.bagsOn("t", { windows = 1 })()
+check(not okB and whyB:find("bag icon faded on 0 of 1", 1, true), "a bag icon left fails")
+be.EmptyBagIcon:SetAlpha(0)
+okB, whyB = T.bagsOn("t", { windows = 1 })()
+check(okB, "the bag icon faded passes: " .. tostring(whyB))
+eq(SkinProbeDB.results["BG.t"].ghost, 1, "one bag icon counted")
+be.EmptyBagIcon:Hide()
+be.EmptyBagIcon:SetAlpha(1)
+-- The empty test's premise, on a texture of the probe's own.
+local okR, whyR = T.atlasRoundTrip()
+check(okR, "a file texture reads no atlas: " .. tostring(whyR))
 SkinProbeDB.suiteBlocked = 1
 okB, whyB = T.bagsOn("t", { windows = 1 })()
 check(not okB and whyB:find("1 blocked", 1, true), "a blocked action fails")
 SkinProbeDB.suiteBlocked = 0
 rawset(_G, "ContainerFrame1", nil)
+rawset(_G, "C_Container", savedCC)
 rawset(_G, "GlassUI", savedGUI4)
 
 do
@@ -1718,9 +1773,87 @@ a = T.arrowState("t")
 eq(a.calls, 1, "its texture's rotation calls counted, from a hook on that texture")
 eq(a.last, 1.25, "with the angle")
 
+-- RestedXP in glass (#56): the window's and the arrow's reads, against a
+-- Glass UI whose skin state the test sets.
+local function backdrop(parent)
+    local f = CreateFrame("Frame", nil, parent)
+    for _, k in ipairs({ "TopEdge", "Center" }) do
+        f[k] = f:CreateTexture()
+        f[k]:SetAlpha(0)
+    end
+    return f
+end
+rxp.GuideName, rxp.BottomFrame, rxp.Footer = backdrop(rxp), backdrop(rxp), backdrop(rxp)
+rxp.GuideName.bg = rxp.GuideName:CreateTexture()
+rxp.GuideName.bg:SetAlpha(0)
+rxp.ScrollChild = CreateFrame("Frame", nil, rxp.BottomFrame)
+local xrow, xhidden = backdrop(rxp.ScrollChild), backdrop(rxp.ScrollChild)
+xhidden.Center:SetAlpha(1)
+xhidden:SetAlpha(0)
+rxp.ScrollChild.framePool = { xrow, xhidden }
+rxp.CurrentStepFrame = CreateFrame("Frame", nil, rxp)
+local xcard = backdrop(rxp.CurrentStepFrame)
+xcard.number = backdrop(xcard)
+rxp.CurrentStepFrame.framePool = { xcard }
+local xtrack = { fill = rxp.BottomFrame:CreateTexture() }
+arrow.texture:SetAlpha(0)
+arrow.text = arrow:CreateFontString()
+arrow.text:SetText("Step 1\n(10yd)")
+local ourArrow = CreateFrame("Frame", nil, arrow)
+local ourTex = ourArrow:CreateTexture()
+ourTex:SetRotation(arrow.texture:GetRotation())
+ourTex:SetVertexColor(1, 0.82, 0)
+local pill = CreateFrame("Frame", nil, arrow)
+pill:SetSize(arrow.text:GetStringWidth() + 16, 20)
+local xaccent = { 1, 0.82, 0 }
+rawset(_G, "GlassUI", { Suite = { Accent = function() return xaccent end, SetLook = function() end },
+    Engine = { SetEnabled = function() end },
+    RestedXP = { _test = { PILL_PAD = { 8, 4 },
+        wins = { [rxp] = { win = CreateFrame("Frame", nil, rxp.GuideName), track = xtrack, list = rxp.BottomFrame,
+                           name = rxp.GuideName, footer = rxp.Footer } },
+        rows = { [xrow] = CreateFrame("Frame", nil, xrow) },
+        cards = { [xcard] = { glass = CreateFrame("Frame", nil, xcard) } },
+        arrows = { [arrow] = { frame = ourArrow, arrow = ourTex, text = arrow.text, pill = pill } } } } })
+SkinProbeDB.suiteBlocked = 0
+local okX, whyX = T.rxOn("x", { rows = true })()
+check(okX, "the guide in glass: pass: " .. tostring(whyX))
+eq(SkinProbeDB.results["RX.x"].rows, 2, "both shown rows read")
+eq(SkinProbeDB.results["RX.x"].rowsRight, 2, "a hidden step (alpha 0, RestedXP's) counts as right")
+local function fails(label, fn, undo)
+    fn()
+    local ok = T.rxOn("x", { rows = true })()
+    check(not ok, "fails: " .. label)
+    undo()
+end
+fails("a header piece up", function() rxp.GuideName.TopEdge:SetAlpha(1) end, function() rxp.GuideName.TopEdge:SetAlpha(0) end)
+fails("the banner up", function() rxp.GuideName.bg:SetAlpha(1) end, function() rxp.GuideName.bg:SetAlpha(0) end)
+fails("a row's fill up", function() xrow.Center:SetAlpha(1) end, function() xrow.Center:SetAlpha(0) end)
+fails("a card's tab up", function() xcard.number.Center:SetAlpha(1) end, function() xcard.number.Center:SetAlpha(0) end)
+fails("our glass hidden", function() GlassUI.RestedXP._test.wins[rxp].win:Hide() end,
+      function() GlassUI.RestedXP._test.wins[rxp].win:Show() end)
+fails("a blocked action", function() SkinProbeDB.suiteBlocked = 1 end, function() SkinProbeDB.suiteBlocked = 0 end)
+check(not T.rxOn("x", { collapsed = true })(), "the list shown: not collapsed")
+rxp.BottomFrame:Hide()
+check(T.rxOn("x", { collapsed = true })(), "the list hidden, the track with it: collapsed")
+rxp.BottomFrame:Show()
+local okA, whyA = T.raOn("a")()
+check(okA, "the arrow in glass: pass: " .. tostring(whyA))
+local function arrowFails(label, fn, undo)
+    fn()
+    check(not T.raOn("a")(), "the arrow fails: " .. label)
+    undo()
+end
+arrowFails("RestedXP's texture up", function() arrow.texture:SetAlpha(1) end, function() arrow.texture:SetAlpha(0) end)
+arrowFails("angles apart", function() ourTex:SetRotation(0.3) end, function() ourTex:SetRotation(arrow.texture:GetRotation()) end)
+arrowFails("not the accent", function() xaccent = { 0.6, 0.85, 1 } end, function() xaccent = { 1, 0.82, 0 } end)
+arrowFails("the pill too small", function() pill:SetWidth(10) end, function() pill:SetWidth(arrow.text:GetStringWidth() + 16) end)
+arrowFails("ours hidden", function() ourArrow:Hide() end, function() ourArrow:Show() end)
+rawset(_G, "GlassUI", nil)
+
 -- The procedures are defined and every step's run, wait and check works here.
 for _, name in ipairs({ "wave1", "map", "gradient", "merchant", "card", "suite", "suitecombat", "meter",
-                        "meterskin", "meterbars", "suitepanel", "pearl", "tracker", "questing", "accent" }) do
+                        "meterskin", "meterbars", "suitepanel", "pearl", "tracker", "questing", "accent",
+                        "rxpglass" }) do
     local p = FP.procedures["SkinProbe/" .. name]
     check(p ~= nil, "procedure " .. name .. " is defined")
     if p then

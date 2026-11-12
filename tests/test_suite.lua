@@ -703,6 +703,21 @@ eq(Suite.Listed(gn), true, "listed even when not installed")
 eq(Suite.State("GlassNameplates"), "missing", "shown as not installed")
 local gnt = Suite.Theme("GlassNameplates")
 check(gnt and gnt.preset == "pearl", "Theme answers it, following by default")
+-- Shatter (#164): dynamic, listed only while loaded; following live, or its
+-- Flat look (no glass) by its own choice.
+setup({})
+local sh
+for _, m in ipairs(Suite.ROSTER) do if m.name == "Shatter" then sh = m end end
+check(sh and sh.dynamic and sh.title == "Shatter", "Shatter is a dynamic member")
+eq(Suite.Listed(sh), false, "not installed: not listed")
+WoW.installed.Shatter, WoW.loaded.Shatter = 2, true
+eq(Suite.Listed(sh), true, "loaded: listed")
+local sht = Suite.Theme("Shatter")
+check(sht and sht.preset == "pearl", "Theme answers it, following by default")
+Suite.Report("Shatter", { api = 1, built = "pearl", live = true, look = { tint = "clear", accent = "gold" } })
+eq(Suite.State("Shatter"), "following", "following Pearl")
+Suite.Report("Shatter", { api = 1, live = true, declined = "Flat" })
+eq(Suite.State("Shatter"), "chosen", "Flat: its own look by its choice")
 -- Stakeout (#152): dynamic; its own look by the player's choice in it is
 -- "chosen", never "failed", nothing pending, no "set to follow".
 setup({})
@@ -763,5 +778,8 @@ for _, name in ipairs({ "GlassUnitFramesDB", "GlassRaidFramesDB", "GlassRaidFram
 end
 eq(next(GUI.failures), nil, "no failures")
 for k, v in pairs(GUI.failures) do io.write("    " .. k .. ": " .. v .. "\n") end
+
+-- FINDING: the usage lines' bare "|" (harness.lua, acceptKnownStrays).
+check(acceptKnownStrays() > 0, "the usage lines' known bare-| lines, let through until they're doubled")
 
 done("test_suite")

@@ -41,14 +41,26 @@ Codex `gpt-6-astra` review: round 1 (2026-10-20), one BLOCKER (the header's boun
   - Regions: `icon`, `Count`, `IconBorder` (quality), the overlays, `NormalTexture` (the
     `UI-Quickslot2` rim), `NewItemTexture`, `JunkIcon`, `ItemContextOverlay` (the search dim),
     `Cooldown`, ….
-  - **An empty slot** is the atlas in the button's `emptyBackgroundAtlas` key (`bags-item-slot64`,
-    ContainerFrame.xml:84), drawn into `icon` itself (`SetItemButtonTexture(nil)`).
-  - In combined mode each button also gets an `ItemSlotBackground` texture, created lazily and
-    shown with `SetShown` (ContainerFrame.lua:1846-1853).
+  - **An empty slot** (70707 on, #170; 70888 lines): the button's `hasItem` is nil (`SetHasItem`,
+    1 or nil, ContainerFrame.lua:1970, set before the icon on every update, :1214-1219), and `icon`
+    holds the empty atlas `SetItemButtonTexture(nil)` puts there. That atlas comes from
+    `GetItemButtonBackgroundTexture` (:1953): `bags-item-slot64`, or `bags-item-slot-blank` in the
+    combined window (`ShouldUseBagIconForEmptySlot`, Camelot's override `IsCombined()`,
+    Camelot/ContainerFrame.lua:7). On 70450 it was the button's `emptyBackgroundAtlas` key
+    (ContainerFrame.xml:84 then), which 70707 removed.
+  - **`EmptyBagIcon`** (70707, ContainerFrame.xml:153, ARTWORK, all points, hidden): in the combined
+    window an empty slot shows its bag's icon, greyed (`SetAppearanceToEmptyBagSlot`, :1940:
+    `SetShown`, `SetTexture`, `SetVertexColor`, `SetDesaturation`; `SyncAppearanceWithHasItem`,
+    :1962, from `UpdateItems` and `UpdateCooldowns`). No Blizzard path writes its alpha.
+  - The combined window's `ItemSlotBackground` (70450) is gone in 70707, its template too.
+  - From 70707 the shared `ItemButton` intrinsic masks the icon, the normal and the pushed texture
+    (`Mask`, `common-iconmask`, Blizzard_ItemButton/Shared/ItemButtonTemplate.xml:19). Judged
+    in the 70888 runs (#168): the owner's yes to the separate and combined windows, so the wells
+    need no change.
   - **Every `UpdateItems`** (ContainerFrame.lua:1191-1239) rewrites the icon (texture or atlas, and
     whether it shows), the IconBorder (show, texture, colour), the overlays, the counts, the
     desaturation and the junk icon.
-  - The bag refresh paths read here never reset the rim's or the slot background's alpha, so a fade
+  - The bag refresh paths read here never reset the rim's or the bag icon's alpha, so a fade
     holds. The shared `ItemButtonMixin:SetAlpha` (Blizzard_ItemButton/Shared/ItemButtonTemplate.lua:233)
     can write the icon's and the IconBorder's alpha; it isn't called on the bag update path, and
     we never call it (Codex). `NewItemTexture` and `flash` are alpha-animated: never touched.
@@ -137,12 +149,15 @@ Both windows need them, and the next ones will too.
     a Section well is the fallback (five textures, no mask or rim frame).
 - **Each pass:**
   - the `NormalTexture` (read by `GetNormalTexture`) faded;
-  - `ItemSlotBackground` faded when present (combined mode);
-  - **the empty slot:** the `icon` dimmed to 0 (`kit:Dim(icon, 0)`) while its atlas is the
-    button's own `emptyBackgroundAtlas` (both read). It's `kit:Dim(icon, nil)` once filled, which
-    gives back Blizzard's latest alpha, never a forced 1 (Codex).
-    - The stock template sets only the atlas, so an empty slot is `SetAtlas` and an item is
-      `SetTexture` (Blizzard_ItemButton/Mainline/ItemButtonTemplate.lua:76).
+  - `EmptyBagIcon` faded (the combined window's greyed bag icon; the owner, 2026-11-11: the well
+    stays plain glass, as in the separate bags). Blizzard never writes its alpha, so no hook on
+    `SyncAppearanceWithHasItem` (Codex, #170);
+  - **the empty slot:** the `icon` dimmed to 0 (`kit:Dim(icon, 0)`) while the button's `hasItem` is
+    nil and the icon holds an atlas (both read, never written). It's `kit:Dim(icon, nil)` once
+    filled, which gives back Blizzard's latest alpha, never a forced 1 (Codex).
+    - Blizzard's state decides, not the art: no atlas name in our code, so both empty atlases work.
+      An item is `SetTexture`, which reads no atlas, so an item's icon is never dimmed
+      (Blizzard_ItemButton/Mainline/ItemButtonTemplate.lua:77-95; the probe measures the round trip).
     - An empty slot shows only its glass well, and an item shows its icon.
     - The icon's `SetAtlas`/`SetTexture` are hooked on the instance, gated, so the dim follows
       Blizzard's every update.
@@ -163,8 +178,9 @@ Both windows need them, and the next ones will too.
 
 - **Stubs:** a backpack and a combined window (`NineSlice`, `Bg` with its four pieces, the portrait,
   the close button, `MoneyFrame.Border`), the search box and sort button, and item buttons with their
-  regions and `emptyBackgroundAtlas`. `UpdateItems` acquires buttons in Blizzard's order, empty and
-  filled.
+  regions as of 70707 (`EmptyBagIcon`, no `emptyBackgroundAtlas`). `UpdateItems` acquires buttons in
+  Blizzard's order, empty and filled, setting `hasItem` before the icon; `UpdateCooldowns` syncs the
+  empty look without `UpdateItems`.
 - **The kit move:** the merchant's tests pass unchanged.
 - **Each piece:** fades and restores, the glass's parents and levels, the header's anchors and
   colours, the close button, the money and search panes, and the slot wells. The empty dim follows

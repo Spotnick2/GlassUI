@@ -1,30 +1,17 @@
--- Every widget method the addon calls must exist on this client.
+-- Every widget method the addon calls must exist on this client, on that
+-- widget type.
 --
 -- The stub answers any Capitalised method call (a no-op for ones it does not
 -- implement), so a call to a method Forever lacks would otherwise pass
--- silently. This checks each recorded "Type:Method" against the API dump's
--- widget-method walk. Keep it exercising every handler the addon installs.
+-- silently. The addon is exercised as widely as is cheap, then WowTestKit's
+-- Kit.checkMethods checks each recorded "Type:Method" against the pinned
+-- build's widget methods. Keep it exercising every handler the addon installs.
 -- It does NOT prove argument contracts, event behaviour or protection rules:
 -- that is the in-game pass (docs/FOREVER-PROBE.md).
 dofile("tests/wow_stubs.lua")
 dofile("tests/harness.lua")
 
-local f = io.open(WoW.DUMP, "r")
-if not f then
-    io.write("test_methods: SKIPPED (no API dump at " .. WoW.DUMP .. ")\n")
-    os.exit(0)
-end
-local widget, documented = {}, {}
-for line in f:lines() do
-    local wm = line:match("^(%a+:%a+)%s*$")
-    if wm then widget[wm] = true end
-    local fn = line:match("^([%a_]+)%(")
-    if fn then documented[fn] = true end
-end
-f:close()
-
-WoW.methodsCalled = {}
-local GUI = loadAddon()
+local GUI = loadAddon({ before = WoW.makeRestedXP })
 
 -- Every command and every skin's pass; later milestones add theirs here.
 WoW.showMerchant()
@@ -48,6 +35,14 @@ WoW.trade()
 WoW.flushTimers(0)
 WoW.mapMaximize(true)
 WoW.flushTimers(0)
+WoW.rxpTheme()
+WoW.rxpLoadGuide()
+WoW.rxpSetStep()
+WoW.rxpTurn(0.5)
+WoW.rxpArrowText("Step 13\n(300yd)")
+WoW.rxpArrowShow()
+WoW.rxpArrowFont(12)
+WoW.flushTimers(0)
 WoW.characterPane("StatisticsFrame")
 WoW.clickTab(CommunitiesFrame.ChatTab)
 WoW.openBag(ContainerFrameCombinedBags, { 133784, "empty" })
@@ -60,7 +55,8 @@ GUI.Options._test.lookRows["Tint"][2]:Click()
 for _, cmd in ipairs({ "failures", "version", "help", "", "skins", "skin merchant off", "skin merchant on",
                        "skin bags off", "skin bags on", "skin gamemenu off", "skin gamemenu on",
                        "skin guild off", "skin guild on", "skin character off", "skin character on", "skin map off", "skin map on", "skin loot off", "skin loot on", "skin loothistory off",
-                       "skin loothistory on", "skin trade off", "skin trade on",
+                       "skin loothistory on", "skin trade off", "skin trade on", "skin rxp off", "skin rxp on",
+                       "skin rxparrow off", "skin rxparrow on",
                        "off", "on", "theme smoked", "theme class", "theme clear",
                        "suite", "suite follow glassunitframes on", "options",
                        "look", "look tint class", "look preset soft" }) do
@@ -68,13 +64,12 @@ for _, cmd in ipairs({ "failures", "version", "help", "", "skins", "skin merchan
 end
 WoW.flushTimers()
 
-local n = 0
-for name in pairs(WoW.methodsCalled) do
-    n = n + 1
-    local method = name:match(":(%a+)$")
-    check(widget[name] or documented[method], "method exists on Forever: " .. name)
-end
-check(n > 1, "recorded a realistic number of methods (raise it as features land) (" .. n .. ")")
+local recorded = Kit.checkMethods()
+-- The floor is what this exercise records today, rounded down: it keeps the
+-- exercise from quietly shrinking.
+check(recorded >= 130, "the exercise reached every skin and command (" .. recorded .. " methods recorded)")
 eq(next(GUI.failures), nil, "no failures recorded while exercising everything")
 for k, v in pairs(GUI.failures) do io.write("    " .. k .. ": " .. v .. "\n") end
+-- FINDING: the help's and the look's bare "|" lines (harness.lua, acceptKnownStrays).
+check(acceptKnownStrays() > 0, "the help's known bare-| lines, let through until they're doubled")
 done("test_methods")

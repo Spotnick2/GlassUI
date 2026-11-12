@@ -70,7 +70,7 @@ lines in each TOC are the authoritative list of Forever-only variants (FV below)
 | World map | `WorldMapFrame`, `QuestMapFrame` | Blizzard_WorldMap, always (Mainline with Camelot's templates; the quest log Mainline with Camelot's overrides, its side tabs hidden) | `WorldMapFrameTemplate`, `frameBuffer="true"` | Leatrix Maps rebuilds the border (below); the frame buffer doesn't flatten a child panel (W1.3, 70374; re-checked by `mapglass`). Shown from secure call chains: styled a frame later. Skinned in #99 (docs/MAP.md) |
 | Bags | `ContainerFrame1..N`, `ContainerFrameCombinedBags` | always | `PortraitFrameFlatTemplate` | opened in combat, so first pass may wait; item buttons are on the use path: alpha only |
 | Tooltips | `GameTooltip`, `ShoppingTooltip1/2`, `ItemRefTooltip`, `EmbeddedItemTooltip` | always | `SharedTooltipTemplate` + `.NineSlice` | hook `SharedTooltip_SetBackdropStyle`, deferred a frame (it fires from secure code); `GameTooltip.StatusBar` is secure and secret: fade only; skip embedded tooltips; no `OnTooltipSetItem` (porting guide :488, :862) |
-| Menus | `Menu.GetManager()` menus | Blizzard_Menu (FV `Camelot\Menu.xml`) | `MenuStyle1Mixin`/`MenuStyle2Mixin` | **never `AddMenuAcquiredCallback`** (Ellesmere v9.6.1: a tainted Whisper entry broke chat, `EUI_BlizzardSkin_TooltipSkin.lua:944-967`); hook `OpenMenu`/`OpenContextMenu` and the style mixins' `Generate` (flyouts), defer; no `CreateTexture` while a menu is open (`:989-992`), and menus are reused (`:921-926`): **a glass panel on a menu is unproven**, so the fallback is tint-only |
+| Menus | `Menu.GetManager()` menus | Blizzard_Menu (FV `Camelot\Menu.xml`) | `MenuStyle1Mixin`/`MenuStyle2Mixin` | **never `AddMenuAcquiredCallback`** (Ellesmere v9.8.4: a tainted Whisper entry broke chat, `EUI_BlizzardSkin_TooltipSkin.lua:1109-1114`); hook `OpenMenu`/`OpenContextMenu` and the style mixins' `Generate` (flyouts), defer; no `CreateTexture` while a menu is open (`:1150-1152`), and menus are reused (`:1081-1086`): **a glass panel on a menu is unproven**, so the fallback is tint-only |
 | Escape menu | `GameMenuFrame` | Blizzard_GameMenu, always | `MainMenuFrameTemplate`, buttons from a pool | the Esc path is taint-sensitive (porting guide :1536): taint pass |
 | Auction house | `AuctionHouseFrame` | Blizzard_AuctionHouseUI, LoD | `PortraitFrameTemplate` | Auctionator adds tabs |
 | Professions | `ProfessionsFrame`, `ProfessionsBookFrame` | Blizzard_Professions, Blizzard_ProfessionsBook, LoD | FV `ProfessionsFrameBase` (side tab, right tabs 1-7); `ButtonFrameTemplate` | recipe rows are protected (Ellesmere WindowPacks:1895); Skilled hooks it |
@@ -87,9 +87,16 @@ lines in each TOC are the authoritative list of Forever-only variants (FV below)
 - ScrollBox windows: never force their first layout from our load pass; skin on the first `OnShow`
   (Ellesmere WindowPacks:11993).
 - UI widget trees hold secret values: leave them alone.
-- **Gamepad interface style:** hooks on Blizzard windows taint its secure navigation and can loop
-  until the client freezes. Ellesmere stands every skin down for the session in that mode
-  (`EllesmereUIBlizzardSkin.lua:92-105`, v9.6.1). Glass UI does the same.
+- **Gamepad interface style:** Ellesmere v9.6.1 stood every skin down for the session in that mode
+  (`EllesmereUIBlizzardSkin.lua:92-105`): hooks on Blizzard windows tainted its secure navigation
+  and could loop until the client froze. Glass UI does the same. **That source is withdrawn:**
+  v9.8.4 removed the stand-down and now says a hook on a Blizzard frame is no reason for one,
+  because the navigation calls frame callbacks securely (`EllesmereUI_UICore.lua:1534-1540`). The
+  source agrees from 70707 on: smart navigation calls each frame's callbacks through
+  `SecureHelper.SecureCallOptionalFunction`, a `securecallfunction` wrapper
+  (`Blizzard_GamepadSmartNavigation\SecureHelper.lua:210`, `SmartNavigation.lua:680-1665`). That is a
+  code path, not a taint measurement, and our own isn't made: it needs a controller to drive the
+  navigation (#171). The stand-down stays until then.
 - Chat bubbles are forbidden in instances (not in scope anyway).
 
 **Who already owns what** (Glass UI skips these whenever the owner is loaded):
@@ -199,6 +206,18 @@ lines in each TOC are the authoritative list of Forever-only variants (FV below)
     - a meter window made later;
     - the handover;
     - in combat.
+- **Third-party windows get the same contract** (RestedXP, #56): getters, `SetAlpha` held, our
+  own frames, `hooksecurefunc` on an instance's own function field (`RXPFrame.UpdateVisuals`,
+  `BottomFrame.UpdateFrame`, `CurrentStepFrame.UpdateText`), never a call to the addon's
+  functions, a field written or its saved variables read.
+- **Our own arrow over RestedXP's** (the owner, 2026-11-01, #56; docs/RESTEDXP.md): the one
+  "never replace" exception. RestedXP's waypoint arrow texture (`RXPG_ARROW.texture`) is faded
+  and held, and Glass UI draws its own arrow (`Media\Arrow.tga`, in the suite accent) on a child
+  frame over it, at the angle RestedXP sets: a `hooksecurefunc` on that texture's `SetRotation`
+  copies the angle to ours. RestedXP still owns everything else: where the arrow is, whether it
+  shows (its frame's alpha and visibility, which ours follows as a child), its rotation, its
+  distance and text, and dragging it. Ours only mirrors; nothing of RestedXP's is driven. Tinting
+  RestedXP's texture instead couldn't colour the owner's black arrow theme. This arrow only.
 - **Never:** `Show`/`Hide`/`SetShown`/`SetPoint`/`SetParent`/`SetSize`/`SetScale`/`SetText`/
   `SetFont*`/`SetTextColor` (except the audited title accent above), mixin methods, `UIFrameFade*`,
   field writes on Blizzard tables, reassigning a Blizzard global or method, opening or closing
@@ -289,7 +308,10 @@ Engine.Register({
   asked for, gives back what it blanked and tinted, and hides our panels. Anything that shades is
   `live = false`: off means "takes effect after /reload". Universal live restore is a non-goal.
 - **Gamepad stand-down:** if the gamepad interface style is active at login, no skin installs a
-  hook this session; the settings page says why. (Which CVar or API reports it: probe.)
+  hook this session; the settings page says why. `C_InputInterfaceStyle.GetCurrentStyle()` reports
+  it (W1.4), set by Settings > Gamepad > Enable Gamepad UI (the `InputDeviceInterfaceStyle` CVar),
+  with or without a controller. Kept on a withdrawn source until measured (client-wide hazards
+  above, #171).
 
 ### The kit (`Skin\Kit.lua`)
 The helpers every skin needs; nothing else.

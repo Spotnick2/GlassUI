@@ -48,6 +48,7 @@ end
 -- A skin that fails halfway through touching the merchant, and a protected
 -- one on it: their callbacks run on Blizzard's objects too.
 local GUI = loadAddon({ before = function()
+    WoW.makeRestedXP()
     local E = GlassUI.Engine
     E.Register({ key = "failing", title = "failing", live = true, frames = function() return MerchantFrame end,
                  style = function(kit, f) kit:Fade(f.CloseButton); error("halfway") end })
@@ -180,6 +181,28 @@ GUI._test.slash("skin character off")
 GUI._test.slash("skin character on")
 WoW.hideCharacter()
 eq(#WoW.currencyTouches, 0, "nothing touches the currency pane (#94)")
+-- RestedXP (#56): themes, a guide, steps with a tip, a hover, the collapse
+-- and V2, the arrow turned, its text and font, both switches off and on.
+WoW.rxpTheme()
+WoW.rxpLoadGuide()
+WoW.rxpSetStep({ { title = "Step 13" }, { title = "Tip", tip = true }, { title = "" } })
+WoW.flushTimers(0)
+WoW.rxpHover(RXPFrame.ScrollChild.framePool[1])
+WoW.rxpTheme(0.4, 0.2, 0.1)
+WoW.rxpCollapse(true)
+WoW.rxpCollapse(false)
+WoW.rxpV2(true)
+WoW.rxpV2(false)
+WoW.rxpTurn(0.7)
+WoW.rxpArrowText("Step 13\n(300yd)")
+WoW.rxpArrowShow()
+WoW.rxpTurn(-1.1)
+WoW.rxpArrowFont(14)
+WoW.rxpArrowText("Step 13\n(290yd)")
+WoW.flushTimers(0)
+for _, cmd in ipairs({ "skin rxp off", "skin rxp on", "skin rxparrow off", "skin rxparrow on" }) do GUI._test.slash(cmd) end
+WoW.rxpSetStep({ { title = "Step 14" } })
+WoW.flushTimers(0)
 -- The damage meter (#49): shown, its Background changed, a window added,
 -- minimized, its breakdown, and one made while the skin is off.
 WoW.showMeter()
