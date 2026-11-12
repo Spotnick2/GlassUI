@@ -54,8 +54,9 @@ Codex `gpt-6-astra` review: round 1 (2026-10-20), one BLOCKER (the header's boun
     :1962, from `UpdateItems` and `UpdateCooldowns`). No Blizzard path writes its alpha.
   - The combined window's `ItemSlotBackground` (70450) is gone in 70707, its template too.
   - From 70707 the shared `ItemButton` intrinsic masks the icon, the normal and the pushed texture
-    (`Mask`, `common-iconmask`, Blizzard_ItemButton/Shared/ItemButtonTemplate.xml:19): a look to
-    judge in the runs (#168).
+    (`Mask`, `common-iconmask`, Blizzard_ItemButton/Shared/ItemButtonTemplate.xml:19). Judged
+    in the 70888 runs (#168): the owner's yes to the separate and combined windows, so the wells
+    need no change.
   - **Every `UpdateItems`** (ContainerFrame.lua:1191-1239) rewrites the icon (texture or atlas, and
     whether it shows), the IconBorder (show, texture, colour), the overlays, the counts, the
     desaturation and the junk icon.
