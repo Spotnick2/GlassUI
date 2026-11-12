@@ -85,6 +85,10 @@ WoW.templates.UIPanelScrollFrameTemplate = function(w) w.ScrollBar = newWidget("
 -- (GetDisabledTexture; the Blizzard buttons below, and the tests read the
 -- state textures by their keys _normal, _pushed, _disabled, _highlight).
 -- The core's Enable/Disable keep the state in _disabled and would replace it.
+-- WowTestKit #41: a frame's ID, 0 by default (the bag windows' bag, an item
+-- button's slot; the probe reads them, ContainerFrame.lua:1845).
+function Methods.SetID(w, id) w._id = id end
+function Methods.GetID(w) return w._id or 0 end
 function Methods.SetEnabled(w, v) w._enabled = v and true or false end
 function Methods.Enable(w) w._enabled = true end
 function Methods.Disable(w) w._enabled = false end
@@ -1025,9 +1029,9 @@ local function moneyFrame(parent, name)
     return m
 end
 
--- An item button of ContainerFrameItemButtonTemplate (ContainerFrame.xml:81):
--- its regions, the empty atlas key; in combined mode a slot background made
--- on demand (ContainerFrame.lua:1846).
+-- An item button of ContainerFrameItemButtonTemplate as of 70707
+-- (ContainerFrame.xml:77, 70888): its regions, the hidden EmptyBagIcon
+-- (:153); no empty atlas key and no slot background any more.
 local function itemButton(frame)
     local b = blizz("Button", frame)
     b._width, b._height = 37, 37
@@ -1036,35 +1040,63 @@ local function itemButton(frame)
     b.IconBorder = blizz("Texture", b, nil, "OVERLAY")
     b.Count = blizz("FontString", b, nil, "ARTWORK")
     b.NewItemTexture = blizz("Texture", b, nil, "OVERLAY")
+    b.EmptyBagIcon = blizz("Texture", b, nil, "ARTWORK")
+    b.EmptyBagIcon._shown = false
     b._normal = blizz("Texture", b, nil, "ARTWORK")
     b._normal._file = "Interface\\Buttons\\UI-Quickslot2"
-    rawset(b, "emptyBackgroundAtlas", "bags-item-slot64")
     return b
 end
 
 WoW.bagContents = setmetatable({}, { __mode = "k" })
 WoW.bagButtons = setmetatable({}, { __mode = "k" })
 
+local function isCombined(b) return b:GetParent() == rawget(_G, "ContainerFrameCombinedBags") end
+
+-- SyncAppearanceWithHasItem (:1962) and SetAppearanceToEmptyBagSlot (:1940):
+-- the bag's icon greyed in a combined empty slot, then SetItemButtonTexture(nil)
+-- puts the empty atlas on the icon (GetItemButtonBackgroundTexture, :1953).
+local function syncAppearance(b)
+    if rawget(b, "hasItem") then b.EmptyBagIcon:Hide() return end
+    local combined = isCombined(b)
+    b.EmptyBagIcon:SetShown(combined)
+    if combined then
+        b.EmptyBagIcon:SetTexture(133633)
+        b.EmptyBagIcon:SetVertexColor(1, 1, 1, 0.6)
+    end
+    b.icon:SetAtlas(combined and "bags-item-slot-blank" or "bags-item-slot64")
+end
+
+-- UpdateItems (:1189-1225): SetHasItem first, then the icon, then the sync.
 local function updateItems(frame)
     local list = WoW.bagContents[frame] or {}
     local pool = WoW.bagButtons[frame]
     for _, b in ipairs(pool) do b:Hide() end                -- ReleaseAll
-    local combined = frame == rawget(_G, "ContainerFrameCombinedBags")
     for i, item in ipairs(list) do
         local b = pool[i]
         if not b then b = itemButton(frame); pool[i] = b end   -- Acquire
         b:Show()
-        if combined and not rawget(b, "ItemSlotBackground") then
-            rawset(b, "ItemSlotBackground", blizz("Texture", b, nil, "BACKGROUND"))
-        end
-        if rawget(b, "ItemSlotBackground") then b.ItemSlotBackground:SetShown(combined) end
-        if item == "empty" then
-            b.icon:SetAtlas(b.emptyBackgroundAtlas)          -- SetItemButtonTexture(nil)
-            b.IconBorder:Hide()
-        else
+        local filled = item ~= "empty"
+        rawset(b, "hasItem", filled and 1 or nil)             -- SetHasItem(texture)
+        if filled then
             b.icon:SetTexture(item)
             b.IconBorder:Show()
             b.IconBorder:SetVertexColor(0.1, 0.4, 1)
+        else
+            b.IconBorder:Hide()
+        end
+        syncAppearance(b)
+    end
+end
+
+-- UpdateCooldowns (:1249): each button's state from the client, then the sync,
+-- without UpdateItems (so none of Glass UI's UpdateItems post-hook either).
+local function updateCooldowns(frame)
+    local list = WoW.bagContents[frame] or {}
+    for i, b in ipairs(WoW.bagButtons[frame]) do
+        if b:IsShown() then
+            local filled = list[i] ~= nil and list[i] ~= "empty"
+            rawset(b, "hasItem", filled and 1 or nil)
+            syncAppearance(b)
         end
     end
 end
@@ -1106,6 +1138,11 @@ function WoW.bagUpdate(frame, contents)
     WoW.asBlizzard(function() frame:UpdateItems() end)
 end
 function WoW.closeBag(frame) WoW.asBlizzard(function() frame:Hide() end) end
+-- A cooldown update (BAG_UPDATE_COOLDOWN -> UpdateCooldowns) with these contents.
+function WoW.bagCooldowns(frame, contents)
+    WoW.bagContents[frame] = contents
+    WoW.asBlizzard(function() updateCooldowns(frame) end)
+end
 
 -- The Escape menu (#90, Blizzard_GameMenu, MainMenuFrameTemplate on Forever,
 -- origin/forever 70450): its Border (DialogBorderTemplate: the NineSlice frame

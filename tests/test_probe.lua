@@ -915,18 +915,40 @@ bw.NineSlice:SetAlpha(0)
 local bslots, bwins = {}, {}
 local hdrTex = bw:CreateTexture()
 bwins[bw] = { header = hdrTex }
-local function bagButton(empty)
+-- The client's answer, keyed by (bag, slot), independent of the buttons' state
+-- and art (#170): items[bag][slot] = itemID; free[bag] = free slots.
+local items, free = {}, {}
+local savedCC = rawget(_G, "C_Container")
+rawset(_G, "C_Container", {
+    GetContainerItemInfo = function(bag, slot)
+        local id = items[bag] and items[bag][slot]
+        return id and { itemID = id } or nil
+    end,
+    GetContainerNumFreeSlots = function(bag) return free[bag] or 0, 0 end,
+})
+local function bagButton(bag, slot, empty)
     local b = CreateFrame("Button", nil, bw)
+    b:SetID(slot)
+    b.bagID = bag
     b.icon = b:CreateTexture()
     b.IconBorder = b:CreateTexture()
     b._normal = b:CreateTexture()
     b._normal:SetAlpha(0)
-    b.emptyBackgroundAtlas = "bags-item-slot64"
-    if empty then b.icon:SetAtlas("bags-item-slot64"); b.icon:SetAlpha(0) else b.icon:SetTexture(1) end
+    b.EmptyBagIcon = b:CreateTexture()
+    b.EmptyBagIcon:Hide()
+    items[bag] = items[bag] or {}
+    if empty then
+        b.icon:SetAtlas("bags-item-slot64"); b.icon:SetAlpha(0)
+        free[bag] = (free[bag] or 0) + 1
+    else
+        items[bag][slot] = 1000 + slot
+        b.icon:SetTexture(1)
+    end
     bslots[b] = { glass = CreateFrame("Frame", nil, b) }
     return b
 end
-local be, bf = bagButton(true), bagButton(false)
+-- Two bags, the same slot number in each: the backpack's empty, bag 1's filled.
+local be, bf = bagButton(0, 1, true), bagButton(1, 1, false)
 local bandH = 26
 rawset(_G, "GlassUI", { Bags = { _test = { wins = bwins, slots = bslots }, HeaderHeight = function() return bandH end } })
 SkinProbeDB.suiteBlocked = 0
@@ -964,14 +986,47 @@ hdrTex:Hide()
 okB, whyB = T.bagsOn("t", { windows = 1 })()
 check(not okB and whyB:find("header on 0 of 1", 1, true), "no header fails")
 hdrTex:Show()
+eq(br.free, 1, "the free slots of the bags shown")
 bf.icon:SetAtlas("some-item-atlas")
-check(T.bagsOn("t", { windows = 1 })(), "an item given as an atlas is counted filled, not empty")
+check(T.bagsOn("t", { windows = 1 })(), "an item shown as an atlas is still filled: the client says so")
 bf.icon:SetTexture(1)
+-- The client decides, not the icon: the backpack's slot reads as an item's icon
+-- but the client says empty, so it must be dimmed.
+be.icon:SetTexture(1)
+okB, whyB = T.bagsOn("t", { windows = 1 })()
+check(okB, "the client's empty slot counted empty whatever its icon: " .. tostring(whyB))
+eq(SkinProbeDB.results["BG.t"].empty, 1, "one empty, by the client")
+be.icon:SetAtlas("bags-item-slot64")
+-- The vacuous pass (#170): free slots in a bag shown, but no empty slot found.
+items[0][1] = 5
+be.icon:SetAlpha(1)
+okB, whyB = T.bagsOn("t", { windows = 1 })()
+check(not okB and whyB:find("1 free slots but no empty slot found", 1, true), "free slots, none found fails")
+-- A full bag shown with free space in a closed bag: passes, and says so.
+free[0], free[3] = 0, 4
+okB, whyB = T.bagsOn("t", { windows = 1 })()
+check(okB and whyB:find("empty slots not exercised", 1, true), "a closed bag's free space doesn't count: " .. tostring(whyB))
+items[0][1], free[0], free[3] = nil, 1, nil
+be.icon:SetAlpha(0)
+-- The combined window's greyed bag icon on an empty slot: faded, or it fails.
+be.EmptyBagIcon:Show()
+okB, whyB = T.bagsOn("t", { windows = 1 })()
+check(not okB and whyB:find("bag icon faded on 0 of 1", 1, true), "a bag icon left fails")
+be.EmptyBagIcon:SetAlpha(0)
+okB, whyB = T.bagsOn("t", { windows = 1 })()
+check(okB, "the bag icon faded passes: " .. tostring(whyB))
+eq(SkinProbeDB.results["BG.t"].ghost, 1, "one bag icon counted")
+be.EmptyBagIcon:Hide()
+be.EmptyBagIcon:SetAlpha(1)
+-- The empty test's premise, on a texture of the probe's own.
+local okR, whyR = T.atlasRoundTrip()
+check(okR, "a file texture reads no atlas: " .. tostring(whyR))
 SkinProbeDB.suiteBlocked = 1
 okB, whyB = T.bagsOn("t", { windows = 1 })()
 check(not okB and whyB:find("1 blocked", 1, true), "a blocked action fails")
 SkinProbeDB.suiteBlocked = 0
 rawset(_G, "ContainerFrame1", nil)
+rawset(_G, "C_Container", savedCC)
 rawset(_G, "GlassUI", savedGUI4)
 
 do

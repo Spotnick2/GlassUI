@@ -141,9 +141,20 @@ WoW.asBlizzard(function() pool[3].icon:SetTexture(135000) end)
 eq(pool[3].icon:GetAlpha(), 1, "an icon set on its own: followed")
 WoW.asBlizzard(function() pool[3].icon:SetAtlas("bags-item-slot64") end)
 eq(pool[3].icon:GetAlpha(), 0, "and emptied on its own")
-WoW.asBlizzard(function() pool[3].icon:SetAtlas("some-item-atlas") end)
-eq(pool[3].icon:GetAlpha(), 1, "an item given as an atlas is no empty slot: only the button's own empty atlas is")
-WoW.asBlizzard(function() pool[3].icon:SetAtlas("bags-item-slot64") end)
+-- The state decides, not the art: an atlas on a button that holds an item is
+-- no empty slot (SetHasItem says so).
+WoW.asBlizzard(function() rawset(pool[3], "hasItem", 1); pool[3].icon:SetAtlas("some-item-atlas") end)
+eq(pool[3].icon:GetAlpha(), 1, "an atlas on a button holding an item: not dimmed")
+WoW.asBlizzard(function() rawset(pool[3], "hasItem", nil); pool[3].icon:SetAtlas("bags-item-slot64") end)
+eq(pool[3].icon:GetAlpha(), 0, "emptied again: dimmed")
+-- No key names the empty atlas from 70707 (ContainerFrame.xml:77).
+eq(rawget(pool[3], "emptyBackgroundAtlas"), nil, "the 70707 template: no emptyBackgroundAtlas key")
+-- The cooldown path syncs the empty look without UpdateItems, so without our
+-- per-pass re-sync: the icon's own hooks carry it.
+WoW.bagCooldowns(CF1, { "empty", 133784, "empty" })
+eq(pool[1].icon:GetAlpha(), 0, "cooldown sync: an emptied slot dimmed by the icon hook alone")
+eq(pool[2].icon:GetAlpha(), 0.8, "cooldown sync: a filled slot left at Blizzard's alpha")
+WoW.bagUpdate(CF1, { 134400, 133784, "empty" })
 -- Pooled buttons come back: one glass each, ever.
 local panels = #ours(pool[1])
 WoW.bagUpdate(CF1, { 134400 })
@@ -155,16 +166,33 @@ eq(pool[4].icon:GetAlpha(), 0, "empty: dimmed")
 -- A button's own state never written: no field, no ID, no script of ours.
 eq(rawget(pool[1], "glass"), nil, "no field of ours on the button")
 
--- The combined window: its own money frame; each button's slot background faded.
+-- The separate bags never show the greyed bag icon; faded all the same.
+check(not pool[3].EmptyBagIcon:IsShown(), "separate: Blizzard keeps the bag icon hidden")
+
+-- The combined window: its own money frame; an empty slot on the blank atlas,
+-- its greyed bag icon faded (70707).
 WoW.openBag(C, { 133784, "empty" })
 local hc = B.wins[C]
 check(hc and on(hc.money), "the combined window's money pane")
 eq(hc.money.fill._points[1][2], C.MoneyFrame.Border, "on its own coin box")
 local cpool = WoW.bagButtons[C]
-for i, b in ipairs(cpool) do
-    eq(b.ItemSlotBackground:GetAlpha(), 0, "combined slot " .. i .. ": its slot background faded")
-end
+eq(cpool[2].icon:GetAtlas(), "bags-item-slot-blank", "combined: Blizzard's blank empty atlas")
 eq(cpool[2].icon:GetAlpha(), 0, "combined: the empty slot dimmed")
+eq(cpool[1].icon:GetAlpha(), 1, "combined: the item shown")
+check(cpool[2].EmptyBagIcon:IsShown(), "combined: Blizzard shows the bag icon on the empty slot")
+eq(cpool[2].EmptyBagIcon:GetAlpha(), 0, "combined: the bag icon faded, the well plain glass")
+-- Blizzard's next updates show, retexture and recolour it: the fade holds.
+WoW.bagCooldowns(C, { 133784, "empty" })
+eq(cpool[2].EmptyBagIcon:GetAlpha(), 0, "combined: still faded after a cooldown sync")
+-- A button acquired after the first style, in the combined window.
+WoW.bagUpdate(C, { 133784, "empty", "empty" })
+check(B.slots[cpool[3]] ~= nil, "combined: a new button given its glass")
+eq(cpool[3].icon:GetAlpha(), 0, "combined: its empty slot dimmed")
+eq(cpool[3].EmptyBagIcon:GetAlpha(), 0, "combined: its bag icon faded")
+-- Filled: Blizzard hides the bag icon; the icon is the item's.
+WoW.bagUpdate(C, { 133784, 134400, "empty" })
+check(not cpool[2].EmptyBagIcon:IsShown(), "combined: filled, the bag icon hidden by Blizzard")
+eq(cpool[2].icon:GetAlpha(), 1, "combined: filled, the item shown")
 
 -- A window without a money frame: no pane.
 WoW.openBag(ContainerFrame2, { "empty" })
@@ -179,6 +207,7 @@ eq(BagItemSearchBox.Left:GetAlpha(), 1, "the search box back")
 eq(pool[2].icon:GetAlpha(), 0.8, "an empty slot's pattern back, at Blizzard's latest alpha")
 eq(pool[3].icon:GetAlpha(), 1, "another at 1")
 eq(pool[1]._normal:GetAlpha(), 1, "the rims back")
+eq(cpool[3].EmptyBagIcon:GetAlpha(), 1, "the combined window's bag icon back")
 check(not win:IsShown() and not B.slots[pool[1]].glass:IsShown(), "our glass hidden")
 check(not B.shared.searchHost:IsShown() and not h.closeFrame:IsShown(), "the search pane and the close X too")
 GUI._test.slash("look accent ice")
@@ -190,6 +219,7 @@ eq(CF1.NineSlice:GetAlpha(), 0, "on again: faded")
 eq(pool[1].icon:GetAlpha(), 0, "the slots re-synced: empty dimmed")
 eq(pool[3].icon:GetAlpha(), 1, "filled shown")
 eq(pool[1]._normal:GetAlpha(), 0, "the rims faded")
+eq(cpool[3].EmptyBagIcon:GetAlpha(), 0, "the combined window's bag icon faded again")
 check(win:IsShown() and B.slots[pool[1]].glass:IsShown(), "our glass back")
 eq(h.closeX[1]._color[1], GUI.Suite.ACCENTS.ice[1], "the accent set while off, on the X")
 GUI._test.slash("look accent gold")

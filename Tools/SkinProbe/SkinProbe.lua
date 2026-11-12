@@ -1346,13 +1346,75 @@ local function glassMemory()
     return ok and plain(kb) or nil
 end
 
+-- A button's (bag, slot) as Blizzard's GetBagID reads them (ContainerFrame.lua:1845,
+-- 70888): its bagID field, else its parent's ID; the slot is its own ID. Fields and
+-- native getters only.
+local function bagSlot(b)
+    local bag = plain(b.bagID)
+    if bag == nil then
+        local okP, p = call(b, "GetParent")
+        local okI, id = call(okP and p or nil, "GetID")
+        bag = okI and plain(id) or nil
+    end
+    local okS, slot = call(b, "GetID")
+    return bag, okS and plain(slot) or nil
+end
+
+-- Empty by the client, not by the skin's own reading (#170: a check that read the
+-- skin's key passed as 0 of 0 once the key was gone): true, false, or nil unread.
+local function slotEmpty(bag, slot)
+    local cc = rawget(_G, "C_Container")
+    if bag == nil or slot == nil or type(cc) ~= "table" or type(cc.GetContainerItemInfo) ~= "function" then
+        return nil
+    end
+    local ok, info = pcall(cc.GetContainerItemInfo, bag, slot)
+    if not ok then return nil end
+    return info == nil
+end
+
+-- Free slots in the bags seen on visible buttons, the keyring left out (it shows a
+-- computed part of its size, MainMenuBarBagButtons.lua:64): closed bags don't count.
+local function freeIn(bags)
+    local cc = rawget(_G, "C_Container")
+    if type(cc) ~= "table" or type(cc.GetContainerNumFreeSlots) ~= "function" then return 0 end
+    local index = rawget(_G, "Enum") and Enum.BagIndex
+    local keyring = type(index) == "table" and index.Keyring or nil
+    local n = 0
+    for bag in pairs(bags) do
+        if bag ~= keyring then
+            local ok, free = pcall(cc.GetContainerNumFreeSlots, bag)
+            free = ok and plain(free) or nil
+            if type(free) == "number" then n = n + free end
+        end
+    end
+    return n
+end
+
+-- An icon set from a file reads no atlas (the bag skin's empty test rests on it,
+-- #170): measured on a texture of ours.
+local function atlasRoundTrip()
+    local f = CreateFrame("Frame")
+    local t = f:CreateTexture()
+    t:SetAtlas("bags-item-slot64")
+    local before = plain(t:GetAtlas())
+    t:SetTexture(134400)
+    local after = plain(t:GetAtlas())
+    f:Hide()
+    record("BG.atlas", { before = before, after = after })
+    local ok = before ~= nil and after == nil
+    say("BG atlas: after SetAtlas " .. tostring(before) .. ", after SetTexture " .. tostring(after))
+    return ok, ok and "a file texture reads no atlas" or ("after SetTexture the atlas reads " .. tostring(after))
+end
+
 -- Every open window: ours shown, Blizzard's shell faded; each shown item
--- button: our glass seen, its rim faded, an empty slot (its icon on the
--- button's own empty atlas) dimmed to 0, a filled one not.
+-- button: our glass seen, its rim faded, an empty slot (empty by the client)
+-- dimmed to 0, its greyed bag icon (the combined window's) faded, a filled
+-- one shown.
 local function bagsState(label)
     local B, G = bagsUI()
     local rec = { windows = 0, slots = 0, glass = 0, rimsFaded = 0, empty = 0, emptyDimmed = 0, filled = 0,
-                  filledShown = 0, shellFaded = 0, headers = 0 }
+                  filledShown = 0, shellFaded = 0, headers = 0, unread = 0, ghost = 0, ghostFaded = 0, free = 0 }
+    local bags = {}
     for _, name in ipairs(BAG_WINDOWS) do
         local f = frameByName(name)
         if f and seen(f) then
@@ -1370,12 +1432,22 @@ local function bagsState(label)
                     local okN, rim = call(b, "GetNormalTexture")
                     local okR, ra = call(okN and rim or nil, "GetAlpha")
                     if okR and plain(ra) == 0 then rec.rimsFaded = rec.rimsFaded + 1 end
-                    local okT, atlas = call(b.icon, "GetAtlas")
                     local okI, ia = call(b.icon, "GetAlpha")
                     ia = okI and plain(ia) or nil
-                    if okT and plain(atlas) ~= nil and plain(atlas) == plain(b.emptyBackgroundAtlas) then
+                    local bag, slot = bagSlot(b)
+                    local empty = slotEmpty(bag, slot)
+                    if bag ~= nil and empty ~= nil then bags[bag] = true end
+                    if empty == nil then
+                        rec.unread = rec.unread + 1
+                    elseif empty then
                         rec.empty = rec.empty + 1
                         if ia == 0 then rec.emptyDimmed = rec.emptyDimmed + 1 end
+                        local okG, gs = call(b.EmptyBagIcon, "IsShown")
+                        if okG and plain(gs) == true then
+                            rec.ghost = rec.ghost + 1
+                            local okGA, ga = call(b.EmptyBagIcon, "GetAlpha")
+                            if okGA and plain(ga) == 0 then rec.ghostFaded = rec.ghostFaded + 1 end
+                        end
                     else
                         rec.filled = rec.filled + 1
                         if type(ia) == "number" and ia > 0 then rec.filledShown = rec.filledShown + 1 end
@@ -1384,6 +1456,7 @@ local function bagsState(label)
             end
         end
     end
+    rec.free = freeIn(bags)
     rec.combined = frameByName("ContainerFrameCombinedBags") ~= nil and seen(frameByName("ContainerFrameCombinedBags"))
     rec.header = G and G.Bags and G.Bags.HeaderHeight and G.Bags.HeaderHeight() or nil
     rec.memoryKB = glassMemory()
@@ -1394,19 +1467,28 @@ local function bagsState(label)
     say("BG " .. label .. ": " .. rec.windows .. " windows (" .. tostring(rec.open) .. "), " .. rec.slots
         .. " slots, glass " .. rec.glass .. ", rims faded " .. rec.rimsFaded .. ", empty " .. rec.empty
         .. " (dimmed " .. rec.emptyDimmed .. "), filled " .. rec.filled .. " (shown " .. rec.filledShown
-        .. "), memory " .. tostring(rec.memoryKB) .. " KB, fps " .. tostring(rec.fps) .. ", blocked "
+        .. "), bag icons " .. rec.ghost .. " (faded " .. rec.ghostFaded .. "), free " .. rec.free .. ", unread "
+        .. rec.unread .. ", memory " .. tostring(rec.memoryKB) .. " KB, fps " .. tostring(rec.fps) .. ", blocked "
         .. rec.blocked)
     record("BG." .. label, rec)
     return rec
 end
 
 -- A check: at least `want.windows` open; every open window and slot as above;
--- `want.combined` if given; nothing blocked.
+-- `want.combined` if given; free slots in the bags shown but no empty slot
+-- found is a FAIL (the check would pass on nothing); nothing blocked. What the
+-- step couldn't exercise (no empty slot, no bag icon, unread slots) is said, not
+-- failed.
 local function bagsOn(label, want)
     return function()
         local r = bagsState(label)
-        local bad = {}
+        local bad, notes = {}, {}
         local function want_(cond, why) if not cond then bad[#bad + 1] = why end end
+        want_(not (r.free > 0 and r.empty == 0), r.free .. " free slots but no empty slot found")
+        want_(r.ghostFaded == r.ghost, "bag icon faded on " .. r.ghostFaded .. " of " .. r.ghost)
+        if r.empty == 0 then notes[#notes + 1] = "empty slots not exercised" end
+        if want.combined and r.ghost == 0 then notes[#notes + 1] = "the bag icon not exercised (no empty slot)" end
+        if r.unread > 0 then notes[#notes + 1] = r.unread .. " slots unread" end
         want_(r.windows >= (want.windows or 1), r.windows .. " windows open")
         if want.combined ~= nil then want_(r.combined == want.combined, "combined " .. tostring(r.combined)) end
         want_(r.shellFaded == r.windows, "shell faded on " .. r.shellFaded .. " of " .. r.windows)
@@ -1416,7 +1498,8 @@ local function bagsOn(label, want)
         want_(r.emptyDimmed == r.empty, "empty dimmed " .. r.emptyDimmed .. " of " .. r.empty)
         want_(r.filledShown == r.filled, "filled shown " .. r.filledShown .. " of " .. r.filled)
         want_(r.blocked == 0, r.blocked .. " blocked")
-        return #bad == 0, #bad == 0 and "as Blizzard shows them" or table.concat(bad, "; ")
+        local note = #notes > 0 and (" (" .. table.concat(notes, "; ") .. ")") or ""
+        return #bad == 0, (#bad == 0 and "as Blizzard shows them" or table.concat(bad, "; ")) .. note
     end
 end
 
@@ -1450,6 +1533,8 @@ Probe:Steps("bags", {
           record("BG.memory before", glassMemory())
           return setCVar("scriptErrors", "1"), setCVar("taintLog", "1")
       end },
+    { text = "Checks that an icon set from a file reads no atlas (the empty-slot test rests on it).", auto = true,
+      run = function() return true end, check = atlasRoundTrip },
     -- Separate bags.
     { text = "Close every bag. If your bags open as one 'Combined Backpack' window, click its portrait (top left) "
           .. "and untick the combine option first. Then open ALL your bags (Shift+B): this step goes on by itself.",
@@ -1487,7 +1572,7 @@ Probe:Steps("bags", {
       end },
     { text = "Press Next for a screenshot.", screenshot = "bags, combined",
       check = bagsOn("combined", { windows = 1, combined = true }) },
-    { text = "The combined window as glass too? Back to separate bags afterwards if you prefer them (the portrait's "
+    { text = "The combined window as glass too, its empty slots plain glass with no greyed bag icon? Back to separate bags afterwards if you prefer them (the portrait's "
           .. "menu).", ask = true },
     -- Off and on.
     { text = "Open your bags. Switches the bags skin off: Blizzard's look.", button = "Skin off",
@@ -1495,6 +1580,7 @@ Probe:Steps("bags", {
       check = function()
           local r = bagsState("off")
           local ok = r.windows >= 1 and r.glass == 0 and r.shellFaded == 0 and r.rimsFaded == 0 and r.emptyDimmed == 0
+              and r.ghostFaded == 0
           return ok, ok and "Blizzard's look, nothing of ours" or "something of ours while off"
       end },
     { text = "Move an item (a slot empties), then switch the skin on.", button = "Skin on",
@@ -1508,7 +1594,7 @@ Probe:Steps("bags", {
     { text = "Type /reload to save the results.", reload = true },
 })
 
-skinChecks.bagsState, skinChecks.bagsOn = bagsState, bagsOn
+skinChecks.bagsState, skinChecks.bagsOn, skinChecks.atlasRoundTrip = bagsState, bagsOn, atlasRoundTrip
 end
 
 --------------------------------------------------------------------------------
@@ -5020,7 +5106,7 @@ NS._test = { ltState = skinChecks.ltState, ltOn = skinChecks.ltOn, ltClosed = sk
     mpState = skinChecks.mpState, mpOn = skinChecks.mpOn, mpYield = skinChecks.mpYield,
     mpDescribe = skinChecks.describe, mpStartWatch = skinChecks.startWatch, mpReadWatch = skinChecks.readWatch,
     mpWatchTick = skinChecks.watchTick, chState = skinChecks.chState, chOn = skinChecks.chOn, gdState = skinChecks.gdState, gdOn = skinChecks.gdOn, gmState = skinChecks.gmState, gmOn = skinChecks.gmOn, settingsReturn = skinChecks.settingsReturn, bagsState = skinChecks.bagsState,
-    bagsOn = skinChecks.bagsOn, both = both, closeState = closeState, closeOn = closeOn, headerTry = headerTry, layoutState = layoutState, layoutOn = layoutOn, Probe = Probe, state = state, tree = tree, fade = fade, slashOwners = slashOwners,
+    bagsOn = skinChecks.bagsOn, atlasRoundTrip = skinChecks.atlasRoundTrip, both = both, closeState = closeState, closeOn = closeOn, headerTry = headerTry, layoutState = layoutState, layoutOn = layoutOn, Probe = Probe, state = state, tree = tree, fade = fade, slashOwners = slashOwners,
              gamepad = gamepad, panelsOn = panelsOn, panelsOff = panelsOff, borderFade = borderFade,
              borderRestore = borderRestore, gradientOn = gradientOn, gradientOff = gradientOff,
              panels = panels, faded = faded, cardAtlas = cardAtlas, cardOn = cardOn, cardOff = cardOff,

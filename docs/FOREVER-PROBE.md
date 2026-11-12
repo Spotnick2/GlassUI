@@ -213,6 +213,7 @@ memory, the framerate and blocked actions. Saved as `SkinProbeDB.results["BG.<la
 | BG.5 | The combined window | **Run 1: passes.** Owner: yes. |
 | BG.6 | Off: Blizzard's look; a change; on: re-synced; after a /reload | **Run 1: off and on pass.** The after-`/reload` check FAILed with no bag open: its wait step was moved past by hand before a bag was opened. Not a skin fault. |
 | BG.7 | The cost: Glass UI's memory before and after, the framerate with every bag open | **Run 1:** Glass UI 394 KB before, 757 KB with 4 windows and 34 slots open (combined, 30 slots: 646 KB); about 150 fps throughout. Acceptable: the Section fallback isn't needed. |
+| BG.8 | 70707 on (#170): an icon set from a file reads no atlas (`BG.atlas`, the empty test's premise); empty slots read from the client (`C_Container.GetContainerItemInfo`), not the skin's key, with free slots in a bag shown but none found a FAIL; the combined window's greyed bag icon faded | **Waiting** for the 70888 run (#168), with BG.1 and BG.5 again: BG.1 passed on 70450 by the old key, which 70707 removed, so on 70707 and later it passed as 0 of 0. BG.5 needs an empty slot in the combined window. |
 
 ### The merchant's layout (#84, docs/MERCHANT.md section 4)
 
