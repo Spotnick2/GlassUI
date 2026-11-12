@@ -12,8 +12,9 @@
 -- smoky header band, the portrait's disc, the close button's disc and X
 -- (the kit's window pieces). The money box and the shared search box as
 -- recessed panes, the sort button on small glass. Each item slot a small
--- glass well: its quick-slot rim faded, and an empty slot's wing pattern
--- dimmed to nothing, so the well shows. The quality border, counts, the
+-- glass well: its quick-slot rim faded, and an empty slot's pattern (and in
+-- the combined window its greyed bag icon) dimmed to nothing, so the well
+-- shows. The quality border, counts, the
 -- new-item glow, junk and quest icons and the search dim stay Blizzard's.
 --
 -- Fades, hooks on instances and our own frames only: live, off and on
@@ -72,14 +73,18 @@ local function moneyOf(frame)
     return nil
 end
 
--- An empty slot: the icon shows the button's own empty atlas (the stock
--- template sets only the atlas: SetItemButtonTexture(nil),
--- Blizzard_ItemButton/Mainline/ItemButtonTemplate.lua:76). Then the icon is
--- dimmed to nothing and the glass well shows; filled, Blizzard's alpha back.
+-- An empty slot: Blizzard's own item state says so, and the icon holds the
+-- empty atlas Blizzard chose. The state is the button's `hasItem` (1 or nil,
+-- SetHasItem, ContainerFrame.lua:1970, 70888), read only, set before the icon
+-- on every update (:1214-1219). The atlas is SetItemButtonTexture(nil)'s:
+-- bags-item-slot64, or bags-item-slot-blank in the combined window
+-- (GetItemButtonBackgroundTexture, :1953). From 70707 no key names it any
+-- more, so it isn't named here either: an item texture on the icon reads no
+-- atlas and is never dimmed. Empty: the icon dimmed to nothing and the glass
+-- well shows; filled, Blizzard's alpha back.
 local function emptyDim(kit, s)
     local okA, atlas = pcall(s.icon.GetAtlas, s.icon)
-    local want = API.Plain(s.button.emptyBackgroundAtlas)
-    local empty = okA and want ~= nil and API.Plain(atlas) == want
+    local empty = API.Plain(s.button.hasItem) == nil and okA and API.Plain(atlas) ~= nil
     kit:Dim(s.icon, empty and 0 or nil)
 end
 
@@ -102,9 +107,12 @@ local function slot(kit, b)
     end
     local ok, rim = pcall(b.GetNormalTexture, b)
     if ok then kit:Fade(rim) end
-    -- Combined bags give each button a slot background, made on demand
-    -- (ContainerFrame.lua:1846-1853).
-    kit:Fade(tbl(b.ItemSlotBackground))
+    -- The combined window's empty slot also shows its bag's icon, greyed
+    -- (EmptyBagIcon, 70707: SetAppearanceToEmptyBagSlot, :1940). Faded, so the
+    -- well is plain glass as in the separate bags (the owner, 2026-11-11).
+    -- Blizzard only shows, hides, retextures and recolours it, never its
+    -- alpha, so the fade holds between passes.
+    kit:Fade(tbl(b.EmptyBagIcon))
     emptyDim(kit, s)
 end
 
