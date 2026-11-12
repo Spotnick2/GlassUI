@@ -35,7 +35,7 @@ local function newWidget(wtype, parent, name)
     return w
 end
 
--- WowTestKit #TBD2: every frame too. A test lists a frame's children or
+-- WowTestKit #38: every frame too. A test lists a frame's children or
 -- regions with ipairs(f._children) whether it has any or not, and the core
 -- makes those lists only with the first child or region.
 local coreCreateFrame = CreateFrame
@@ -102,7 +102,7 @@ function Methods.SetDesaturated(t, v) t._desat = v and true or false end
 -- A texture painted with SetGradient ignores a later SetAlpha, and GetAlpha
 -- keeps reading 1 (porting guide section 3, measured on 70374 twice; an image
 -- texture too, SkinProbe W1.6 square C): the core's SetAlpha models that.
--- WowTestKit #TBD1: an alpha set BEFORE the gradient doesn't survive it
+-- WowTestKit #37: an alpha set BEFORE the gradient doesn't survive it
 -- either, the texture shows and reads 1 (70374, SkinProbe W1.6 square B),
 -- and this API takes colour objects; the core's SetGradient does neither.
 function Methods.SetGradient(t, orientation, c1, c2)
