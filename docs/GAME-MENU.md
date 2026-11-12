@@ -47,10 +47,10 @@ Our glass, with no `layoutIndex`, is left out of the menu's layout (LayoutFrame.
     mixin method**. Native getters and the engine's `OnShow` post-hook on the menu are allowed; no
     button script is hooked or replaced (Codex). It only reacts to Blizzard showing it.
 - **References** (behaviour only):
-  - **Ellesmere** (`EUI_BlizzardSkin_Dialogs.lua:351-430`): `HookScript("OnShow")` on the menu,
+  - **Ellesmere** (v9.8.4, `EUI_BlizzardSkin_Dialogs.lua:351-470`): `HookScript("OnShow")` on the menu,
     `hooksecurefunc(GameMenuFrame, "InitButtons")`, the NineSlice and the `Border` faded, a
     backdrop. It moves the header, which we don't.
-  - **ElvUI** (`Skins/Misc.lua:114-121`): strips and re-anchors the header.
+  - **ElvUI** (16.01, `Skins/Misc.lua:118-125`): strips and re-anchors the header.
 
 ## The plan
 
