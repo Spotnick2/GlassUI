@@ -19,6 +19,13 @@ Kept Blizzard's:
 The anatomy is from `wow-ui-source` origin/forever (70450). The owner can trade between their own
 two accounts, so every case can be probed.
 
+**Re-checked on 70888** (the clone at 70888, 2026-11-12): TradeFrame.xml is unchanged since 70450.
+TradeFrame.lua's one change is gamepad-only: `TradeFrame_OnShow` opens all the bags instead of the
+backpack when the gamepad UI is on (:29-31). The skin touches neither. Since 70707, the shared
+`ItemButton` intrinsic masks the icon, the normal and the pushed texture (`common-iconmask`,
+Blizzard_ItemButton/Shared/ItemButtonTemplate.xml:19), as in the bags. The slots' look is judged
+in the run (TD.1).
+
 ## The frame
 
 `TradeFrame` comes from Blizzard_UIPanels_Game `Mainline/TradeFrame.{xml,lua}` (toc 116-117,
