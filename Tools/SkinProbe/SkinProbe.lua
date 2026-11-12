@@ -3122,8 +3122,9 @@ end
 
 Probe:Steps("tradeglass", {
     title = "Glass UI: the trade window in glass (#113)",
-    rev = 1,
-    { text = "Turns on script errors, the taint log off, and counts blocked actions from now.", auto = true,
+    rev = 2,
+    { text = "Turns on script errors, the taint log OFF for the first pass, and counts blocked actions from now.",
+      auto = true,
       run = function()
           if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
           return setCVar("scriptErrors", "1"), setCVar("taintLog", "0")
@@ -3166,8 +3167,13 @@ Probe:Steps("tradeglass", {
     { text = "Press Trade on both characters. If a confirmation dialog shows, cancel it the first time, then press "
           .. "Trade again and confirm it. The trade completes. Press Next.", check = tdClosed("completed") },
     { text = "Did a confirmation dialog show before the trade completed?", ask = true },
+    -- The rest with the taint log on (rev 2, Codex on #154): the first pass
+    -- has it off, and the /reload above would have turned it off anyway.
+    { text = "Turns the taint log ON for the rest of the run.", auto = true,
+      run = function() return setCVar("taintLog", "1") end },
+    { text = "Open a trade again (either side). Put an item in on each side, press Trade on this character, then "
+          .. "Cancel. Press Next with the window open. " .. TAINT_NOISE, check = tdOn("taint log on") },
     -- Off and on, closing.
-    { text = "Open a trade again (either side) and press Next with it open.", check = tdOn("open again") },
     { text = "With the trade window open: switches the skin off (Blizzard's look).", button = "Skin off",
       run = function() return tdSwitch(false) end, screenshot = "trade, skin off",
       check = function()

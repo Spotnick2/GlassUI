@@ -93,7 +93,7 @@ delegate. Every hook of ours only schedules.
 - **No hook on Blizzard's global update functions.** Nothing else needs one: no art is re-faded by
   Blizzard on an update (the survey), and the red has its instance hook.
 
-## The probe (`/fp steps skin tradeglass`, rev 1)
+## The probe (`/fp steps skin tradeglass`, rev 2)
 
 Between the owner's two accounts, read on the account that runs the probe.
 1. **The first trade of the session:** the window built a frame after its show; the shell faded;
@@ -121,6 +121,10 @@ Between the owner's two accounts, read on the account that runs the probe.
    `RecipientOverlay` are forbidden (the survey measured only the money row).
 6. **Off and on,** with a trade open. **A `/reload`.** **In combat,** if a trade can open in combat
    (unmeasured); otherwise recorded as unavailable.
+7. **Rev 2 (Codex on #154): the taint log on** after the first pass, as `mapglass` does. The
+   reload at the start would turn it off, so it's turned on mid-run. Then a trade with items on
+   both sides, Trade and Cancel, and everything in 6 except the reload, run with the log on. The
+   run ends with it off. The log is read from `Logs\taint.log` after the run (FOREVER-PROBE TD.7).
 
 ## Tests
 

@@ -275,6 +275,7 @@ The money input is never read: it is forbidden. Saved as `SkinProbeDB.results["T
 | TD.4 | Accepting, an offer changed after it (the highlights, the warning icon), Cancel taking the acceptance back, completing (the secure confirmation when it shows) | not run |
 | TD.5 | Off and on with a trade open; closed with the X and with Esc; in combat if a trade can open there (else skipped) | not run |
 | TD.6 | Are a slot's plate and socket, or the recipient's overlay, forbidden like the money input? | not run |
+| TD.7 | Rev 2 (Codex on #154): the taint log on from after the first pass to the end, so after the run's `/reload` (which turns it off). Items in on both sides, Trade and Cancel, off and on, the X, Esc, combat: nothing blocked, and nothing of Glass UI's in `Logs\taint.log` | not run |
 
 ## The suite theme (#24, docs/SUITE.md)
 

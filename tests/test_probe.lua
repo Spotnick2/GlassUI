@@ -1878,4 +1878,26 @@ T.suiteRestore(); T.panelRestore()
 rawset(_G, "GlassUI", nil)
 eq(#WoW.chat, 0, "still nothing in chat after every procedure step")
 
+-- tradeglass rev 2 (Codex on #154): trade checks run with the taint log on.
+-- A /reload turns the log off (measured, the porting guide), so turning it
+-- on before the run's reload doesn't count; the run ends with it off.
+do
+    local log
+    rawset(_G, "C_CVar", { SetCVar = function(name, value)
+        if name == "taintLog" then log = value end
+        return true
+    end })
+    local p = FP.procedures["SkinProbe/tradeglass"]
+    check(p ~= nil, "procedure tradeglass is defined")
+    local checkedOn, atReload = 0, nil
+    for _, st in ipairs(p and p.steps or {}) do
+        if st.reload then atReload, log = log, "0" end
+        if st.run then pcall(st.run) end
+        if st.check and log == "1" then checkedOn = checkedOn + 1 end
+    end
+    check(checkedOn >= 1, "tradeglass: trade checks with the taint log on, after the reload (" .. checkedOn .. ")")
+    eq(atReload, "0", "tradeglass turns the taint log off before its last /reload")
+    rawset(_G, "C_CVar", nil)
+end
+
 done("test_probe")
