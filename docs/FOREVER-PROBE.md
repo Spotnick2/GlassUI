@@ -201,19 +201,27 @@ tab), the menu's size against its first, and blocked actions (taint log on). Sav
 
 `/fp steps skin bags`. Each check reads every open bag window and its shown item buttons against what
 Blizzard shows: the shell faded, the header band, glass on every slot, the rims faded, an empty slot
-(its icon on the button's own empty atlas) dimmed, a filled one shown. It also records Glass UI's
-memory, the framerate and blocked actions. Saved as `SkinProbeDB.results["BG.<label>"]`.
+dimmed, the combined window's greyed bag icon faded, a filled one shown. An empty slot is read from
+the client (`C_Container.GetContainerItemInfo`); until #170 it was the button's own empty atlas, a key
+70707 removed. It also records Glass UI's memory, the framerate and blocked actions. Saved as
+`SkinProbeDB.results["BG.<label>"]`.
+
+**On 70888 (2026-11-12, #168), two runs with #170's fix (#175):**
+- run #164 on one account: 6 windows, 52 slots, 3 free;
+- run #257 on another: 64 slots, 22 free.
+
+Every check passes but the one after `/reload` (BG.6).
 
 | # | Question | Result |
 |---|---|---|
-| BG.1 | Separate bags, all open: every window and slot as above; the look against the merchant's | **Run 1 (70450, 2026-10-20): every check passes** (4 windows, 34 slots: glass on all, 17 empty dimmed, 17 filled shown). The owner: "apart from the gigantic circles yes". The portrait discs were about four times too big: the bags shrink the portrait to 36 (`SetPortraitTextureSizeAndOffset`, ContainerFrame.lua:789), and the mask read far wider. The disc is now round the portrait itself (`onPortrait`), with a 4 px ring. |
-| BG.2 | The title band: 20, 26 or 34 | **Run 1: unsure.** The three bands barely differ to the eye: 26 kept. |
-| BG.3 | A search, an item moved, a sort: the dims follow | **Run 1: passes** (search, move, sort). |
-| BG.4 | The backpack opened and an item used in combat, the taint log on: nothing blocked | **Run 1: passes.** Opened and used an item in combat with the taint log on: the item worked (owner: yes), nothing blocked. |
-| BG.5 | The combined window | **Run 1: passes.** Owner: yes. |
-| BG.6 | Off: Blizzard's look; a change; on: re-synced; after a /reload | **Run 1: off and on pass.** The after-`/reload` check FAILed with no bag open: its wait step was moved past by hand before a bag was opened. Not a skin fault. |
-| BG.7 | The cost: Glass UI's memory before and after, the framerate with every bag open | **Run 1:** Glass UI 394 KB before, 757 KB with 4 windows and 34 slots open (combined, 30 slots: 646 KB); about 150 fps throughout. Acceptable: the Section fallback isn't needed. |
-| BG.8 | 70707 on (#170): an icon set from a file reads no atlas (`BG.atlas`, the empty test's premise); empty slots read from the client (`C_Container.GetContainerItemInfo`), not the skin's key, with free slots in a bag shown but none found a FAIL; the combined window's greyed bag icon faded | **Waiting** for the 70888 run (#168), with BG.1 and BG.5 again: BG.1 passed on 70450 by the old key, which 70707 removed, so on 70707 and later it passed as 0 of 0. BG.5 needs an empty slot in the combined window. |
+| BG.1 | Separate bags, all open: every window and slot as above; the look against the merchant's | **Run 1 (70450, 2026-10-20): every check passes** (4 windows, 34 slots: glass on all, 17 empty dimmed, 17 filled shown). The owner: "apart from the gigantic circles yes". The portrait discs were about four times too big: the bags shrink the portrait to 36 (`SetPortraitTextureSizeAndOffset`, ContainerFrame.lua:789), and the mask read far wider. The disc is now round the portrait itself (`onPortrait`), with a 4 px ring. **70888, run #164: passes** (6 windows with the keyring, 52 slots: glass on all, 7 empty read from the client and 7 dimmed, 45 filled shown; 0 unread). Owner: yes. Run #257's first check counted nothing: the bags were closed when it was passed. Its later checks cover the separate view (64 slots, 24 of 24 empty dimmed). |
+| BG.2 | The title band: 20, 26 or 34 | **Run 1: unsure.** The three bands barely differ to the eye: 26 kept. **70888:** "they all read ok", then 26 again: 26 stays. |
+| BG.3 | A search, an item moved, a sort: the dims follow | **Run 1: passes** (search, move, sort). **70888: passes in both runs** (7 of 7, then 24 of 24, each time). |
+| BG.4 | The backpack opened and an item used in combat, the taint log on: nothing blocked | **Run 1: passes.** Opened and used an item in combat with the taint log on: the item worked (owner: yes), nothing blocked. **70888, run #257: passes.** The backpack was open in combat (20 of 20 slots on glass). The item worked (owner: yes), and nothing was blocked. Run #164 skipped it. |
+| BG.5 | The combined window | **Run 1: passes.** Owner: yes. **70888: passes in both runs.** Run #164: 48 slots, 3 empty dimmed, 3 bag icons faded. Run #257: 58 slots, 22 of 22 dimmed and faded. Owner: yes. In #257's screenshots, Blizzard's greyed bag icon fills each empty slot with the skin off, and with it on they're plain glass wells. |
+| BG.6 | Off: Blizzard's look; a change; on: re-synced; after a /reload | **Run 1: off and on pass.** The after-`/reload` check FAILed with no bag open: its wait step was moved past by hand before a bag was opened. Not a skin fault. **70888: off and on pass in both runs.** Off: no glass, no dim, every bag icon back. On: all back. The after-`/reload` check FAILed the same way in both runs, Done before a bag was open. Bags opened after a reload are skinned in every run's later checks. |
+| BG.7 | The cost: Glass UI's memory before and after, the framerate with every bag open | **Run 1:** Glass UI 394 KB before, 757 KB with 4 windows and 34 slots open (combined, 30 slots: 646 KB); about 150 fps throughout. Acceptable: the Section fallback isn't needed. **70888:** run #164 1092 KB before, 2034 KB with 6 windows and 52 slots, 2489 KB combined (48); run #257 3755 KB before, 3740-4412 KB with 6 windows and 64 slots (the search, move and sort checks: its first separate check ran with no bag open), 5595 KB combined (58). 55-70 fps in both, the runs taken in a crowded capital and in the open world, so not comparable with run 1. |
+| BG.8 | 70707 on (#170): an icon set from a file reads no atlas (`BG.atlas`, the empty test's premise); empty slots read from the client (`C_Container.GetContainerItemInfo`), not the skin's key, with free slots in a bag shown but none found a FAIL; the combined window's greyed bag icon faded | **70888: passes in both runs.** `BG.atlas`: `bags-item-slot64`, then nothing after `SetTexture`. Every empty slot the client reports was found (0 unread) and dimmed: 7 and 3 in run #164, 24 and 22 in run #257. Every combined bag icon was faded, and given back when off. |
 
 ### The merchant's layout (#84, docs/MERCHANT.md section 4)
 
