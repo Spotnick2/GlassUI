@@ -532,6 +532,35 @@ local function editMode()
     return ok and plain(v) == true
 end
 
+-- A wait's own state belongs to one attempt at its step (Codex on #181).
+-- ForeverProbe keeps a procedure's step functions across Stop and a restart,
+-- and calls a wait with nothing, so a "seen" marker left by a stopped, skipped
+-- or timed-out attempt would pass the next one at its first poll. The returned
+-- function is true when a poll starts a new attempt: the running record
+-- changed (a restart makes a new one), or the wait wasn't polled for longer
+-- than ATTEMPT_GAP (ForeverProbe polls every second while waiting, Steps.lua
+-- POLL; a step left and reached again misses polls).
+local attempt
+do
+local ATTEMPT_GAP = 2.5
+function attempt()
+    local lastRec, lastPoll
+    return function()
+        local fp = rawget(_G, "ForeverProbe")
+        local steps = type(fp) == "table" and rawget(fp, "Steps")
+        local rec
+        if type(steps) == "table" and type(steps.Active) == "function" then
+            local ok, _, r = pcall(steps.Active)
+            rec = ok and r or nil
+        end
+        local now = GetTime()
+        local fresh = lastPoll == nil or now - lastPoll > ATTEMPT_GAP or rec ~= lastRec
+        lastRec, lastPoll = rec, now
+        return fresh
+    end
+end
+end
+
 local function shownFrame(f)
     local ok, v = call(f, "IsShown")
     return ok and plain(v) == true
@@ -1692,10 +1721,13 @@ end
 -- with Settings closed when the step starts is no return: run 1 passed all
 -- three this way without a Settings visit (Codex on #91, P2). combat: the
 -- visit and the return both in combat. The seen state resets once accepted,
--- so a step reached again needs its own visit.
+-- and with each new attempt (attempt(), above), so a step reached again needs
+-- its own visit.
 local function settingsReturn(combat)
     local visited = false
+    local isNew = attempt()
     return function()
+        if isNew() then visited = false end
         local sp = frameByName("SettingsPanel")
         local open = sp ~= nil and seen(sp)
         local okC, c = pcall(InCombatLockdown)
@@ -4127,10 +4159,13 @@ end
 -- it has seen it open during the step. Edit Mode is closed when the step
 -- starts, so "not editMode()" alone passed at once on 70888 (run #225, #180)
 -- and the Text Size check read the titles untouched. The seen state resets
--- once accepted, so a step reached again needs its own visit.
-local function editModeVisit()
+-- once accepted, and with each new attempt (attempt(), the game menu's), so a
+-- step reached again needs its own visit.
+function skinChecks.editModeVisit()
     local visited = false
+    local isNew = attempt()
     return function()
+        if isNew() then visited = false end
         local open = editMode()
         if open then visited = true end
         if not visited then return false, "waiting for Edit Mode to open" end
@@ -4139,7 +4174,6 @@ local function editModeVisit()
         return true, "Edit Mode opened and closed"
     end
 end
-skinChecks.editModeVisit = editModeVisit
 
 Probe:Steps("accent", {
     title = "Glass UI: the accent on the yellow titles (#71)",
@@ -4150,7 +4184,7 @@ Probe:Steps("accent", {
       run = function() return setAccent("ice") end, check = titlesAre("ice"), screenshot = "accent, ice" },
     { text = "In Edit Mode, change the tracker's Text Size, then close Edit Mode. This step goes on by itself once "
           .. "it has seen Edit Mode open and close.",
-      wait = editModeVisit(), timeout = 600,
+      wait = skinChecks.editModeVisit(), timeout = 600,
       check = titlesAre("ice, after Text Size"), screenshot = "accent, after Text Size" },
     { text = "Gold, Blizzard's own.", button = "Gold", run = function() return setAccent("gold") end,
       check = titlesAre("gold"), screenshot = "accent, gold" },
@@ -4166,7 +4200,7 @@ Probe:Steps("accent", {
       end, check = titlesAre("skins off", GOLD) },
     { text = "With the skins off, change the tracker's Text Size in Edit Mode again, then close it. This step goes "
           .. "on by itself once it has seen Edit Mode open and close.",
-      wait = editModeVisit(), timeout = 600,
+      wait = skinChecks.editModeVisit(), timeout = 600,
       check = titlesAre("off, after Text Size", GOLD) },
     { text = "Both skins on again: the titles take the current accent.", button = "Skins on",
       run = function()

@@ -1142,6 +1142,41 @@ emActive = false
 okE, whyE = visit()
 check(okE, "opened, then closed: accepted: " .. tostring(whyE))
 check(not visit(), "reached again: it needs a visit of its own")
+-- An interrupted attempt leaves nothing behind (Codex on #181): Edit Mode seen
+-- open, then Stop and a restart (a new running record), or the step left and
+-- reached again (polls missed). The next attempt needs its own visit.
+local pinned, activeFn = GetTime, FP.Steps.Active
+local clock, running = 100, { "first run" }
+rawset(_G, "GetTime", function() return clock end)
+FP.Steps.Active = function() return nil, running end
+local function interrupted(newWait, open, close, label)
+    -- Restarted: a new record, polled at once.
+    local w = newWait()
+    open(); w()
+    close()
+    running = { "restarted" }
+    local ok = w()
+    check(not ok, label .. ": a visit seen before a restart doesn't pass the new run")
+    -- Left and reached again in the same run: polls missed.
+    w = newWait()
+    open(); w()
+    close()
+    clock = clock + 3
+    ok = w()
+    check(not ok, label .. ": a visit seen before the step was left doesn't pass its return")
+    -- Polled every second through one attempt, the visit still counts.
+    w = newWait()
+    w()
+    clock = clock + 1; open(); w()
+    clock = clock + 1; close()
+    ok = w()
+    check(ok, label .. ": a visit within one attempt, polled each second, passes")
+end
+interrupted(T.editModeVisit, function() emActive = true end, function() emActive = false end, "Edit Mode")
+interrupted(function() return T.settingsReturn(false) end, function() sp:Show() end,
+    function() sp:Hide(); gm:Show() end, "Settings")
+FP.Steps.Active = activeFn
+rawset(_G, "GetTime", pinned)
 -- The accent procedure's two Text Size steps use it, not a bare "closed" wait.
 local accentProc = FP.procedures["SkinProbe/accent"]
 local tsWaits = 0
