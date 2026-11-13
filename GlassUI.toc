@@ -22,6 +22,7 @@ Skin\Guild.lua
 Skin\Character.lua
 Skin\Map.lua
 Skin\Loot.lua
+Skin\Trade.lua
 Skin\DamageMeter.lua
 Skin\QuestTracker.lua
 Skin\RestedXP.lua

@@ -2959,6 +2959,244 @@ skinChecks.ltState, skinChecks.ltOn, skinChecks.ltClosed, skinChecks.fakeCheck =
 end
 
 --------------------------------------------------------------------------------
+-- The trade window (#113, docs/TRADE.md): between the owner's two accounts,
+-- read on the one running it. Each check reads the shell (the most visible
+-- of its pieces), the 14 wells (glass shown at the slot's level - 1, socket,
+-- plate and slot frame faded), Trade and Cancel (art faded, glass shown), the
+-- recipient's red (Blizzard's plate red <=> our mirror shown), the accept
+-- highlights and the warning icon as Blizzard shows them, whether the slot
+-- pieces and the overlay read as forbidden, blocked actions. The money input
+-- is never read: it is forbidden. Saved as TD.<label>.
+--------------------------------------------------------------------------------
+
+do
+local opens, lastOpen = 0, 0
+local tradeEvents = CreateFrame("Frame")
+tradeEvents:RegisterEvent("TRADE_SHOW")
+tradeEvents:SetScript("OnEvent", function() opens = opens + 1; lastOpen = GetTime() end)
+
+local TD_SHELL = { "TradeRecipientBG", "TradeRecipientLeftBorder", "TradeRecipientBotLeftCorner", "TradeRecipientMoneyBg" }
+local TD_INSETS = { "TradePlayerItemsInset", "TradeRecipientItemsInset", "TradePlayerEnchantInset",
+                    "TradeRecipientEnchantInset", "TradePlayerInputMoneyInset", "TradeRecipientMoneyInset" }
+local TD_HIGHLIGHTS = { "TradeHighlightPlayer", "TradeHighlightRecipient", "TradeHighlightPlayerEnchant",
+                        "TradeHighlightRecipientEnchant" }
+
+local function alphaOf(r)
+    local ok, a = call(r, "GetAlpha")
+    a = ok and plain(a) or nil
+    return type(a) == "number" and a or nil
+end
+
+-- Blizzard's red on a plate (0.9, 0, 0, TradeFrame.lua:180).
+local function plateRed(plate)
+    local ok, r, g, b = call(plate, "GetVertexColor")
+    r, g, b = plain(r), plain(g), plain(b)
+    return ok and type(r) == "number" and type(g) == "number" and type(b) == "number" and r > 0.4 and g < 0.1
+        and b < 0.1
+end
+
+local function forbiddenOf(obj)
+    local ok, f = call(obj, "IsForbidden")
+    return ok and tostring(plain(f)) or "?"
+end
+
+local function tdState(label)
+    local G = glassUI()
+    local T = G and G.Trade and G.Trade._test
+    local tf = frameByName("TradeFrame")
+    local rec = { opens = opens, wells = 0, wellsRight = 0, buttonsRight = 0, red = 0, redMismatch = 0, mine = 0,
+                  theirs = 0 }
+    rec.shown = tf ~= nil and seen(tf)
+    local okC, c = pcall(InCombatLockdown)
+    rec.combat = okC and plain(c) == true
+    rec.installed = T ~= nil and tf ~= nil and T.wins[tf] ~= nil
+    if tf then
+        local most = 0
+        local function see(r) local a = alphaOf(r); if a then most = math.max(most, a) end end
+        see(tf.NineSlice); see(tf.Bg); see(tf.TopTileStreaks)
+        for _, n in ipairs(TD_SHELL) do see(frameByName(n)) end
+        for _, n in ipairs(TD_INSETS) do
+            local i = frameByName(n)
+            if i then see(i.Bg); see(i.NineSlice) end
+        end
+        rec.shell = most
+        for _, side in ipairs({ "Player", "Recipient" }) do
+            for i = 1, 7 do
+                local name = "Trade" .. side .. "Item" .. i
+                local item, b = frameByName(name), frameByName(name .. "ItemButton")
+                local plate = frameByName(name .. "NameFrame")
+                local s = T and item and T.slots[item]
+                rec.wells = rec.wells + 1
+                local okN, normal = call(b, "GetNormalTexture")
+                local okL, il = call(item, "GetFrameLevel")
+                local right = s ~= nil and seen(s.glass) and okL and s.glass:GetFrameLevel() == plain(il) - 1
+                    and alphaOf(item and item.SlotTexture) == 0 and alphaOf(plate) == 0
+                    and alphaOf(okN and normal or nil) == 0
+                if right then rec.wellsRight = rec.wellsRight + 1 end
+                local okI, tex = call(b and b.icon, "GetTexture")
+                if okI and plain(tex) then
+                    if side == "Player" then rec.mine = rec.mine + 1 else rec.theirs = rec.theirs + 1 end
+                end
+                if side == "Recipient" and s and s.red then
+                    local red = plateRed(plate)
+                    if red then rec.red = rec.red + 1 end
+                    if red ~= seen(s.red) then rec.redMismatch = rec.redMismatch + 1 end
+                end
+            end
+        end
+        for _, n in ipairs({ "TradeFrameTradeButton", "TradeFrameCancelButton" }) do
+            local b = frameByName(n)
+            local bg = T and b and T.buttons[b]
+            if bg and seen(bg.glass) and alphaOf(b.Left) == 0 and alphaOf(b.Middle) == 0 and alphaOf(b.Right) == 0 then
+                rec.buttonsRight = rec.buttonsRight + 1
+            end
+        end
+        local hl = {}
+        for _, n in ipairs(TD_HIGHLIGHTS) do
+            local f = frameByName(n)
+            hl[#hl + 1] = n:gsub("TradeHighlight", "") .. "=" .. tostring(f ~= nil and seen(f))
+        end
+        rec.highlights = table.concat(hl, " ")
+        local tb = frameByName("TradeFrameTradeButton")
+        rec.warning = tb ~= nil and tb.WarningIcon ~= nil and seen(tb.WarningIcon)
+        rec.forbidden = "plate " .. forbiddenOf(frameByName("TradeRecipientItem1NameFrame")) .. ", socket "
+            .. forbiddenOf(frameByName("TradeRecipientItem1") and frameByName("TradeRecipientItem1").SlotTexture)
+            .. ", overlay " .. forbiddenOf(tf.RecipientOverlay)
+    end
+    rec.blocked = type(SkinProbeDB) == "table" and SkinProbeDB.suiteBlocked or 0
+    say("TD " .. label .. ": shown " .. tostring(rec.shown) .. ", combat " .. tostring(rec.combat) .. ", installed "
+        .. tostring(rec.installed) .. ", shell " .. tostring(rec.shell) .. ", wells " .. rec.wellsRight .. "/"
+        .. rec.wells .. ", buttons " .. rec.buttonsRight .. "/2, items " .. rec.mine .. "+" .. rec.theirs
+        .. ", red " .. rec.red .. " (" .. rec.redMismatch .. " off), " .. tostring(rec.highlights) .. ", warning "
+        .. tostring(rec.warning) .. ", forbidden " .. tostring(rec.forbidden) .. ", opens " .. rec.opens
+        .. ", blocked " .. rec.blocked)
+    record("TD." .. label, rec)
+    return rec
+end
+
+-- want.combat; want.red: at least one red slot of theirs; want.mine/theirs: at least that many items.
+local function tdOn(label, want)
+    want = want or {}
+    return function()
+        local r = tdState(label)
+        local bad = {}
+        local function want_(cond, why) if not cond then bad[#bad + 1] = why end end
+        want_(r.shown, "the window not shown")
+        want_(r.installed, "not installed")
+        if want.combat ~= nil then want_(r.combat == want.combat, "combat " .. tostring(r.combat)) end
+        want_(r.shell == 0, "shell " .. tostring(r.shell))
+        want_(r.wellsRight == r.wells, "wells " .. r.wellsRight .. " of " .. r.wells)
+        want_(r.buttonsRight == 2, "buttons " .. r.buttonsRight .. " of 2")
+        want_(r.redMismatch == 0, r.redMismatch .. " red mirror(s) off")
+        if want.red then want_(r.red > 0, "no red slot of theirs") end
+        if want.mine then want_(r.mine >= want.mine, "items of yours " .. r.mine) end
+        if want.theirs then want_(r.theirs >= want.theirs, "items of theirs " .. r.theirs) end
+        want_(r.blocked == 0, r.blocked .. " blocked")
+        return #bad == 0, #bad == 0 and "as Blizzard shows it" or table.concat(bad, "; ")
+    end
+end
+
+local function tdClosed(label)
+    return function()
+        local r = tdState(label)
+        local ok = not r.shown and r.blocked == 0
+        return ok, (r.shown and "still open" or "closed") .. ", " .. r.blocked .. " blocked"
+    end
+end
+
+local function tdWait(n)
+    return function()
+        local G = glassUI()
+        local T = G and G.Trade and G.Trade._test
+        local tf = frameByName("TradeFrame")
+        local ready = opens >= n and tf ~= nil and seen(tf) and T and T.wins[tf] ~= nil and GetTime() - lastOpen > 0.3
+        return ready, "waiting for the trade window"
+    end
+end
+
+local function tdSwitch(on)
+    local G = glassUI()
+    if not (G and G.Engine) then return false, "Glass UI not loaded" end
+    return G.Engine.SetEnabled("trade", on)
+end
+
+Probe:Steps("tradeglass", {
+    title = "Glass UI: the trade window in glass (#113)",
+    rev = 2,
+    { text = "Turns on script errors, the taint log OFF for the first pass, and counts blocked actions from now.",
+      auto = true,
+      run = function()
+          if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
+          return setCVar("scriptErrors", "1"), setCVar("taintLog", "0")
+      end },
+    { text = "Log your other account's character in next to this one. Then type /reload here, and don't trade before "
+          .. "the next step.", reload = true },
+    { text = "From THIS character, open a trade with the other one (target it, then /trade, or right-click its "
+          .. "portrait > Trade). This step goes on by itself once the window is open; a screenshot is taken.",
+      timeout = 300, screenshot = "trade, first", wait = tdWait(1), check = tdOn("first") },
+    { text = "Does it read as the template: dark glass, the smoky band with both names and portraits, both portraits on "
+          .. "glass discs, the item columns and money rows as recessed panes, each slot a glass well, Trade and "
+          .. "Cancel on glass, the close button on its disc, \"Will not be traded\" readable? Anything off: the "
+          .. "Note.", ask = true },
+    { text = "Press Cancel to close it. Then from the OTHER character, open a trade with this one (accept the "
+          .. "request here if one shows). This step goes on by itself.", timeout = 300, wait = tdWait(2),
+      check = tdOn("from the other side") },
+    -- Every input route on this side.
+    { text = "On this character: drag an item from your bags onto your slot 1; click another bag item, then click "
+          .. "your slot 2; pick up a third and click the window's empty background (it lands in the first free "
+          .. "slot); drag slot 1's item onto slot 4. Press Next.", check = tdOn("items in", { mine = 3 }) },
+    { text = "Click one of your items in the window and put it back in your bags. Press Next.",
+      check = tdOn("item out") },
+    { text = "Type 1 copper in your money box. Then click your backpack's gold amount, take a few copper, and click "
+          .. "the trade window's background. Press Next.", check = tdOn("money") },
+    -- Their side.
+    { text = "On the OTHER character: offer an item THIS character can't use (it shows red here), a stack, and some "
+          .. "money. Press Next here; a screenshot is taken.", screenshot = "trade, theirs",
+      check = tdOn("theirs", { red = true, theirs = 2 }) },
+    { text = "Does their unusable item read red here (its icon, and a faint red on its glass well), their money "
+          .. "readable? Anything off: the Note.", ask = true },
+    { text = "If either character can put something in the \"Will not be traded\" slot (an enchant or an item to "
+          .. "apply something to), try it now: a binding warning may show, cancel it once and accept it the second "
+          .. "time. Else just press Next.", check = tdOn("enchant slot") },
+    -- Accepting, cancelling, a changed offer.
+    { text = "Press Trade on THIS character only (not the other yet). Press Next.", check = tdOn("accepted") },
+    { text = "On the OTHER character, change its offer (add or remove an item): your acceptance resets here, and a "
+          .. "warning icon shows on Trade. Press Next.", check = tdOn("offer changed") },
+    { text = "Press Trade here again, then Cancel: Cancel takes your acceptance back and the window stays open. "
+          .. "Press Next.", check = tdOn("acceptance cancelled") },
+    { text = "Press Trade on both characters. If a confirmation dialog shows, cancel it the first time, then press "
+          .. "Trade again and confirm it. The trade completes. Press Next.", check = tdClosed("completed") },
+    { text = "Did a confirmation dialog show before the trade completed?", ask = true },
+    -- The rest with the taint log on (rev 2, Codex on #154): the first pass
+    -- has it off, and the /reload above would have turned it off anyway.
+    { text = "Turns the taint log ON for the rest of the run.", auto = true,
+      run = function() return setCVar("taintLog", "1") end },
+    { text = "Open a trade again (either side). Put an item in on each side, press Trade on this character, then "
+          .. "Cancel. Press Next with the window open. " .. TAINT_NOISE, check = tdOn("taint log on") },
+    -- Off and on, closing.
+    { text = "With the trade window open: switches the skin off (Blizzard's look).", button = "Skin off",
+      run = function() return tdSwitch(false) end, screenshot = "trade, skin off",
+      check = function()
+          local r = tdState("off")
+          local ok = r.shown and r.shell > 0 and r.wellsRight == 0 and r.buttonsRight == 0
+          return ok, ok and "Blizzard's look, nothing of ours" or "something of ours while off"
+      end },
+    { text = "Switches the skin on again.", button = "Skin on", run = function() return tdSwitch(true) end },
+    { text = "Wait a second, then press Next (the window still open).", check = tdOn("on again") },
+    { text = "Close it with its X. Press Next.", check = tdClosed("closed with X") },
+    { text = "Open a trade again, then close it with Esc. Press Next.", check = tdClosed("closed with Esc") },
+    { text = "If you can start a trade while in combat (get hit by a mob near the other character, then /trade), "
+          .. "do it and press Next with the window open; else press Skip.", check = tdOn("in combat", { combat = true }) },
+    { text = "Did every trade open, change and close with no 'Interface action failed' message or Lua error? "
+          .. "Anything else: the Note.", ask = true },
+    taintOff(),
+    { text = "Type /reload to save the results.", reload = true },
+})
+
+skinChecks.tdState, skinChecks.tdOn, skinChecks.tdClosed = tdState, tdOn, tdClosed
+end
+
+--------------------------------------------------------------------------------
 -- The suite theme (#24, docs/SUITE.md "In-game validation", S.1-S.8): Glass
 -- UI coordinating Glass Unit Frames and Glass Raid Frames. It reads only
 -- public state: Glass UI's Suite record, each addon's glass instance (its
@@ -5103,6 +5341,7 @@ boot:SetScript("OnEvent", function(_, _, name)
 end)
 
 NS._test = { ltState = skinChecks.ltState, ltOn = skinChecks.ltOn, ltClosed = skinChecks.ltClosed,
+    tdState = skinChecks.tdState, tdOn = skinChecks.tdOn, tdClosed = skinChecks.tdClosed,
     mpState = skinChecks.mpState, mpOn = skinChecks.mpOn, mpYield = skinChecks.mpYield,
     mpDescribe = skinChecks.describe, mpStartWatch = skinChecks.startWatch, mpReadWatch = skinChecks.readWatch,
     mpWatchTick = skinChecks.watchTick, chState = skinChecks.chState, chOn = skinChecks.chOn, gdState = skinChecks.gdState, gdOn = skinChecks.gdOn, gmState = skinChecks.gmState, gmOn = skinChecks.gmOn, settingsReturn = skinChecks.settingsReturn, bagsState = skinChecks.bagsState,

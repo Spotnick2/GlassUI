@@ -1570,6 +1570,104 @@ for _, n in ipairs({ "LootFrame", "GroupLootHistoryFrame" }) do rawset(_G, n, ni
 rawset(_G, "GlassUI", savedGUI9)
 end
 
+do
+-- #113: the trade window as the procedure reads it, on the stub's TradeFrame
+-- with a skin's result faked: the pieces faded, the wells and button glass.
+local savedGUI10 = rawget(_G, "GlassUI")
+WoW.makeTrade()
+local tf = TradeFrame
+tf:Show()
+local wins, slots, buttons = { [tf] = {} }, {}, {}
+for _, r in ipairs({ tf.NineSlice, tf.Bg, tf.TopTileStreaks, TradeRecipientBG, TradeRecipientLeftBorder,
+                     TradeRecipientBotLeftCorner, TradeRecipientMoneyBg }) do r:SetAlpha(0) end
+for _, n in ipairs({ "TradePlayerItemsInset", "TradeRecipientItemsInset", "TradePlayerEnchantInset",
+                     "TradeRecipientEnchantInset", "TradePlayerInputMoneyInset", "TradeRecipientMoneyInset" }) do
+    _G[n].Bg:SetAlpha(0); _G[n].NineSlice:SetAlpha(0)
+end
+for _, side in ipairs({ "Player", "Recipient" }) do
+    for i = 1, 7 do
+        local name = "Trade" .. side .. "Item" .. i
+        local item, b = _G[name], _G[name .. "ItemButton"]
+        item.SlotTexture:SetAlpha(0); _G[name .. "NameFrame"]:SetAlpha(0); b._normal:SetAlpha(0)
+        local glass = CreateFrame("Frame", nil, b)
+        glass:SetFrameLevel(item:GetFrameLevel() - 1)
+        local s = { glass = glass }
+        if side == "Recipient" then s.red = glass:CreateTexture(); s.red:Hide() end
+        slots[item] = s
+    end
+end
+for _, n in ipairs({ "TradeFrameTradeButton", "TradeFrameCancelButton" }) do
+    local b = _G[n]
+    b.Left:SetAlpha(0); b.Middle:SetAlpha(0); b.Right:SetAlpha(0)
+    buttons[b] = { glass = CreateFrame("Frame", nil, b) }
+end
+rawset(_G, "GlassUI", { Trade = { _test = { wins = wins, slots = slots, buttons = buttons } } })
+SkinProbeDB.suiteBlocked = 0
+local okD, whyD = T.tdOn("t")()
+check(okD, "the trade window in glass: pass: " .. tostring(whyD))
+eq(SkinProbeDB.results["TD.t"].wells, 14, "fourteen slots read")
+eq(SkinProbeDB.results["TD.t"].forbidden, "plate false, socket false, overlay false", "forbidden read on three pieces")
+tf.NineSlice:SetAlpha(1)
+okD, whyD = T.tdOn("t")()
+check(not okD and whyD:find("shell 1", 1, true), "the shell back fails")
+tf.NineSlice:SetAlpha(0)
+TradeRecipientMoneyInset.NineSlice:SetAlpha(0.5)
+okD, whyD = T.tdOn("t")()
+check(not okD and whyD:find("shell 0.5", 1, true), "an inset's border back fails")
+TradeRecipientMoneyInset.NineSlice:SetAlpha(0)
+local s5 = slots[TradeRecipientItem5]
+s5.glass:SetFrameLevel(TradeRecipientItem5ItemButton:GetFrameLevel() - 1)
+okD, whyD = T.tdOn("t")()
+check(not okD and whyD:find("wells 13 of 14", 1, true), "a well over the glyph's level fails")
+s5.glass:SetFrameLevel(TradeRecipientItem5:GetFrameLevel() - 1)
+TradePlayerItem2NameFrame:SetAlpha(1)
+okD, whyD = T.tdOn("t")()
+check(not okD and whyD:find("wells 13 of 14", 1, true), "a plate back fails")
+TradePlayerItem2NameFrame:SetAlpha(0)
+TradeFrameCancelButton.Middle:SetAlpha(1)
+okD, whyD = T.tdOn("t")()
+check(not okD and whyD:find("buttons 1 of 2", 1, true), "a button's art back fails")
+TradeFrameCancelButton.Middle:SetAlpha(0)
+-- The red: Blizzard's plate red and our mirror agree, else a FAIL.
+TradeRecipientItem5NameFrame:SetVertexColor(0.9, 0, 0)
+okD, whyD = T.tdOn("t", { red = true })()
+check(not okD and whyD:find("1 red mirror(s) off", 1, true), "red plate, no mirror: fails")
+s5.red:Show()
+okD, whyD = T.tdOn("t", { red = true })()
+check(okD, "red plate, mirror shown: pass: " .. tostring(whyD))
+TradeRecipientItem5NameFrame:SetVertexColor(1, 1, 1)
+okD, whyD = T.tdOn("t")()
+check(not okD and whyD:find("1 red mirror(s) off", 1, true), "white plate, mirror still shown: fails")
+s5.red:Hide()
+okD, whyD = T.tdOn("t", { red = true })()
+check(not okD and whyD:find("no red slot of theirs", 1, true), "red wanted, none: fails")
+-- Items counted from the icons.
+TradePlayerItem1ItemButton.icon:SetTexture(5500)
+TradeRecipientItem1ItemButton.icon:SetTexture(5500)
+okD, whyD = T.tdOn("t", { mine = 2 })()
+check(not okD and whyD:find("items of yours 1", 1, true), "fewer of mine than wanted fails")
+check(T.tdOn("t", { mine = 1, theirs = 1 })(), "one each: pass")
+-- Combat, blocked, closing, not installed.
+okD, whyD = T.tdOn("t", { combat = true })()
+check(not okD and whyD:find("combat false", 1, true), "combat wanted, none: fails")
+SkinProbeDB.suiteBlocked = 1
+okD, whyD = T.tdOn("t")()
+check(not okD and whyD:find("1 blocked", 1, true), "a blocked action fails")
+okD = T.tdClosed("c")()
+check(not okD, "still open and blocked: fails")
+tf:Hide()
+okD, whyD = T.tdClosed("c")()
+check(not okD and whyD:find("1 blocked", 1, true), "closed but blocked: fails")
+SkinProbeDB.suiteBlocked = 0
+okD, whyD = T.tdClosed("c")()
+check(okD and whyD:find("closed", 1, true), "closed without a block: pass")
+tf:Show()
+wins[tf] = nil
+okD, whyD = T.tdOn("t")()
+check(not okD and whyD:find("not installed", 1, true), "not installed fails")
+rawset(_G, "GlassUI", savedGUI10)
+end
+
 -- #56 discovery: Questie's tracker and RestedXP's window and arrow.
 -- When each frame first exists: the first place it was seen is kept.
 local qbase = CreateFrame("Frame", "Questie_BaseFrame", UIParent)
@@ -1779,5 +1877,27 @@ T.panelsOff(); T.borderRestore(); T.gradientOff(); T.barsOff()
 T.suiteRestore(); T.panelRestore()
 rawset(_G, "GlassUI", nil)
 eq(#WoW.chat, 0, "still nothing in chat after every procedure step")
+
+-- tradeglass rev 2 (Codex on #154): trade checks run with the taint log on.
+-- A /reload turns the log off (measured, the porting guide), so turning it
+-- on before the run's reload doesn't count; the run ends with it off.
+do
+    local log
+    rawset(_G, "C_CVar", { SetCVar = function(name, value)
+        if name == "taintLog" then log = value end
+        return true
+    end })
+    local p = FP.procedures["SkinProbe/tradeglass"]
+    check(p ~= nil, "procedure tradeglass is defined")
+    local checkedOn, atReload = 0, nil
+    for _, st in ipairs(p and p.steps or {}) do
+        if st.reload then atReload, log = log, "0" end
+        if st.run then pcall(st.run) end
+        if st.check and log == "1" then checkedOn = checkedOn + 1 end
+    end
+    check(checkedOn >= 1, "tradeglass: trade checks with the taint log on, after the reload (" .. checkedOn .. ")")
+    eq(atReload, "0", "tradeglass turns the taint log off before its last /reload")
+    rawset(_G, "C_CVar", nil)
+end
 
 done("test_probe")

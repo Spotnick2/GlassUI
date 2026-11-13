@@ -43,7 +43,7 @@ it can be reached at all.
 
 | Issue | Window | Notes |
 |---|---|---|
-| #113 | Trade (`TradeFrame`) | In progress (branch `trade-glass`). The money input is forbidden; the recipient's red is mirrored. |
+| #113 | Trade (`TradeFrame`) | Built and tested offline (branch `trade-glass`); the in-game probe waits for the beta. The money input is forbidden; the recipient's red is mirrored. |
 | #114 | NPC quest dialog (`QuestFrame`, `QuestLogPopupDetailFrame`) | Parchment carries the text: textures only. |
 | #115 | Gossip (`GossipFrame`) | Theme container; recolour only. |
 | #116 | Taxi / flight map | `probe-first`: which one Forever opens. |

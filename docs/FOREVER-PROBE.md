@@ -253,6 +253,30 @@ are saved as `SkinProbeDB.results["MS.<label>"]`.
 | MS.3 | The portrait's disc: a ring round the face, centred on the mask, on the NPC's portrait and the buyback tab's | **Run 1:** PASS: seen on both tabs, 70 px (58 + 2 x 6), off-centre 0.00001 px; centred and the right width (the owner). "The ring should probably be pearl/clear": it was dark, with a backing at the window's floor. Now Pearl, clear and without a backing. |
 | MS.4 | Off live: Blizzard's plates, slots and portrait ring back, no glass of ours; on again | **Run 1:** PASS: the border back, 0 rows on glass, no disc; the owner: exactly Blizzard's; on again, faded; after a /reload, still on. The "too many errors" warnings in the screenshots were the taint log's micro menu noise (BugGrabber: `MainMenuBarMicroButtons.lua:2008`, x301), not Glass UI. |
 
+### The trade window (#113, docs/TRADE.md)
+
+`/fp steps skin tradeglass`, between the owner's two accounts, read on the one running it. Each
+check reads:
+- the shell: the most visible of its pieces;
+- the 14 wells: the glass shown at the slot's level − 1, and the socket, plate and slot frame faded;
+- Trade and Cancel: their art faded, their glass shown;
+- the recipient's red: Blizzard's red plate if and only if our mirror shows;
+- the accept highlights and the warning icon, as Blizzard shows them;
+- whether a slot's plate, its socket and the recipient's overlay read as forbidden;
+- blocked actions.
+
+The money input is never read: it is forbidden. Saved as `SkinProbeDB.results["TD.<label>"]`.
+
+| # | Question | Result |
+|---|---|---|
+| TD.1 | The first trade of the session, styled a frame after its show; one opened from the other side; the look | **Pass** (70888, run #211/#212, 2026-11-12). The first trade of the session: shell 0, wells 14/14, buttons 2/2; from the other side the same. The owner: it reads as the template. The screenshot shows the dark glass, both portraits on discs, the panes, each slot a well (the 70707 icon mask reads fine), Trade and Cancel on glass, the gold X on its disc |
+| TD.2 | Every input route on this side (drag, click-drop, a drop on the background, a move between slots, one taken back; money typed and dropped from the cursor) | **Pass** for the items (3 in, one taken back: 2), 14/14 throughout, 0 blocked. Money typed (1 copper) shows in the input. **Money from the cursor not run:** clicking the backpack's coins opens no pickup box on 70888, the bags skin off too (the owner), although Blizzard's code enables it (`MoneyFrame.lua:118`, the PLAYER type) |
+| TD.3 | Their side: an item this character can't use (the red mirrored), a stack, money; the enchant slot and its binding warning when available | **Pass.** A stack (Copper Bar ×3) and money read. Once their unusable item was in: red 1, our mirror matching (0 off) at every check after. The step-9 check itself failed on timing: Next was pressed before that item arrived (the screenshot shows only the usable stack). The enchant slot: no binding warning came up |
+| TD.4 | Accepting, an offer changed after it (the highlights, the warning icon), Cancel taking the acceptance back, completing (the secure confirmation when it shows) | **Pass, 0 blocked.** The warning icon showed after their offer changed, as Blizzard shows it; Cancel kept the window open; a confirmation dialog showed before completing (the owner), and the next trade opened normally. The completion check failed on timing (Next 2 s after the step, the window still open). **Not measured:** Blizzard's accept highlights never read shown, at the accept step either; the skin never touches them |
+| TD.5 | Off and on with a trade open; closed with the X and with Esc; in combat if a trade can open there (else skipped) | **Pass.** Off: Blizzard's look (wells 0, the shell back), screenshot; on again: 14/14, 2/2. Closed with the X and with Esc: 0 blocked. Opened in combat: 14/14, 2/2, 0 blocked |
+| TD.6 | Are a slot's plate and socket, or the recipient's overlay, forbidden like the money input? | **No:** plate, socket and overlay all read `IsForbidden` false at every check |
+| TD.7 | Rev 2 (Codex on #154): the taint log on from after the first pass to the end, so after the run's `/reload` (which turns it off). Items in on both sides, Trade and Cancel, off and on, the X, Esc, combat: nothing blocked, and nothing of Glass UI's in `Logs\taint.log` | **Pass.** The log on from step 17 to 26 (about 2.5 minutes, every case listed). `Logs\taint.log` was not written during it: its last entries are another addon's from earlier that day, so the client does write it on taint. ForeverProbe recorded no blocked or forbidden action in the run; the owner saw no error |
+
 ## The suite theme (#24, docs/SUITE.md)
 
 `/fp steps skin suite`, once Glass UI (this branch), LibGlass r11 (LibGlass#64), GlassUnitFrames

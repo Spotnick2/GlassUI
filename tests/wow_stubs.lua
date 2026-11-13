@@ -2000,6 +2000,152 @@ function WoW.lootHistory(show)
 end
 function WoW.hideMerchant() WoW.asBlizzard(function() MerchantFrame:Hide() end) end
 
+-- TradeFrame (Blizzard_UIPanels_Game, Mainline/TradeFrame.xml; forever 70450,
+-- docs/TRADE.md): ButtonFrameTemplate's shell, the names' HIGH frame, the
+-- recipient's overlay (550), the highlights, the six insets, the 2 x 7 slots,
+-- Trade and Cancel, the forbidden money input (every key but IsForbidden
+-- throws), the recipient's money edge and display. TradeFrame:GetChildren
+-- from addon code throws: it would hand back the forbidden frame. Hidden.
+-- WoW.tradeOffer[side][i] = { icon =, usable = } fills a slot on an update.
+WoW.tradeOffer = { Player = {}, Recipient = {} }
+local function forbidden(name)
+    local f = setmetatable({}, { __index = function(_, k)
+        if k == "IsForbidden" then return function() return true end end
+        error("forbidden: " .. name .. "." .. tostring(k), 2)
+    end })
+    rawset(_G, name, f)
+    table.insert(WoW.blizzGlobals, name)
+    return f
+end
+
+function WoW.makeTrade()
+    WoW.tradeOffer = { Player = {}, Recipient = {} }
+    WoW.asBlizzard(function()
+        local f = blizz("Frame", UIParent, "TradeFrame")
+        f._shown, f._level, f._strata = false, 5, "MEDIUM"
+        f._width, f._height = 344, 446
+        f.NineSlice = nineSlice(f)
+        f.Bg = blizz("Texture", f, "TradeFrameBg", "BACKGROUND")
+        f.TopTileStreaks = blizz("Texture", f, nil, "BORDER")
+        f.Inset = inset(f, "TradeFrameInset")
+        f.PortraitContainer = blizz("Frame", f)
+        f.PortraitContainer._level = 400
+        f.PortraitContainer.portrait = blizz("Texture", f.PortraitContainer, "TradeFramePortrait", "OVERLAY")
+        f.PortraitContainer.portrait._width = 60
+        f.PortraitContainer.CircleMask = blizz("MaskTexture", f.PortraitContainer)
+        f.PortraitContainer.CircleMask._width = 58
+        f.CloseButton = blizzButton(f, "RedButton-Exit", "RedButton-exit-pressed", "RedButton-Highlight",
+                                    "RedButton-Exit-Disabled")
+        f.CloseButton._level, f.CloseButton._width = 510, 24
+        rawset(_G, "TradeFrameCloseButton", f.CloseButton)
+        table.insert(WoW.blizzGlobals, "TradeFrameCloseButton")
+        for _, n in ipairs({ "TradeRecipientBG", "TradeRecipientLeftBorder", "TradeRecipientBotLeftCorner" }) do
+            blizz("Texture", f, n, n == "TradeRecipientBG" and "BACKGROUND" or "OVERLAY")
+        end
+        blizz("FontString", f, "TradeFramePlayerEnchantText", "ARTWORK")
+        blizz("FontString", f, "TradeFrameRecipientEnchantText", "ARTWORK")
+        local names = blizz("Frame", f)
+        names._strata = "HIGH"
+        blizz("FontString", names, "TradeFrameRecipientNameText", "ARTWORK")
+        blizz("FontString", names, "TradeFramePlayerNameText", "ARTWORK")
+        local ov = blizz("Frame", f)
+        ov._level = 550
+        ov.portrait = blizz("Texture", ov, nil, "ARTWORK")
+        ov.portrait._width = 60
+        ov.portraitFrame = blizz("Texture", ov, nil, "ARTWORK")
+        f.RecipientOverlay = ov
+        for _, n in ipairs({ "TradeHighlightPlayer", "TradeHighlightRecipient", "TradeHighlightPlayerEnchant",
+                             "TradeHighlightRecipientEnchant" }) do
+            local hl = blizz("Frame", f, n)
+            hl._shown = false
+        end
+        for _, n in ipairs({ "TradePlayerItemsInset", "TradeRecipientItemsInset", "TradePlayerEnchantInset",
+                             "TradeRecipientEnchantInset", "TradePlayerInputMoneyInset", "TradeRecipientMoneyInset" }) do
+            local i = inset(f, n)
+            i._level = f._level                                    -- useParentLevel
+        end
+        for _, side in ipairs({ "Player", "Recipient" }) do
+            for i = 1, 7 do
+                local name = "Trade" .. side .. "Item" .. i
+                local item = blizz("Frame", f, name)
+                item._level = f._level + 1
+                item.SlotTexture = blizz("Texture", item, name .. "SlotTexture", "BACKGROUND")
+                blizz("Texture", item, name .. "NameFrame", "BACKGROUND")
+                blizz("FontString", item, name .. "Name", "BACKGROUND")
+                if i == 7 then item._glyph = blizz("Texture", item, nil, "ARTWORK") end
+                local b = blizz("Button", item, name .. "ItemButton")
+                b._level = item._level + 2                         -- OnLoad: two up
+                b._width = 37
+                b.icon = blizz("Texture", b, name .. "ItemButtonIconTexture", "BORDER")
+                b.IconBorder = blizz("Texture", b, nil, "OVERLAY")
+                b.Count = blizz("FontString", b, nil, "ARTWORK")
+                b._normal = blizz("Texture", b, nil, "ARTWORK")
+                b.Alert = blizz("Frame", b)
+            end
+        end
+        for _, n in ipairs({ "TradeFrameTradeButton", "TradeFrameCancelButton" }) do
+            local b = blizz("Button", f, n)
+            b._level = f._level + 1
+            for _, k in ipairs({ "Left", "Middle", "Right" }) do b[k] = blizz("Texture", b, nil, "BACKGROUND") end
+            b._highlight = blizz("Texture", b, nil, "HIGHLIGHT")
+            b.Text = blizz("FontString", b, nil, "OVERLAY")
+            if n == "TradeFrameTradeButton" then
+                b.WarningIcon = blizz("Texture", b, nil, "ARTWORK")
+                b.WarningIcon._shown = false
+            end
+        end
+        local edge = blizz("Frame", f, "TradeRecipientMoneyBg")
+        blizz("Frame", f, "TradeRecipientMoneyFrame")
+        -- TradeFrame_OnLoad (TradeFrame.lua:16-21).
+        TradeRecipientItemsInset.Bg:SetAlpha(0.1)
+        TradeRecipientMoneyInset.Bg:SetAlpha(0)
+        TradeRecipientEnchantInset.Bg:SetAlpha(0.1)
+        edge:SetAlpha(0.6)
+        forbidden("TradePlayerInputMoneyFrame")
+        forbidden("TradePlayerInputMoneyFrameGold")
+        forbidden("TradePlayerInputMoneyFrameGoldMiddle")
+        rawset(f, "GetChildren", function(self)
+            if not WoW.inBlizzard then error("TradeFrame:GetChildren from addon code: the forbidden money frame", 2) end
+            return Methods.GetChildren(self)
+        end)
+        WoW.snapshot()
+    end)
+end
+
+-- TradeFrame_UpdatePlayerItem / UpdateTargetItem (TradeFrame.lua:100-194):
+-- the icon, and on the recipient's side the red or white on the icon, the
+-- plate and the slot.
+local function tradeSlot(side, i)
+    local name = "Trade" .. side .. "Item" .. i
+    local o = WoW.tradeOffer[side][i]
+    local b = _G[name .. "ItemButton"]
+    b.icon:SetTexture(o and o.icon or nil)
+    if side == "Recipient" then
+        local red = o and not o.usable
+        b.icon:SetVertexColor(red and 0.9 or 1, red and 0 or 1, red and 0 or 1)
+        _G[name .. "NameFrame"]:SetVertexColor(red and 0.9 or 1, red and 0 or 1, red and 0 or 1)
+        _G[name].SlotTexture:SetVertexColor(1, red and 0 or 1, red and 0 or 1)
+    end
+end
+function WoW.tradeSlot(side, i) WoW.asBlizzard(tradeSlot, side, i) end
+
+-- TRADE_SHOW / TRADE_UPDATE: ShowUIPanel, then TradeFrame_Update; Trade and
+-- Cancel re-set their art on show (UIPanelButton's SetTexture).
+function WoW.trade()
+    WoW.asBlizzard(function()
+        TradeFrame:Show()
+        TradeFrame.PortraitContainer.portrait:SetTexture(1)
+        TradeFrame.RecipientOverlay.portrait:SetTexture(2)
+        for _, side in ipairs({ "Player", "Recipient" }) do
+            for i = 1, 7 do tradeSlot(side, i) end
+        end
+        for _, n in ipairs({ "TradeFrameTradeButton", "TradeFrameCancelButton" }) do
+            for _, k in ipairs({ "Left", "Middle", "Right" }) do _G[n][k]:SetTexture("Interface\\Buttons\\UI-Panel-Button-Up") end
+        end
+    end)
+end
+function WoW.closeTrade() WoW.asBlizzard(function() TradeFrame:Hide() end) end
+
 -- RestedXP v4.11.26 (#56, docs/RESTEDXP.md): RXPFrame (GuideWindow.lua) and
 -- RXPG_ARROW (map.lua), its default window ("V1"). A third-party addon's
 -- objects, under the same contract record as Blizzard's: its function fields
