@@ -101,8 +101,11 @@ Between the owner's two accounts, read on the account that runs the probe.
    incoming request's accept/decline popup if the client shows one.
 2. **The look,** in a screenshot.
 3. **Items both ways, by every input route:** click and remove a slot's item, drag between slots,
-   drop an item on the window's background, drop cursor money (the window's `OnMouseUp`,
-   `TradeFrame.lua:247-257`). All through the player's actions; the probe calls no trade function.
+   drop an item on the window's background. All through the player's actions; the probe calls no
+   trade function. Cursor money (the window's `OnMouseUp`, `TradeFrame.lua:247-257`) has no route
+   from the bags on 70888: their coins open the currency tab, as on Retail (`showCurrencyTracking`,
+   `ContainerFrame.xml:202`, checked first by `MoneyInputFrame.lua:219`; nothing at all while the
+   character has no currency, `Camelot/CharacterFrame.lua:98-103`). Money is typed (#178).
    - an item **the probing character can't use**, offered by the other (the red mirrored);
    - a stack (the count);
    - the enchant slot;
@@ -172,6 +175,6 @@ Also taken:
   mutants all killed.
 - In game: **accepted on 70888** (run #211/#212, 2026-11-12, rev 2). TD.1-TD.7 pass: glass on
   every open, both sides, off and on, the X, Esc and combat, 0 blocked, and nothing in the taint log.
-  Two checks failed on timing only (TD.3, TD.4). Not covered: money dropped from the cursor (the
-  backpack's coins open no pickup box on 70888, with the bags skin off too) and the accept
-  highlights (never read shown).
+  Two checks failed on timing only (TD.3, TD.4). Not covered: money dropped from the cursor (no route
+  from the bags on 70888, item 3 above; expected, not a client bug, #178) and the accept highlights
+  (never read shown).

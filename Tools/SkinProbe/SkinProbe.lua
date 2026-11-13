@@ -3147,8 +3147,9 @@ Probe:Steps("tradeglass", {
           .. "slot); drag slot 1's item onto slot 4. Press Next.", check = tdOn("items in", { mine = 3 }) },
     { text = "Click one of your items in the window and put it back in your bags. Press Next.",
       check = tdOn("item out") },
-    { text = "Type 1 copper in your money box. Then click your backpack's gold amount, take a few copper, and click "
-          .. "the trade window's background. Press Next.", check = tdOn("money") },
+    -- Typed only: on 70888 the bags' coins open the currency tab, not a money
+    -- pickup (showCurrencyTracking, ContainerFrame.xml:202; #178).
+    { text = "Type 1 copper in your money box. Press Next.", check = tdOn("money") },
     -- Their side.
     { text = "On the OTHER character: offer an item THIS character can't use (it shows red here), a stack, and some "
           .. "money. Press Next here; a screenshot is taken.", screenshot = "trade, theirs",
