@@ -413,7 +413,7 @@ width the text's plus its padding.
 
 | # | Question | Result |
 |---|---|---|
-| AC.1 | Ice and gold, live: both titles follow at once | **Passes (70888, 2026-11-13, run #225).** Ice: the tracker's and the meter's titles 0.65, 0.84, 0.91 at once; gold: 1, 0.82, 0. The owner: both read well (no preference given). |
+| AC.1 | Ice and gold, live: both titles follow at once | **Passes (70888, 2026-11-13, run #225).** Ice: the tracker's and the meter's titles 0.65, 0.84, 0.91 at once; gold: 1, 0.82, 0. The owner: both read well, and prefers gold (the default; run #240, which also passed AC.1 and AC.4 again on rev 1). |
 | AC.2 | Edit Mode's Text Size with the skins on: the accent holds | **Not measured (run #225):** the step finished as it began, Edit Mode still closed, so the check read titles nothing had touched. Its wait now needs Edit Mode seen open, then closed (rev 2, #180). To run again. Run #235 used the deployed rev 1 again (#181 not yet merged): the same, not measured. |
 | AC.3 | Skins off: Blizzard's gold back; Text Size while off keeps it; on again: the current accent | **Partly (run #225).** Skins off with the accent ice: both titles Blizzard's gold; on again: ice. Text Size while off: not measured, as AC.2 (#180). |
 | AC.4 | Changed in combat: at once, nothing blocked | **Passes (70888, 2026-11-13, run #235):** gold pressed while fighting, both titles gold at once (1, 0.82, 0), nothing blocked. |
