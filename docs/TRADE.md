@@ -167,7 +167,11 @@ Also taken:
 
 - `Skin\Trade.lua`, key `trade`; `WoW.makeTrade` in the stubs (the money input as a forbidden
   proxy that throws on any key but `IsForbidden`; `TradeFrame:GetChildren` from addon code throws).
-- `test_trade` 254 checks, 36 mutants all killed; the contract and methods tests open a trade.
+- `test_trade` 255 checks, 36 mutants all killed; the contract and methods tests open a trade.
 - `/fp steps skin tradeglass` (docs/FOREVER-PROBE.md, TD): its checks tested in `test_probe`, 13
   mutants all killed.
-- In game: not run yet (the beta was down on 2026-10-21).
+- In game: **accepted on 70888** (run #211/#212, 2026-11-12, rev 2). TD.1-TD.7 pass: glass on
+  every open, both sides, off and on, the X, Esc and combat, 0 blocked, and nothing in the taint log.
+  Two checks failed on timing only (TD.3, TD.4). Not covered: money dropped from the cursor (the
+  backpack's coins open no pickup box on 70888, with the bags skin off too) and the accept
+  highlights (never read shown).
