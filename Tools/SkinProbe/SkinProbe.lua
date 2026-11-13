@@ -4123,14 +4123,34 @@ local function setAccent(name)
     return G.Suite.SetLook("accent", name), name
 end
 
+-- Edit Mode and back: a step's wait that accepts Edit Mode closed only after
+-- it has seen it open during the step. Edit Mode is closed when the step
+-- starts, so "not editMode()" alone passed at once on 70888 (run #225, #180)
+-- and the Text Size check read the titles untouched. The seen state resets
+-- once accepted, so a step reached again needs its own visit.
+local function editModeVisit()
+    local visited = false
+    return function()
+        local open = editMode()
+        if open then visited = true end
+        if not visited then return false, "waiting for Edit Mode to open" end
+        if open then return false, "Edit Mode is still open" end
+        visited = false
+        return true, "Edit Mode opened and closed"
+    end
+end
+skinChecks.editModeVisit = editModeVisit
+
 Probe:Steps("accent", {
     title = "Glass UI: the accent on the yellow titles (#71)",
+    rev = 2,
     { text = "Have the quest tracker and the damage meter on screen. Reads both titles.", auto = true,
       run = function() return accentState("start").accent end },
     { text = "Ice: 'All Objectives', the section titles and 'Damage Done' turn ice blue.", button = "Ice",
       run = function() return setAccent("ice") end, check = titlesAre("ice"), screenshot = "accent, ice" },
-    { text = "In Edit Mode, change the tracker's Text Size, then close Edit Mode.",
-      wait = function() return not editMode(), "Edit Mode is still open" end, timeout = 600,
+    { text = "In Edit Mode, change the tracker's Text Size, then close Edit Mode. This step goes on by itself once "
+          .. "it has seen Edit Mode open and close.",
+      wait = editModeVisit(), timeout = 600,
       check = titlesAre("ice, after Text Size"), screenshot = "accent, after Text Size" },
     { text = "Gold, Blizzard's own.", button = "Gold", run = function() return setAccent("gold") end,
       check = titlesAre("gold"), screenshot = "accent, gold" },
@@ -4144,8 +4164,9 @@ Probe:Steps("accent", {
           G.Engine.SetEnabled("meter", false)
           return true
       end, check = titlesAre("skins off", GOLD) },
-    { text = "With the skins off, change the tracker's Text Size in Edit Mode again, then close it.",
-      wait = function() return not editMode(), "Edit Mode is still open" end, timeout = 600,
+    { text = "With the skins off, change the tracker's Text Size in Edit Mode again, then close it. This step goes "
+          .. "on by itself once it has seen Edit Mode open and close.",
+      wait = editModeVisit(), timeout = 600,
       check = titlesAre("off, after Text Size", GOLD) },
     { text = "Both skins on again: the titles take the current accent.", button = "Skins on",
       run = function()
@@ -5345,7 +5366,7 @@ NS._test = { ltState = skinChecks.ltState, ltOn = skinChecks.ltOn, ltClosed = sk
     tdState = skinChecks.tdState, tdOn = skinChecks.tdOn, tdClosed = skinChecks.tdClosed,
     mpState = skinChecks.mpState, mpOn = skinChecks.mpOn, mpYield = skinChecks.mpYield,
     mpDescribe = skinChecks.describe, mpStartWatch = skinChecks.startWatch, mpReadWatch = skinChecks.readWatch,
-    mpWatchTick = skinChecks.watchTick, chState = skinChecks.chState, chOn = skinChecks.chOn, gdState = skinChecks.gdState, gdOn = skinChecks.gdOn, gmState = skinChecks.gmState, gmOn = skinChecks.gmOn, settingsReturn = skinChecks.settingsReturn, bagsState = skinChecks.bagsState,
+    mpWatchTick = skinChecks.watchTick, chState = skinChecks.chState, chOn = skinChecks.chOn, gdState = skinChecks.gdState, gdOn = skinChecks.gdOn, gmState = skinChecks.gmState, gmOn = skinChecks.gmOn, settingsReturn = skinChecks.settingsReturn, editModeVisit = skinChecks.editModeVisit, bagsState = skinChecks.bagsState,
     bagsOn = skinChecks.bagsOn, atlasRoundTrip = skinChecks.atlasRoundTrip, both = both, closeState = closeState, closeOn = closeOn, headerTry = headerTry, layoutState = layoutState, layoutOn = layoutOn, Probe = Probe, state = state, tree = tree, fade = fade, slashOwners = slashOwners,
              gamepad = gamepad, panelsOn = panelsOn, panelsOff = panelsOff, borderFade = borderFade,
              borderRestore = borderRestore, gradientOn = gradientOn, gradientOff = gradientOff,

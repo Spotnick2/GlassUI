@@ -192,10 +192,10 @@ tab), the menu's size against its first, and blocked actions (taint log on). Sav
 
 | # | Question | Result |
 |---|---|---|
-| GM.1 | The first opening of the session in combat, then out of combat; the look against the mockup; the hover glow | **Run 1 (70450, 2026-10-20): passes.** The first opening of the session was in combat, after a /reload, then out of combat: every button on glass, faded and tinted, the title tab, nothing blocked. The owner: the look and the white hover glow, yes. The screenshots match the mockup. |
-| GM.2 | Settings and back (its close button, Esc, in combat); Esc while casting: nothing blocked | **Run 1 doesn't count** (Codex on #91, P2): the three Settings steps' waits were already true when each step began (the menu open, Settings closed), so they passed without a Settings visit. Only Esc while casting was really exercised: nothing blocked. Rev 2's waits accept a return only after seeing Settings open during the step (in combat for the combat one). **Run 2: not run yet.** |
-| GM.3 | Log Out and Exit Game cancelled, Return to Game; AddOns, Edit Mode, Macros: the size held | **Run 1: passes, one procedure FAIL.** The "exits cancelled" check ran with the menu closed (it reads the open menu), with nothing blocked. Return to Game closed it; after AddOns, Edit Mode and Macros the size matched the first. |
-| GM.4 | Off with the menu open, then on | **Run 1: passes.** Off with the menu open: Blizzard's red, nothing of ours. On: as before. |
+| GM.1 | The first opening of the session in combat, then out of combat; the look against the mockup; the hover glow | **Run 1 (70450, 2026-10-20): passes.** The first opening of the session was in combat, after a /reload, then out of combat: every button on glass, faded and tinted, the title tab, nothing blocked. The owner: the look and the white hover glow, yes. The screenshots match the mockup. **Run 2 (70888, 2026-11-13, run #226-#228):** the look and the white hover glow confirmed again (screenshots, off and on); the first opening in combat skipped. |
+| GM.2 | Settings and back (its close button, Esc, in combat); Esc while casting: nothing blocked | **Run 1 doesn't count** (Codex on #91, P2): the three Settings steps' waits were already true when each step began (the menu open, Settings closed), so they passed without a Settings visit. Only Esc while casting was really exercised: nothing blocked. Rev 2's waits accept a return only after seeing Settings open during the step (in combat for the combat one). **Run 2 (70888, 2026-11-13): passes out of combat.** Settings opened from the menu and closed by its close button, then by Esc: back on the menu each time, 9 of 9 buttons on glass, faded and with the white glow, the size held (256 x 466), 0 blocked. Esc while casting: the same. The owner saw no blocked message. **In combat: skipped, still to do.** |
+| GM.3 | Log Out and Exit Game cancelled, Return to Game; AddOns, Edit Mode, Macros: the size held | **Run 1: passes, one procedure FAIL.** The "exits cancelled" check ran with the menu closed (it reads the open menu), with nothing blocked. Return to Game closed it; after AddOns, Edit Mode and Macros the size matched the first. **Run 2 (70888, 2026-11-13):** AddOns, Edit Mode and Macros: the size held, 9 of 9, 0 blocked. Log Out and Exit Game skipped (in a city). |
+| GM.4 | Off with the menu open, then on | **Run 1: passes.** Off with the menu open: Blizzard's red, nothing of ours. On: as before. **Run 2 (70888, 2026-11-13): passes:** off, 0 of ours; on again, 9 of 9. |
 
 ### The bags (#88, docs/BAGS.md)
 
@@ -400,10 +400,10 @@ width the text's plus its padding.
 
 | # | Question | Result |
 |---|---|---|
-| RX.1 | The look against the mockup; a new step and its card a frame later; rows hovered; RestedXP's theme changed and back (QS.2's 954) | not run |
-| RX.2 | Resized while scrolling; the list collapsed (the glass shrinks to the header and footer, the track hides) and back | not run |
-| RX.3 | The arrow turning with RestedXP's (equal angles), the accent ice and gold, the pill after the arrow text size changes standing still, another continent (both at 0) | not run |
-| RX.4 | Both skins off (RestedXP's look) and on; in combat; nothing broken in RestedXP | not run |
+| RX.1 | The look against the mockup; a new step and its card a frame later; rows hovered; RestedXP's theme changed and back (QS.2's 954) | **Passes (70888, 2026-11-13, run #223/#224).** The window in glass: 114 of 114 rows, 2 of 2 cards, the track, no backdrop piece up, the banner at 0, 0 blocked; the owner: it reads like the mockup (screenshot). Hovering rows and RestedXP's theme changed and back: the same. The new-step check was skipped in the run; the owner had used it daily for 9 days on 70888, through many steps, with nothing off. |
+| RX.2 | Resized while scrolling; the list collapsed (the glass shrinks to the header and footer, the track hides) and back | **Passes (70888, 2026-11-13).** Resized and scrolled: 114 of 114. Collapsed: the glass shown, 0 rows, the list and the track hidden (screenshot); shown again: 114 of 114, the track back. |
+| RX.3 | The arrow turning with RestedXP's (equal angles), the accent ice and gold, the pill after the arrow text size changes standing still, another continent (both at 0) | **Passes (70888, 2026-11-13), one case skipped.** RestedXP's arrow at alpha 0 and ours shown at its angle at every read (0.52 / 0.52), in the accent in gold and in ice. The pill fits its text: 64.3 for 48.3, then 119.9 for 103.9 after the text size change. The owner: it reads like the mockup and turns smoothly. Another continent: skipped. |
+| RX.4 | Both skins off (RestedXP's look) and on; in combat; nothing broken in RestedXP | **Passes (70888, 2026-11-13).** Off: RestedXP's look (its 27 pieces back, the banner at 1, our glass and cards gone, its arrow back and ours hidden). On again: as before. The owner: nothing broken. The combat step was skipped in the run; over 9 days of daily play on 70888, combat included, ForeverProbe recorded no blocked action from Glass UI. |
 
 ## The accent on the yellow titles (#71, docs/PLAN.md "The accent on Blizzard's titles")
 
@@ -413,10 +413,10 @@ width the text's plus its padding.
 
 | # | Question | Result |
 |---|---|---|
-| AC.1 | Ice and gold, live: both titles follow at once | not run yet |
-| AC.2 | Edit Mode's Text Size with the skins on: the accent holds | not run yet |
-| AC.3 | Skins off: Blizzard's gold back; Text Size while off keeps it; on again: the current accent | not run yet |
-| AC.4 | Changed in combat: at once, nothing blocked | not run yet |
+| AC.1 | Ice and gold, live: both titles follow at once | **Passes (70888, 2026-11-13, run #225).** Ice: the tracker's and the meter's titles 0.65, 0.84, 0.91 at once; gold: 1, 0.82, 0. The owner: both read well (no preference given). |
+| AC.2 | Edit Mode's Text Size with the skins on: the accent holds | **Not measured (run #225):** the step finished as it began, Edit Mode still closed, so the check read titles nothing had touched. Its wait now needs Edit Mode seen open, then closed (rev 2, #180). To run again. |
+| AC.3 | Skins off: Blizzard's gold back; Text Size while off keeps it; on again: the current accent | **Partly (run #225).** Skins off with the accent ice: both titles Blizzard's gold; on again: ice. Text Size while off: not measured, as AC.2 (#180). |
+| AC.4 | Changed in combat: at once, nothing blocked | Not run (the step skipped in run #225). |
 
 ## The quest tracker (#55, docs/QUEST-TRACKER.md part 2)
 

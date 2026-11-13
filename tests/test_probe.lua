@@ -1128,6 +1128,32 @@ check(not okS and whyS:find("waiting for combat", 1, true), "the return out of c
 WoW.combat = true
 check(backC(), "the return in combat: accepted")
 WoW.combat = false
+-- Edit Mode and back (#180): Edit Mode closed at the step's start is no visit.
+local em = rawget(_G, "EditModeManagerFrame") or CreateFrame("Frame", "EditModeManagerFrame", UIParent)
+local emActive = false
+em.IsEditModeActive = function() return emActive end
+local visit = T.editModeVisit()
+local okE, whyE = visit()
+check(not okE and whyE:find("waiting for Edit Mode to open", 1, true), "Edit Mode closed at the start: not accepted")
+emActive = true
+okE, whyE = visit()
+check(not okE and whyE:find("still open", 1, true), "Edit Mode open: waiting for it to close")
+emActive = false
+okE, whyE = visit()
+check(okE, "opened, then closed: accepted: " .. tostring(whyE))
+check(not visit(), "reached again: it needs a visit of its own")
+-- The accent procedure's two Text Size steps use it, not a bare "closed" wait.
+local accentProc = FP.procedures["SkinProbe/accent"]
+local tsWaits = 0
+for _, s in ipairs(accentProc and accentProc.steps or {}) do
+    if type(s.text) == "string" and s.text:find("Text Size", 1, true) and s.wait then
+        tsWaits = tsWaits + 1
+        emActive = false
+        check(not s.wait(), "the accent step '" .. s.text:sub(1, 40) .. "' isn't done with Edit Mode never opened")
+    end
+end
+eq(tsWaits, 2, "the accent procedure's two Text Size steps wait")
+WoW.combat = false
 rawset(_G, "SettingsPanel", nil)
 rawset(_G, "GameMenuFrame", nil)
 rawset(_G, "GlassUI", savedGUI5)
