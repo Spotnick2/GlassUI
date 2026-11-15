@@ -53,8 +53,9 @@ Suite.ROSTER = {
     -- Follows by default like every member; turned off in its own settings it
     -- reports `declined` (its WoW Forever theme) (#152).
     { name = "Stakeout", title = "Stakeout", dynamic = true },
-    -- Its options window, built once (live = false); Stakeout's pattern, its
-    -- own look "WoW Forever" reported as declined (#163).
+    -- Its options window: live (GlassPearls #117), repainted on every
+    -- LookChanged; without Look or EventRegistry it builds once (live =
+    -- false). Its own look "WoW Forever" reported as declined (#163).
     { name = "GlassPearls", title = "Glass Pearls", dynamic = true },
 }
 local member = {}
