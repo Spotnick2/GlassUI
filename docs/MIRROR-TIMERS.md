@@ -134,7 +134,9 @@ Every new test is mutation-tested (ten mutants, all caught).
    colour.
 3. A restart while shown: surface briefly and dive again before the bar refills, so the frame never
    hides. The probe counts `SetupTimer` calls (a hook of its own) and checks at each poll that the
-   frame stayed shown. The same check, plus a new object's colour before our tint (the baseline).
+   frame stayed shown. The same check. At every start, the fill as Blizzard leaves it (the
+   baseline), read in a probe hook on the bar's `SetStatusBarTexture`: Setup calls it before it
+   shows the frame, so before both of our tint paths (Codex on #186).
 4. With the bar partly down (the groove and the fill both visible): screenshot. Ask: does it read
    right?
 5. The skin off (Blizzard's look, screenshot), on again.

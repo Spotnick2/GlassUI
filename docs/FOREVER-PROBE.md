@@ -51,8 +51,11 @@ The look is judged from the procedure's screenshots; `Logs\taint.log` is read af
 timer frame: its own textures faded, the pill and the track shown (the track on the pill), the pill
 and its rim under the bar's level, a running timer's fill in its colour, and the blocked actions.
 Recorded: strata and levels (container, frame, bar, pill, rim), the label's and the track's layers,
-the fill object and its colour. A `SetupTimer` hook of the probe's own, installed before Glass UI's,
-counts the starts and records each start's fill before our tint (`MT.baseline <timer>`). Saved as
+the fill object and its colour. The probe's own hooks, installed at its load: one on `SetupTimer`
+counts the starts; one on each bar's `SetStatusBarTexture` records each start's fill as Blizzard
+leaves it (`MT.baseline <timer>`: its colour, a first sample, a new object). Setup calls it before
+showing the frame, so before both of our tint paths, the engine's OnShow styling and the skin's
+`SetupTimer` hook (Codex on #186: a `SetupTimer` hook ran after them). Saved as
 `SkinProbeDB.results["MT.<label>"]`.
 
 | # | Question | Result |

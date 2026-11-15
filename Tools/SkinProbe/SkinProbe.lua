@@ -5422,30 +5422,36 @@ local function mtColour(fill)
              b = okV and plain(b) or nil, a = okV and plain(a) or nil }
 end
 
--- The probe's own hook (a dev tool's, never the skin's): a count, and each
--- start's fill before our tint, with whether it is a new texture object.
+-- The probe's own hooks (a dev tool's, never the skin's): a count of
+-- SetupTimer, and each start's fill as Blizzard leaves it, with whether it is
+-- a new texture object. The fill is read in a hook on each bar's
+-- SetStatusBarTexture: Setup calls it before UpdateShownState, so before the
+-- engine's OnShow styling and the skin's SetupTimer hook, whichever was
+-- installed first (Codex, PR #186). Installed at the probe's load, so the
+-- start a /reload underwater replays is seen too.
 local function mtHook()
     if mtHooked then return true end
-    local c = mtFrames()
+    local c, list = mtFrames()
     if not (c and type(c.SetupTimer) == "function") then return false end
     mtHooked = true
-    hooksecurefunc(c, "SetupTimer", function(_, timer)
-        mtSetups = mtSetups + 1
-        timer = plain(timer)
-        local _, list = mtFrames()
-        for _, f in ipairs(list) do
-            if plain(f.timer) == timer then
+    hooksecurefunc(c, "SetupTimer", function() mtSetups = mtSetups + 1 end)
+    for _, f in ipairs(list) do
+        local bar = f.StatusBar
+        if type(bar) == "table" and type(bar.SetStatusBarTexture) == "function" then
+            hooksecurefunc(bar, "SetStatusBarTexture", function()
                 local fill = mtFill(f)
                 local id = fill and tostring(fill) or nil
                 local rec = mtColour(fill)
+                rec.firstSeen = mtLastFill[f] == nil
                 rec.newObject = mtLastFill[f] ~= nil and mtLastFill[f] ~= id
                 mtLastFill[f] = id
-                record("MT.baseline " .. tostring(timer), rec)
-            end
+                record("MT.baseline " .. tostring(plain(f.timer)), rec)
+            end)
         end
-    end)
+    end
     return true
 end
+mtHook()
 
 local function mtLayer(r)
     local ok, layer, sub = call(r, "GetDrawLayer")
@@ -5678,6 +5684,7 @@ Probe:Steps("mirrorglass", {
 })
 
 Probe:Command("mirror", function() mtState("now") end, "the mirror timers: each shown frame's state now")
+NS.mtHook = mtHook   -- tests/test_probe.lua: its stub's container comes after the probe's load
 end)()
 
 --------------------------------------------------------------------------------

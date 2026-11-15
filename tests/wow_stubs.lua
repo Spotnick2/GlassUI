@@ -2407,11 +2407,13 @@ function WoW.makeMirrorTimers()
             -- MirrorTimerMixin:Setup: the atlas first, the label, then shown.
             WoW.bset(f, "timer", timer)
             local bar = f.StatusBar
+            -- The reset is the client's SetStatusBarTexture's own (done
+            -- before the stub's call, so a hook on it sees it, as in game).
             if WoW.mirrorFill == "swap" then bar._fill = blizz("Texture", bar, nil, "ARTWORK") end
-            bar:SetStatusBarTexture(WoW.MIRROR_ATLAS[timer])
             if WoW.mirrorFill ~= "keep" then
                 bar._fill._vertex, bar._fill._desat = { 1, 1, 1, 1 }, false
             end
+            bar:SetStatusBarTexture(WoW.MIRROR_ATLAS[timer])
             f.Text:SetText(label)
             -- UpdateShownState's SetShown(true): the client fires no OnShow
             -- on a frame already shown (the core's Show would).
