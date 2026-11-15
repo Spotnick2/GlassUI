@@ -5381,6 +5381,306 @@ Probe:Command("rxpglass", function(args)
 end, "#56: RestedXP in glass: the window and arrow now (restore: RestedXP's enable state)")
 
 --------------------------------------------------------------------------------
+-- The mirror timers (docs/MIRROR-TIMERS.md): each shown timer frame against
+-- what the skin should have done, with the levels and the fill's colour; a
+-- restart while shown, counted by a SetupTimer hook of the probe's own. That
+-- hook goes in before Glass UI's (installed at the first timer's show), so it
+-- runs first: it reads the fill's colour as Blizzard's Setup left it, before
+-- our tint. Saved as MT.<label>. In a function of its own: the main chunk is
+-- at Lua 5.1's 200 locals (a do block's count toward them).
+--------------------------------------------------------------------------------
+
+;(function()
+-- IsVisible, read plain (the file's `seen` is a table by here: the questing
+-- watch's).
+local function visible(f)
+    local ok, v = call(f, "IsVisible")
+    return ok and plain(v) == true
+end
+
+local mtSetups, mtHooked, mtLastFill = 0, false, {}
+
+local function mtTest()
+    local G = glassUI()
+    return G and G.MirrorTimers and G.MirrorTimers._test
+end
+
+local function mtFrames()
+    local c = frameByName("MirrorTimerContainer")
+    return c, (c and type(c.mirrorTimers) == "table") and c.mirrorTimers or {}
+end
+
+local function mtFill(f)
+    local ok, fill = call(f and f.StatusBar, "GetStatusBarTexture")
+    return ok and type(fill) == "table" and fill or nil
+end
+
+local function mtColour(fill)
+    local okD, d = call(fill, "IsDesaturated")
+    local okV, r, g, b, a = call(fill, "GetVertexColor")
+    return { desat = okD and plain(d) == true or false, r = okV and plain(r) or nil, g = okV and plain(g) or nil,
+             b = okV and plain(b) or nil, a = okV and plain(a) or nil }
+end
+
+-- The probe's own hook (a dev tool's, never the skin's): a count, and each
+-- start's fill before our tint, with whether it is a new texture object.
+local function mtHook()
+    if mtHooked then return true end
+    local c = mtFrames()
+    if not (c and type(c.SetupTimer) == "function") then return false end
+    mtHooked = true
+    hooksecurefunc(c, "SetupTimer", function(_, timer)
+        mtSetups = mtSetups + 1
+        timer = plain(timer)
+        local _, list = mtFrames()
+        for _, f in ipairs(list) do
+            if plain(f.timer) == timer then
+                local fill = mtFill(f)
+                local id = fill and tostring(fill) or nil
+                local rec = mtColour(fill)
+                rec.newObject = mtLastFill[f] ~= nil and mtLastFill[f] ~= id
+                mtLastFill[f] = id
+                record("MT.baseline " .. tostring(timer), rec)
+            end
+        end
+    end)
+    return true
+end
+
+local function mtLayer(r)
+    local ok, layer, sub = call(r, "GetDrawLayer")
+    return ok and (tostring(plain(layer)) .. " " .. tostring(plain(sub))) or nil
+end
+
+local function mtLevel(f)
+    local ok, l = call(f, "GetFrameLevel")
+    return ok and plain(l) or nil
+end
+
+-- One shown frame: its textures' alphas, the fill, our pieces and the levels.
+local function mtFrameState(f, T)
+    local s = { timer = plain(f.timer), textures = 0, faded = 0 }
+    local ok, regions = pcall(function() return { f:GetRegions() } end)
+    for _, r in ipairs(ok and regions or {}) do
+        local okT, t = call(r, "GetObjectType")
+        if okT and plain(t) == "Texture" then
+            s.textures = s.textures + 1
+            local okA, a = call(r, "GetAlpha")
+            if okA and plain(a) == 0 then s.faded = s.faded + 1 end
+        end
+    end
+    local fill = mtFill(f)
+    s.fill = mtColour(fill)
+    s.fillObject = fill and tostring(fill) or nil
+    s.frameLevel, s.barLevel = mtLevel(f), mtLevel(f.StatusBar)
+    local okS, strata = call(f, "GetFrameStrata")
+    s.strata = okS and plain(strata) or nil
+    s.labelLayer = mtLayer(f.Text)
+    local p = T and T.pills[f]
+    if p then
+        s.pill = visible(p.glass)
+        s.pillLevel = mtLevel(p.glass)
+        s.rimLevel = p.g and p.g.top and mtLevel(p.g.top) or nil
+        if p.track then
+            local okP, parent = call(p.track.fill, "GetParent")
+            s.trackOnPill = okP and parent == p.glass
+            s.trackLayer = mtLayer(p.track.fill)
+            s.track = visible(p.track.fill)
+        end
+    end
+    local want = T and s.timer and T.COLORS[s.timer]
+    if want then
+        s.want = want
+        s.tinted = s.fill.desat and type(s.fill.r) == "number" and math.abs(s.fill.r - want[1]) < 0.01
+            and math.abs(s.fill.g - want[2]) < 0.01 and math.abs(s.fill.b - want[3]) < 0.01
+    end
+    return s
+end
+
+local function mtState(label)
+    local c, list = mtFrames()
+    local T = mtTest()
+    local rec = { blocked = type(SkinProbeDB) == "table" and SkinProbeDB.suiteBlocked or 0, setups = mtSetups,
+                  containerShown = visible(c), containerLevel = mtLevel(c), frames = {} }
+    local okS, strata = call(c, "GetFrameStrata")
+    rec.containerStrata = okS and plain(strata) or nil
+    for i, f in ipairs(list) do
+        if visible(f) then rec.frames[#rec.frames + 1] = mtFrameState(f, T); rec.frames[#rec.frames].index = i end
+    end
+    record("MT." .. label, rec)
+    say("MT " .. label .. ": " .. #rec.frames .. " shown, " .. rec.setups .. " setups, " .. rec.blocked .. " blocked")
+    return rec
+end
+
+-- Styled: each shown frame's textures faded, the pill and track shown under
+-- the bar, and a running timer's fill in its colour (opts.timer: one must be
+-- running; opts.tint = false: the colour not checked, Edit Mode's previews).
+local function mtOn(label, opts)
+    opts = opts or {}
+    return function()
+        local r = mtState(label)
+        local bad = {}
+        local function want_(cond, why) if not cond then bad[#bad + 1] = why end end
+        want_(#r.frames > 0, "no timer shown")
+        local running = false
+        for _, s in ipairs(r.frames) do
+            local n = "frame " .. s.index
+            running = running or s.timer ~= nil
+            want_(s.textures > 0 and s.faded == s.textures, n .. ": " .. s.faded .. "/" .. s.textures .. " faded")
+            want_(s.pill, n .. ": the pill not shown")
+            want_(s.track and s.trackOnPill, n .. ": the track not on the pill")
+            want_(type(s.pillLevel) == "number" and type(s.barLevel) == "number" and s.pillLevel < s.barLevel,
+                  n .. ": the pill at " .. num(s.pillLevel) .. ", the bar at " .. num(s.barLevel))
+            want_(s.rimLevel == nil or (type(s.barLevel) == "number" and s.rimLevel < s.barLevel),
+                  n .. ": the rim at " .. num(s.rimLevel))
+            if opts.tint ~= false and s.want then want_(s.tinted, n .. ": the fill not in " .. s.timer .. "'s colour") end
+        end
+        if opts.timer then want_(running, "no timer running") end
+        want_(r.blocked == 0, r.blocked .. " blocked")
+        return #bad == 0, #bad == 0 and (#r.frames .. " on glass") or table.concat(bad, "; ")
+    end
+end
+
+local function mtOff(label)
+    return function()
+        local r = mtState(label)
+        local bad = {}
+        for _, s in ipairs(r.frames) do
+            if s.faded > 0 then bad[#bad + 1] = "frame " .. s.index .. ": " .. s.faded .. " faded" end
+            if s.fill.desat then bad[#bad + 1] = "frame " .. s.index .. ": the fill tinted" end
+            if s.pill then bad[#bad + 1] = "frame " .. s.index .. ": the pill shown" end
+        end
+        if #r.frames == 0 then bad[#bad + 1] = "no timer shown" end
+        return #bad == 0, #bad == 0 and "Blizzard's look, nothing of ours" or table.concat(bad, "; ")
+    end
+end
+
+local function mtShown(timer)
+    local _, list = mtFrames()
+    for _, f in ipairs(list) do
+        if visible(f) and plain(f.timer) == timer then return f end
+    end
+    return nil
+end
+
+local function mtWait(timer)
+    return function()
+        mtHook()
+        return mtShown(timer) ~= nil, "waiting for the " .. timer .. " bar"
+    end
+end
+
+-- A restart while the bar stays up: a SetupTimer counted after the bar was
+-- seen, with the bar seen at every poll since (ForeverProbe polls each
+-- second). A poll without it starts over.
+local function mtRestartWait()
+    local isNew = attempt()
+    local base
+    return function()
+        mtHook()
+        if isNew() then base = nil end
+        if not mtShown("BREATH") then base = nil return false, "waiting for the breath bar" end
+        if base == nil then base = mtSetups return false, "the bar is up: surface briefly and dive again" end
+        if mtSetups > base then
+            record("MT.restart", { setups = mtSetups - base })
+            return true, "restarted while shown"
+        end
+        return false, "waiting for a restart while the bar stays up"
+    end
+end
+
+local function mtSwitch(on)
+    local G = glassUI()
+    if not (G and G.Engine) then return false, "Glass UI not loaded" end
+    G.Engine.SetEnabled("mirror", on)
+    return true, "mirror " .. (on and "on" or "off")
+end
+
+-- Glass Unit Frames' timers on: Blizzard's never show, so none of ours.
+local function mtNoneOfOurs(label)
+    return function()
+        local r = mtState(label)
+        local T = mtTest()
+        local ours = 0
+        local _, list = mtFrames()
+        for _, f in ipairs(list) do
+            local p = T and T.pills[f]
+            if p and visible(p.glass) then ours = ours + 1 end
+        end
+        local ok = #r.frames == 0 and ours == 0
+        return ok, ok and "Blizzard's hidden, none of ours" or (#r.frames .. " of Blizzard's shown, " .. ours .. " of ours")
+    end
+end
+
+Probe:Steps("mirrorglass", {
+    title = "Glass UI: the breath, fatigue and feign death timers in glass",
+    rev = 1,
+    { text = "Turns on script errors and counts blocked actions from now. Be near water you can dive into.",
+      auto = true,
+      run = function()
+          if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
+          return setCVar("scriptErrors", "1")
+      end },
+    { text = "Type /reload, out of the water.", reload = true },
+    { text = "Turns the taint log on (a reload turns it off). " .. TAINT_NOISE, auto = true,
+      run = function() mtHook(); return setCVar("taintLog", "1") end },
+    { text = "Swim underwater until the breath bar shows. This step goes on by itself; a screenshot is taken.",
+      timeout = 600, wait = mtWait("BREATH"), screenshot = "mirror, breath",
+      check = mtOn("breath", { timer = true }) },
+    { text = "Surface for a moment and dive again before the bar fills back up, so it never goes away. This step "
+          .. "goes on by itself once the bar restarted while still shown.", timeout = 600,
+      wait = mtRestartWait(), check = mtOn("restart", { timer = true }) },
+    { text = "Stay under until the bar is about half down, then press Next (a screenshot: the groove and the fill "
+          .. "both show).", screenshot = "mirror, half", check = mtOn("half", { timer = true }) },
+    { text = "Does it read right: the bar on a small glass pill, a dark groove under its blue fill, the label "
+          .. "\"Breath\" under it on the glass, no castbar frame? Anything off: the Note.", ask = true },
+    { text = "Still underwater: switches the skin off (Blizzard's look).", button = "Skin off",
+      screenshot = "mirror, skin off", run = function() return mtSwitch(false) end, check = mtOff("off") },
+    { text = "Switches it on again.", button = "Skin on", run = function() return mtSwitch(true) end,
+      check = mtOn("on again", { timer = true }) },
+    { text = "Underwater with the bar up, type /reload.", reload = true },
+    { text = "Turns the taint log on again.", auto = true,
+      run = function() mtHook(); return setCVar("taintLog", "1") end },
+    { text = "Stay under until the bar shows again (or dive again), then press Next.", timeout = 600,
+      wait = mtWait("BREATH"), check = mtOn("after reload", { timer = true }) },
+    -- Edit Mode, then combat.
+    { text = "Surface and wait for the bar to go. Open Edit Mode and tick Timer Bars if it isn't, so the three bars "
+          .. "show. Press Next with Edit Mode open (a screenshot).", screenshot = "mirror, edit mode",
+      check = mtOn("edit mode", { tint = false }) },
+    { text = "Move the Timer Bars and Save. Move them again, then Revert Changes, and close Edit Mode. Press Next.",
+      check = function() local r = mtState("edit mode closed"); return r.blocked == 0, r.blocked .. " blocked" end },
+    { text = "Get into combat and use a few abilities from your action bars. Press Next while still in combat.",
+      check = function()
+          local okC, c = pcall(InCombatLockdown)
+          local r = mtState("combat after edit mode")
+          return r.blocked == 0 and okC and plain(c) == true,
+                 r.blocked .. " blocked, " .. ((okC and plain(c)) and "in combat" or "not in combat")
+      end },
+    -- The other timers, when you can.
+    { text = "Optional: swim far out to sea until the fatigue bar shows (Skip if you can't). Goes on by itself.",
+      timeout = 900, wait = mtWait("EXHAUSTION"), screenshot = "mirror, fatigue",
+      check = mtOn("fatigue", { timer = true }) },
+    { text = "Optional: a hunter, cast Feign Death (Skip otherwise). Goes on by itself.", timeout = 300,
+      wait = mtWait("FEIGNDEATH"), screenshot = "mirror, feign death", check = mtOn("feign death", { timer = true }) },
+    { text = "Optional: dive while in combat (Skip if you can't). Goes on by itself.", timeout = 600,
+      wait = function()
+          mtHook()
+          local okC, c = pcall(InCombatLockdown)
+          return mtShown("BREATH") ~= nil and okC and plain(c) == true, "waiting for the breath bar in combat"
+      end, check = mtOn("in combat", { timer = true }) },
+    -- Glass Unit Frames.
+    { text = "If Glass Unit Frames is installed with its mirror timers on (its default): dive, and press Next with "
+          .. "its breath bar up (Skip if it isn't installed or its timers are off).",
+      check = mtNoneOfOurs("glass unit frames") },
+    { text = "Did every bar look right, and was there no 'Interface action failed' message? The Note.", ask = true },
+    taintOff(),
+    { text = "Type /reload to save the results.", reload = true },
+})
+
+Probe:Command("mirror", function() mtState("now") end, "the mirror timers: each shown frame's state now")
+end)()
+
+--------------------------------------------------------------------------------
 -- Boot
 --------------------------------------------------------------------------------
 

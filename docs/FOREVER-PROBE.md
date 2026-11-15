@@ -45,6 +45,24 @@ The look is judged from the procedure's screenshots; `Logs\taint.log` is read af
 |---|---|---|
 | Merchant (#4) | `/fp steps skin merchant`: the looks side by side (clear at 0.85, 0.6 and 0.35 backing, smoked, class); buy, sell, buyback, repair; skin off and on live; after /reload; in combat (optional) | **70425: passes.** Buy, sell and buyback work; repair not tested (nothing to repair). The screenshots show the gold shell gone, glass under the window and tabs, and the item rows keeping Blizzard's red. Off live: exactly stock (owner: yes); on live: faded again; after /reload: on, faded at the first show. No `ADDON_ACTION_BLOCKED`/`FORBIDDEN` in the three sessions. Combat skipped (a plain, unprotected window). **Looks:** all five read well, and 0.35 looks the most like glass (owner): clear and class now use backing 0.35, smoked keeps 0.92. **Taint pass on 70450 (typed `/console taintLog 1`, buy/sell/buyback, full exit):** the log was on (BugGrabber: the bag-bar error 84 times that session, see the facts below), and `Logs\taint.log` was not rewritten. At level 1 the client writes only when something is blocked, so nothing was. A level-2 pass over every wave-1 skin goes into the v0.1.0 release check (#9). |
 
+### The mirror timers (#184, docs/MIRROR-TIMERS.md)
+
+`/fp steps skin mirrorglass`; `/fp skin mirror` reads them now. Each check reads, for every shown
+timer frame: its own textures faded, the pill and the track shown (the track on the pill), the pill
+and its rim under the bar's level, a running timer's fill in its colour, and the blocked actions.
+Recorded: strata and levels (container, frame, bar, pill, rim), the label's and the track's layers,
+the fill object and its colour. A `SetupTimer` hook of the probe's own, installed before Glass UI's,
+counts the starts and records each start's fill before our tint (`MT.baseline <timer>`). Saved as
+`SkinProbeDB.results["MT.<label>"]`.
+
+| # | Question | Result |
+|---|---|---|
+| MT.1 | Breath: styled at the first show; a restart while the bar stays up re-tinted; half down, the groove and the fill; the look | Not run yet |
+| MT.2 | The fill's baseline before our tint at each start, and whether Setup hands over a new object (the tint's restore depends on it) | Not run yet |
+| MT.3 | Off underwater: Blizzard's look; on again; `/reload` underwater | Not run yet |
+| MT.4 | Edit Mode's previews on glass; Save, Revert, close, then combat: nothing blocked (taint log on) | Not run yet |
+| MT.5 | Fatigue, feign death, a dive in combat (optional); Glass Unit Frames' timers on: none of ours | Not run yet |
+
 ### The loot window and the loot roll history (#105, docs/LOOT.md)
 
 `/fp steps skin lootglass`. Each check reads:

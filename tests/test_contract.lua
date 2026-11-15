@@ -131,6 +131,22 @@ GUI._test.slash("skin loothistory on")
 WoW.flushTimers(0)
 WoW.closeLoot()
 WoW.lootHistory(false)
+-- The mirror timers: two at once in combat, a restart while shown, a new fill
+-- object, Edit Mode, a stop, off and on.
+WoW.combat = true
+WoW.mirrorStart("BREATH", "Breath")
+WoW.mirrorStart("EXHAUSTION", "Fatigue")
+WoW.combat = false
+WoW.mirrorFill = "swap"
+WoW.mirrorStart("BREATH", "Breath")
+WoW.mirrorFill = "reset"
+WoW.mirrorEditMode(true)
+WoW.mirrorStop("BREATH")
+WoW.mirrorEditMode(false)
+GUI._test.slash("skin mirror off")
+GUI._test.slash("skin mirror on")
+WoW.flushTimers(0)
+WoW.mirrorStop("EXHAUSTION")
 -- The trade window (#113): opened in combat, an unusable item offered and
 -- taken back, off and on.
 WoW.combat = true

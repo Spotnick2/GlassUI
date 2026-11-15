@@ -43,6 +43,10 @@ WoW.rxpArrowText("Step 13\n(300yd)")
 WoW.rxpArrowShow()
 WoW.rxpArrowFont(12)
 WoW.flushTimers(0)
+WoW.mirrorStart("BREATH", "Breath")
+WoW.mirrorStart("BREATH", "Breath")
+WoW.mirrorEditMode(true)
+WoW.mirrorEditMode(false)
 WoW.characterPane("StatisticsFrame")
 WoW.clickTab(CommunitiesFrame.ChatTab)
 WoW.openBag(ContainerFrameCombinedBags, { 133784, "empty" })
@@ -56,7 +60,7 @@ for _, cmd in ipairs({ "failures", "version", "help", "", "skins", "skin merchan
                        "skin bags off", "skin bags on", "skin gamemenu off", "skin gamemenu on",
                        "skin guild off", "skin guild on", "skin character off", "skin character on", "skin map off", "skin map on", "skin loot off", "skin loot on", "skin loothistory off",
                        "skin loothistory on", "skin trade off", "skin trade on", "skin rxp off", "skin rxp on",
-                       "skin rxparrow off", "skin rxparrow on",
+                       "skin rxparrow off", "skin rxparrow on", "skin mirror off", "skin mirror on",
                        "off", "on", "theme smoked", "theme class", "theme clear",
                        "suite", "suite follow glassunitframes on", "options",
                        "look", "look tint class", "look preset soft" }) do
