@@ -25,6 +25,7 @@ Skin\Loot.lua
 Skin\Trade.lua
 Skin\DamageMeter.lua
 Skin\QuestTracker.lua
+Skin\MirrorTimers.lua
 Skin\RestedXP.lua
 Options.lua
 GlassUI.lua

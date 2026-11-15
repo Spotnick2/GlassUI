@@ -96,6 +96,7 @@ function loadAddon(opts)
     if not opts.noMap then WoW.makeWorldMap() end
     if not opts.noLoot then WoW.makeLoot() end
     if not opts.noTrade then WoW.makeTrade() end
+    if not opts.noMirror then WoW.makeMirrorTimers() end
     if not opts.noTracker then WoW.makeTracker() end
     if not (opts.noTracker or opts.noTimer) then WoW.makeQuestTimer() end
     local ns = {}

@@ -45,6 +45,51 @@ The look is judged from the procedure's screenshots; `Logs\taint.log` is read af
 |---|---|---|
 | Merchant (#4) | `/fp steps skin merchant`: the looks side by side (clear at 0.85, 0.6 and 0.35 backing, smoked, class); buy, sell, buyback, repair; skin off and on live; after /reload; in combat (optional) | **70425: passes.** Buy, sell and buyback work; repair not tested (nothing to repair). The screenshots show the gold shell gone, glass under the window and tabs, and the item rows keeping Blizzard's red. Off live: exactly stock (owner: yes); on live: faded again; after /reload: on, faded at the first show. No `ADDON_ACTION_BLOCKED`/`FORBIDDEN` in the three sessions. Combat skipped (a plain, unprotected window). **Looks:** all five read well, and 0.35 looks the most like glass (owner): clear and class now use backing 0.35, smoked keeps 0.92. **Taint pass on 70450 (typed `/console taintLog 1`, buy/sell/buyback, full exit):** the log was on (BugGrabber: the bag-bar error 84 times that session, see the facts below), and `Logs\taint.log` was not rewritten. At level 1 the client writes only when something is blocked, so nothing was. A level-2 pass over every wave-1 skin goes into the v0.1.0 release check (#9). |
 
+### The mirror timers (#184, docs/MIRROR-TIMERS.md)
+
+`/fp steps skin mirrorglass`; `/fp skin mirror` reads them now. Each check reads, for every shown
+timer frame: its own textures faded, the pill and the track shown (the track on the pill), the pill
+and its rim under the bar's level, a running timer's fill in its colour, and the blocked actions.
+Recorded: strata and levels (container, frame, bar, pill, rim), the label's and the track's layers,
+the fill object and its colour. The probe's own hooks, installed at its load: one on `SetupTimer`
+counts the starts; one on each bar's `SetStatusBarTexture` records each start's fill as Blizzard
+leaves it (`MT.baseline <timer>`: its colour, a first sample, a new object). Setup calls it before
+showing the frame, so before both of our tint paths, the engine's OnShow styling and the skin's
+`SetupTimer` hook (Codex on #186: a `SetupTimer` hook ran after them). Saved as
+`SkinProbeDB.results["MT.<label>"]`.
+
+**Run #338/#339 (rev 1, 70938, 2026-11-15): not a test of the skin.** Glass Unit Frames' own bars
+were on, so Blizzard's container never got a timer: every dive recorded it hidden, no frame shown,
+0 `SetupTimer` calls. The breath bar in the screenshots is Glass Unit Frames' (the label and the
+seconds inside the bar). Only Edit Mode showed Blizzard's three frames, and the skin held there:
+3/3 textures faded on each, the pill shown at level 1 under the bar (frame and bar both at level 2,
+container 1, MEDIUM), its rim at 1, the track on the pill (ARTWORK 0), the label OVERLAY 0, the
+fill white and saturated (no timer). Nothing blocked. Rev 2 asks for Glass Unit Frames' bars off
+first, checks that the container listens for `MIRROR_TIMER_START` (`MT.live`), and turns them
+back on at the end for MT.5.
+
+**Run #342-#345 (rev 2, 70938, 2026-11-15): passed.** Glass Unit Frames' bars off, the container
+listening (`MT.live` true). Every check passed but Edit Mode's (below); 0 blocked actions all
+through, in combat included; the owner: "yes" to the look and to every bar at the end. The levels
+are run #339's (container 1, frame and bar 2, pill and rim 1, MEDIUM). The fill: one texture object
+per frame for the whole session, across restarts and across timer types (breath then fatigue on
+frame 1: the same object), so `newObject` never true; a fresh frame's first sample white and
+saturated (breath, after the `/reload` underwater: the hook installed at the probe's load saw
+`PLAYER_ENTERING_WORLD`'s start); a restart keeps our tint through `SetStatusBarTexture` (fatigue's
+last sample: desaturated, in its gold). So Tint's capture is Blizzard's white, saturated fill, and
+off gave exactly that back (`MT.off`: white, not desaturated, 0 of 3 faded, no pill). Edit Mode
+showed no frame this time: the owner found no "Timer Bars" (Forever names them "Duration Bars";
+the step says so now). The last check, Glass Unit Frames' bars on again, wasn't completed (the run
+ended at its step); #338/#339's dives with them on already showed none of ours.
+
+| # | Question | Result |
+|---|---|---|
+| MT.1 | Breath: styled at the first show; a restart while the bar stays up re-tinted; half down, the groove and the fill; the look | **Pass** (#343: styled, a restart while shown counted, re-tinted; the owner: yes) |
+| MT.2 | The fill's baseline before our tint at each start, and whether Setup hands over a new object (the tint's restore depends on it) | **Same object always; baseline white and saturated; our tint survives a re-set** (#343-#344) |
+| MT.3 | Off underwater: Blizzard's look; on again; `/reload` underwater | **Pass** (#343-#344) |
+| MT.4 | Edit Mode's previews on glass; Save, Revert, close, then combat: nothing blocked (taint log on) | **Pass**: previews styled at the planned levels (#339); Save, Revert, close, then combat: 0 blocked (#344) |
+| MT.5 | Fatigue, feign death, a dive in combat (optional); Glass Unit Frames' timers on: none of ours | **Pass**: fatigue in gold, a dive in combat (#344); feign death skipped (no hunter); Glass Unit Frames' bars on: none of ours (#338/#339) |
+
 ### The loot window and the loot roll history (#105, docs/LOOT.md)
 
 `/fp steps skin lootglass`. Each check reads:

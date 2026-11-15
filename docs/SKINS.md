@@ -56,6 +56,12 @@ it can be reached at all.
 | #123 | Books and letters (`ItemTextFrame`) | Material backgrounds carry the text. |
 | #124 | Transmogrifier | `probe-first`: reachability. |
 
+### The HUD
+
+| Issue | Window | Notes |
+|---|---|---|
+| #184 | Breath, fatigue and feign death timers (`MirrorTimerContainer`) | Built and tested offline; `/fp steps skin mirrorglass` waits for the owner. An Edit Mode system: size and points never touched. |
+
 ### Character and progression
 
 | Issue | Window | Notes |

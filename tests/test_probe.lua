@@ -1914,7 +1914,7 @@ rawset(_G, "GlassUI", nil)
 -- The procedures are defined and every step's run, wait and check works here.
 for _, name in ipairs({ "wave1", "map", "gradient", "merchant", "card", "suite", "suitecombat", "meter",
                         "meterskin", "meterbars", "suitepanel", "pearl", "tracker", "questing", "accent",
-                        "rxpglass" }) do
+                        "rxpglass", "mirrorglass" }) do
     local p = FP.procedures["SkinProbe/" .. name]
     check(p ~= nil, "procedure " .. name .. " is defined")
     if p then
@@ -1959,6 +1959,45 @@ do
     check(checkedOn >= 1, "tradeglass: trade checks with the taint log on, after the reload (" .. checkedOn .. ")")
     eq(atReload, "0", "tradeglass turns the taint log off before its last /reload")
     rawset(_G, "C_CVar", nil)
+end
+
+-- mirrorglass (Codex on #186): MT.baseline is Blizzard's fill before either
+-- tint path, the engine's OnShow styling (a hidden frame's start) and the
+-- skin's SetupTimer hook installed before the probe's (a /reload underwater).
+do
+    local c = WoW.makeMirrorTimers()
+    local function tintAll()
+        for _, f in ipairs(c.mirrorTimers) do
+            local fill = f.StatusBar:GetStatusBarTexture()
+            fill:SetDesaturated(true); fill:SetVertexColor(0.25, 0.55, 1)
+        end
+    end
+    hooksecurefunc(c, "SetupTimer", tintAll)                         -- the skin's, first
+    for _, f in ipairs(c.mirrorTimers) do f:HookScript("OnShow", tintAll) end
+    check(ns.mtHook(), "the probe's mirror hooks installed")
+    local function baseline()
+        local b = SkinProbeDB.results["MT.baseline BREATH"]
+        SkinProbeDB.results["MT.baseline BREATH"] = nil
+        return b
+    end
+    WoW.mirrorFill = "reset"
+    WoW.mirrorStart("BREATH", "Breath")
+    local b = baseline()
+    check(b and b.desat == false and b.r == 1 and b.b == 1, "a hidden frame's start: the baseline untinted")
+    check(b and b.firstSeen and not b.newObject, "the first sample of its fill object")
+    check(c.mirrorTimers[1].StatusBar:GetStatusBarTexture()._desat, "(and the stand-in skin did tint it)")
+    WoW.mirrorStart("BREATH", "Breath")
+    b = baseline()
+    check(b and b.desat == false and b.r == 1, "a restart while shown, the skin's hook first: untinted")
+    WoW.mirrorFill = "swap"
+    WoW.mirrorStart("BREATH", "Breath")
+    b = baseline()
+    check(b and b.newObject and b.desat == false, "a new fill object: recorded as new, untinted")
+    WoW.mirrorFill = "keep"
+    WoW.mirrorStart("BREATH", "Breath")
+    b = baseline()
+    check(b and b.desat == true, "a colour that survives SetStatusBarTexture is recorded as it is")
+    WoW.mirrorFill = "reset"
 end
 
 done("test_probe")

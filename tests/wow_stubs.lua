@@ -2354,6 +2354,119 @@ function WoW.rxpArrowText(s) WoW.asBlizzard(function() RXPG_ARROW.text:SetText(s
 function WoW.rxpArrowFont(size) WoW.asBlizzard(function() RXPG_ARROW.text:SetFont("Fonts\\FRIZQT__.TTF", size, "OUTLINE") end) end
 function WoW.rxpArrowAlpha(a) WoW.asBlizzard(function() RXPG_ARROW:SetAlpha(a) end) end
 
+-- Blizzard's mirror timers (Blizzard_MirrorTimer, Mainline/MirrorTimer.xml and
+-- .lua, origin/forever 70938): MirrorTimerContainer, an Edit Mode system
+-- under UIParent, and its three frames in mirrorTimers (MirrorTimerTemplate,
+-- toplevel, hidden): the StatusBar (its OnLoad lowers its own level by one),
+-- TextBorder and an unnamed background (BACKGROUND), Text and Border
+-- (OVERLAY), in that order for GetRegions. The fill is a texture of the bar's
+-- own, re-set by Setup on every start.
+WoW.MIRROR_ATLAS = { EXHAUSTION = "ui-castingbar-filling-standard", BREATH = "ui-castingbar-filling-applyingcrafting",
+                     DEATH = "ui-castingbar-filling-standard", FEIGNDEATH = "ui-castingbar-filling-channel" }
+-- How the stub's Setup treats the fill: "keep" (the colour survives
+-- SetStatusBarTexture), "reset" (white and saturated again, the worst case
+-- for the colour), "swap" (a new texture object).
+WoW.mirrorFill = "reset"
+function WoW.makeMirrorTimers()
+    WoW.asBlizzard(function()
+        local c = blizz("Frame", UIParent, "MirrorTimerContainer")
+        c._shown, c._level, c._strata = false, 2, "MEDIUM"
+        c.mirrorTimers = {}
+        c.activeTimers = {}
+        for i = 1, 3 do
+            local f = blizz("Frame", c)
+            f._shown, f._level, f._width, f._height = false, 3, 206, 32
+            f.layoutIndex = i
+            local bar = blizz("StatusBar", f)
+            bar._level = f._level              -- LowerFrameLevel(self) at its OnLoad
+            bar._width, bar._height = 195, 13
+            bar._fill = blizz("Texture", bar, nil, "ARTWORK")
+            bar._fill._atlas = WoW.MIRROR_ATLAS.EXHAUSTION
+            f.StatusBar = bar
+            local function region(wtype, layer)
+                local r = blizz(wtype, f, nil, layer)
+                WoW.addRegion(f, r)
+                return r
+            end
+            f.TextBorder = region("Texture", "BACKGROUND")
+            region("Texture", "BACKGROUND")    -- ui-castingbar-background, unnamed
+            f.Text = region("FontString", "OVERLAY")
+            f.Text._textColor = { 1, 1, 1, 1 }
+            f.Border = region("Texture", "OVERLAY")
+            c.mirrorTimers[i] = f
+        end
+        -- The container's SetupTimer, as an instance method: what the skin hooks.
+        rawset(c, "SetupTimer", function(self, timer, value, maxvalue, paused, label)
+            local f = self.activeTimers[timer]
+            if not f then
+                for _, t in ipairs(self.mirrorTimers) do
+                    if not t.timer then f = t break end
+                end
+            end
+            if not f then return end
+            -- MirrorTimerMixin:Setup: the atlas first, the label, then shown.
+            WoW.bset(f, "timer", timer)
+            local bar = f.StatusBar
+            -- The reset is the client's SetStatusBarTexture's own (done
+            -- before the stub's call, so a hook on it sees it, as in game).
+            if WoW.mirrorFill == "swap" then bar._fill = blizz("Texture", bar, nil, "ARTWORK") end
+            if WoW.mirrorFill ~= "keep" then
+                bar._fill._vertex, bar._fill._desat = { 1, 1, 1, 1 }, false
+            end
+            bar:SetStatusBarTexture(WoW.MIRROR_ATLAS[timer])
+            f.Text:SetText(label)
+            -- UpdateShownState's SetShown(true): the client fires no OnShow
+            -- on a frame already shown (the core's Show would).
+            if not f:IsShown() then f:Show() end
+            self.activeTimers[timer] = f
+        end)
+        WoW.snapshot()
+    end)
+    return MirrorTimerContainer
+end
+
+-- MIRROR_TIMER_START: SetupTimer, then the container shown (OnEvent).
+function WoW.mirrorStart(timer, label)
+    local c = MirrorTimerContainer
+    WoW.asBlizzard(function()
+        c:SetupTimer(timer, 60000, 60000, 0, label or timer)
+        c:Show()
+        WoW.snapshot()
+    end)
+end
+
+-- MIRROR_TIMER_STOP: Clear (the timer field dropped, the frame hidden).
+function WoW.mirrorStop(timer)
+    local c = MirrorTimerContainer
+    WoW.asBlizzard(function()
+        local f = c.activeTimers[timer]
+        if not f then return end
+        WoW.bset(f, "timer", nil)
+        -- UpdateShownState: Edit Mode keeps it shown, an idle preview with
+        -- its fill as the timer left it.
+        if not c._editMode then f:Hide() end
+        c.activeTimers[timer] = nil
+        local any = false
+        for _, t in ipairs(c.mirrorTimers) do any = any or t:IsShown() end
+        c:SetShown(any)
+    end)
+end
+
+-- Edit Mode's Timer Bars (SetIsInEditMode): all three shown, the running
+-- timers kept (names, fills, values: nothing reset); off, only the running
+-- ones.
+function WoW.mirrorEditMode(on)
+    local c = MirrorTimerContainer
+    WoW.asBlizzard(function()
+        c._editMode = on
+        c:SetShown(on or next(c.activeTimers) ~= nil)
+        for _, t in ipairs(c.mirrorTimers) do
+            local want = on or t.timer ~= nil
+            if want ~= t:IsShown() then t:SetShown(want) end
+        end
+    end)
+end
+
 WoW.reset()
 
 -- Strict globals (the core's), as the last line: everything above is built.
