@@ -718,6 +718,21 @@ Suite.Report("Shatter", { api = 1, built = "pearl", live = true, look = { tint =
 eq(Suite.State("Shatter"), "following", "following Pearl")
 Suite.Report("Shatter", { api = 1, live = true, declined = "Flat" })
 eq(Suite.State("Shatter"), "chosen", "Flat: its own look by its choice")
+-- Glass Pearls (#163): dynamic, built once; following, or its WoW Forever
+-- look by its own choice.
+setup({})
+local gp
+for _, m in ipairs(Suite.ROSTER) do if m.name == "GlassPearls" then gp = m end end
+check(gp and gp.dynamic and gp.title == "Glass Pearls", "Glass Pearls is a dynamic member")
+eq(Suite.Listed(gp), false, "not installed: not listed")
+WoW.installed.GlassPearls, WoW.loaded.GlassPearls = 2, true
+eq(Suite.Listed(gp), true, "loaded: listed")
+local gpt = Suite.Theme("GlassPearls")
+check(gpt and gpt.preset == "pearl", "Theme answers it, following by default")
+Suite.Report("GlassPearls", { api = 1, built = "pearl", live = false, look = { tint = "clear", accent = "gold" } })
+eq(Suite.State("GlassPearls"), "following", "following Pearl")
+Suite.Report("GlassPearls", { api = 1, live = false, declined = "WoW Forever" })
+eq(Suite.State("GlassPearls"), "chosen", "WoW Forever: its own look by its choice")
 -- Stakeout (#152): dynamic; its own look by the player's choice in it is
 -- "chosen", never "failed", nothing pending, no "set to follow".
 setup({})
