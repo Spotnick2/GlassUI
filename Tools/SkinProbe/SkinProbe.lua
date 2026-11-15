@@ -5668,10 +5668,11 @@ Probe:Steps("mirrorglass", {
     { text = "Stay under until the bar shows again (or dive again), then press Next.", timeout = 600,
       wait = mtWait("BREATH"), check = mtOn("after reload", { timer = true }) },
     -- Edit Mode, then combat.
-    { text = "Surface and wait for the bar to go. Open Edit Mode and tick Timer Bars if it isn't, so the three bars "
+    { text = "Surface and wait for the bar to go. Open Edit Mode and tick Duration Bars (Blizzard's name for the "
+          .. "timers) if it isn't, so the three bars "
           .. "show. Press Next with Edit Mode open (a screenshot).", screenshot = "mirror, edit mode",
       check = mtOn("edit mode", { tint = false }) },
-    { text = "Move the Timer Bars and Save. Move them again, then Revert Changes, and close Edit Mode. Press Next.",
+    { text = "Move the Duration Bars and Save. Move them again, then Revert Changes, and close Edit Mode. Press Next.",
       check = function() local r = mtState("edit mode closed"); return r.blocked == 0, r.blocked .. " blocked" end },
     { text = "Get into combat and use a few abilities from your action bars. Press Next while still in combat.",
       check = function()

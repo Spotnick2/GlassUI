@@ -35,7 +35,8 @@ The anatomy is from `wow-ui-source` origin/forever (70938). `MirrorTimerContaine
   (EXHAUSTION and DEATH `ui-castingbar-filling-standard`, BREATH `-applyingcrafting`, FEIGNDEATH
   `-channel`), then the values, `Text:SetText(label)` and `UpdateShownState` (→ `SetShown`).
 - **The timer frame's OnShow and OnHide** call `MirrorTimerContainer:Layout()`.
-- **Edit Mode** (`EditModeManager.lua`, "Timer Bars"): `SetIsInEditMode` shows all three frames.
+- **Edit Mode** (`EditModeManager.lua`, `HUD_EDIT_MODE_TIMER_BARS_LABEL`, "Duration Bars" in game):
+  `SetIsInEditMode` shows all three frames.
   Running timers keep their name, fill and values. `Clear` (a stop) drops the timer and leaves the
   fill as it was: one stopped while Edit Mode shows it stays up as an idle preview.
 - **Glass Unit Frames' timers on** (its `Blizzard.HideFrame("MirrorTimerContainer")`): the
@@ -142,7 +143,7 @@ Every new test is mutation-tested (ten mutants, all caught).
    right?
 5. The skin off (Blizzard's look, screenshot), on again.
 6. `/reload` underwater: the bar comes back styled (PLAYER_ENTERING_WORLD's `SetupTimer`).
-7. Edit Mode with Timer Bars: screenshot. Move the timers and Save, move them again and Revert,
+7. Edit Mode with Duration Bars (the timers): screenshot. Move the timers and Save, move them again and Revert,
    close. Then into combat and use an ability: no blocked action.
 8. Optional: fatigue (swim far out); feign death (a hunter); a dive while in combat.
 9. If Glass Unit Frames is installed: its bars on again, `/reload`, dive: only its bars show, none

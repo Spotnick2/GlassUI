@@ -68,13 +68,27 @@ fill white and saturated (no timer). Nothing blocked. Rev 2 asks for Glass Unit 
 first, checks that the container listens for `MIRROR_TIMER_START` (`MT.live`), and turns them
 back on at the end for MT.5.
 
+**Run #342-#345 (rev 2, 70938, 2026-11-15): passed.** Glass Unit Frames' bars off, the container
+listening (`MT.live` true). Every check passed but Edit Mode's (below); 0 blocked actions all
+through, in combat included; the owner: "yes" to the look and to every bar at the end. The levels
+are run #339's (container 1, frame and bar 2, pill and rim 1, MEDIUM). The fill: one texture object
+per frame for the whole session, across restarts and across timer types (breath then fatigue on
+frame 1: the same object), so `newObject` never true; a fresh frame's first sample white and
+saturated (breath, after the `/reload` underwater: the hook installed at the probe's load saw
+`PLAYER_ENTERING_WORLD`'s start); a restart keeps our tint through `SetStatusBarTexture` (fatigue's
+last sample: desaturated, in its gold). So Tint's capture is Blizzard's white, saturated fill, and
+off gave exactly that back (`MT.off`: white, not desaturated, 0 of 3 faded, no pill). Edit Mode
+showed no frame this time: the owner found no "Timer Bars" (Forever names them "Duration Bars";
+the step says so now). The last check, Glass Unit Frames' bars on again, wasn't completed (the run
+ended at its step); #338/#339's dives with them on already showed none of ours.
+
 | # | Question | Result |
 |---|---|---|
-| MT.1 | Breath: styled at the first show; a restart while the bar stays up re-tinted; half down, the groove and the fill; the look | Not run yet (#338 saw Glass Unit Frames' bar) |
-| MT.2 | The fill's baseline before our tint at each start, and whether Setup hands over a new object (the tint's restore depends on it) | Not run yet |
-| MT.3 | Off underwater: Blizzard's look; on again; `/reload` underwater | Not run yet |
-| MT.4 | Edit Mode's previews on glass; Save, Revert, close, then combat: nothing blocked (taint log on) | Previews styled, levels as planned, nothing blocked (#339, with Glass Unit Frames' bars on); to repeat with them off |
-| MT.5 | Fatigue, feign death, a dive in combat (optional); Glass Unit Frames' timers on: none of ours | Not run yet |
+| MT.1 | Breath: styled at the first show; a restart while the bar stays up re-tinted; half down, the groove and the fill; the look | **Pass** (#343: styled, a restart while shown counted, re-tinted; the owner: yes) |
+| MT.2 | The fill's baseline before our tint at each start, and whether Setup hands over a new object (the tint's restore depends on it) | **Same object always; baseline white and saturated; our tint survives a re-set** (#343-#344) |
+| MT.3 | Off underwater: Blizzard's look; on again; `/reload` underwater | **Pass** (#343-#344) |
+| MT.4 | Edit Mode's previews on glass; Save, Revert, close, then combat: nothing blocked (taint log on) | **Pass**: previews styled at the planned levels (#339); Save, Revert, close, then combat: 0 blocked (#344) |
+| MT.5 | Fatigue, feign death, a dive in combat (optional); Glass Unit Frames' timers on: none of ours | **Pass**: fatigue in gold, a dive in combat (#344); feign death skipped (no hunter); Glass Unit Frames' bars on: none of ours (#338/#339) |
 
 ### The loot window and the loot roll history (#105, docs/LOOT.md)
 
