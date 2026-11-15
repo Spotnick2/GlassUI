@@ -126,8 +126,9 @@ Every new test is mutation-tested (ten mutants, all caught).
 
 ## Acceptance (`/fp steps skin mirrorglass`)
 
-1. Script errors on, the blocked-action count reset; `/reload`, then the taint log on (a reload
-   turns it off).
+1. Script errors on, the blocked-action count reset; Glass Unit Frames' bars off if it's installed
+   (they hide Blizzard's: run #338 measured only theirs); `/reload`, then the taint log on (a
+   reload turns it off), and the container checked listening for `MIRROR_TIMER_START`.
 2. Swim underwater until the breath bar shows. Screenshot. The check: the frame's three textures
    faded, the fill tinted, the pill shown under the bar. Recorded: strata and levels (container,
    frame, bar, pill, rim), the label's layer, the track's parent and layer, the fill object and its
@@ -144,8 +145,8 @@ Every new test is mutation-tested (ten mutants, all caught).
 7. Edit Mode with Timer Bars: screenshot. Move the timers and Save, move them again and Revert,
    close. Then into combat and use an ability: no blocked action.
 8. Optional: fatigue (swim far out); feign death (a hunter); a dive while in combat.
-9. If Glass Unit Frames is installed: its timers on, `/reload`, dive: only its timers show, none of
-   ours. Off, `/reload`, dive: Blizzard's in our glass.
+9. If Glass Unit Frames is installed: its bars on again, `/reload`, dive: only its bars show, none
+   of ours (with them off, steps 2-8 were Blizzard's in our glass).
 10. Taint log off, `/reload`.
 
 ## Review

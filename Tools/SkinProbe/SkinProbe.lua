@@ -5618,18 +5618,36 @@ local function mtNoneOfOurs(label)
     end
 end
 
+-- Blizzard's container listens for timers: Glass Unit Frames' own timers
+-- (its Blizzard.HideFrame at load) unregister its events, and then
+-- Blizzard's never show (run #338: every dive measured GUF's bar).
+local function mtLive()
+    local c = mtFrames()
+    local ok, on = call(c, "IsEventRegistered", "MIRROR_TIMER_START")
+    return ok and plain(on) == true
+end
+
 Probe:Steps("mirrorglass", {
     title = "Glass UI: the breath, fatigue and feign death timers in glass",
-    rev = 1,
+    rev = 2,
     { text = "Turns on script errors and counts blocked actions from now. Be near water you can dive into.",
       auto = true,
       run = function()
           if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
           return setCVar("scriptErrors", "1")
       end },
+    { text = "If Glass Unit Frames is installed: in its settings, untick \"Glass breath and fatigue bars\" (its own "
+          .. "bars hide Blizzard's, which are what this tests). Then press Next." },
     { text = "Type /reload, out of the water.", reload = true },
     { text = "Turns the taint log on (a reload turns it off). " .. TAINT_NOISE, auto = true,
       run = function() mtHook(); return setCVar("taintLog", "1") end },
+    { text = "Checks that Blizzard's timers are live. If this doesn't go on by itself, another addon hides them "
+          .. "(Glass Unit Frames' bars still on): press Stop, untick them, and start again.", timeout = 15,
+      wait = function()
+          local on = mtLive()
+          record("MT.live", on)
+          return on, "Blizzard's timer bars hidden by another addon"
+      end },
     { text = "Swim underwater until the breath bar shows. This step goes on by itself; a screenshot is taken.",
       timeout = 600, wait = mtWait("BREATH"), screenshot = "mirror, breath",
       check = mtOn("breath", { timer = true }) },
@@ -5674,12 +5692,14 @@ Probe:Steps("mirrorglass", {
           local okC, c = pcall(InCombatLockdown)
           return mtShown("BREATH") ~= nil and okC and plain(c) == true, "waiting for the breath bar in combat"
       end, check = mtOn("in combat", { timer = true }) },
-    -- Glass Unit Frames.
-    { text = "If Glass Unit Frames is installed with its mirror timers on (its default): dive, and press Next with "
-          .. "its breath bar up (Skip if it isn't installed or its timers are off).",
-      check = mtNoneOfOurs("glass unit frames") },
     { text = "Did every bar look right, and was there no 'Interface action failed' message? The Note.", ask = true },
     taintOff(),
+    -- Glass Unit Frames' bars back: Blizzard's hidden, none of ours.
+    { text = "If Glass Unit Frames is installed: tick \"Glass breath and fatigue bars\" again in its settings, then "
+          .. "press Next (Skip the next three steps if it isn't installed)." },
+    { text = "Type /reload.", reload = true },
+    { text = "Dive, and press Next with Glass Unit Frames' breath bar up.",
+      check = mtNoneOfOurs("glass unit frames") },
     { text = "Type /reload to save the results.", reload = true },
 })
 

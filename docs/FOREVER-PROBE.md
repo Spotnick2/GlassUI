@@ -58,12 +58,22 @@ showing the frame, so before both of our tint paths, the engine's OnShow styling
 `SetupTimer` hook (Codex on #186: a `SetupTimer` hook ran after them). Saved as
 `SkinProbeDB.results["MT.<label>"]`.
 
+**Run #338/#339 (rev 1, 70938, 2026-11-15): not a test of the skin.** Glass Unit Frames' own bars
+were on, so Blizzard's container never got a timer: every dive recorded it hidden, no frame shown,
+0 `SetupTimer` calls. The breath bar in the screenshots is Glass Unit Frames' (the label and the
+seconds inside the bar). Only Edit Mode showed Blizzard's three frames, and the skin held there:
+3/3 textures faded on each, the pill shown at level 1 under the bar (frame and bar both at level 2,
+container 1, MEDIUM), its rim at 1, the track on the pill (ARTWORK 0), the label OVERLAY 0, the
+fill white and saturated (no timer). Nothing blocked. Rev 2 asks for Glass Unit Frames' bars off
+first, checks that the container listens for `MIRROR_TIMER_START` (`MT.live`), and turns them
+back on at the end for MT.5.
+
 | # | Question | Result |
 |---|---|---|
-| MT.1 | Breath: styled at the first show; a restart while the bar stays up re-tinted; half down, the groove and the fill; the look | Not run yet |
+| MT.1 | Breath: styled at the first show; a restart while the bar stays up re-tinted; half down, the groove and the fill; the look | Not run yet (#338 saw Glass Unit Frames' bar) |
 | MT.2 | The fill's baseline before our tint at each start, and whether Setup hands over a new object (the tint's restore depends on it) | Not run yet |
 | MT.3 | Off underwater: Blizzard's look; on again; `/reload` underwater | Not run yet |
-| MT.4 | Edit Mode's previews on glass; Save, Revert, close, then combat: nothing blocked (taint log on) | Not run yet |
+| MT.4 | Edit Mode's previews on glass; Save, Revert, close, then combat: nothing blocked (taint log on) | Previews styled, levels as planned, nothing blocked (#339, with Glass Unit Frames' bars on); to repeat with them off |
 | MT.5 | Fatigue, feign death, a dive in combat (optional); Glass Unit Frames' timers on: none of ours | Not run yet |
 
 ### The loot window and the loot roll history (#105, docs/LOOT.md)
