@@ -733,6 +733,23 @@ Suite.Report("GlassPearls", { api = 1, built = "pearl", live = false, look = { t
 eq(Suite.State("GlassPearls"), "following", "following Pearl")
 Suite.Report("GlassPearls", { api = 1, live = false, declined = "WoW Forever" })
 eq(Suite.State("GlassPearls"), "chosen", "WoW Forever: its own look by its choice")
+-- Live (GlassPearls #117): a look change after it built leaves nothing
+-- pending; its own-named fallbacks ("glasspearls", "font") aren't ours to name.
+Suite.Report("GlassPearls", { api = 1, built = "pearl", live = true, look = { tint = "clear", accent = "gold" } })
+eq(Suite.ReportOf("GlassPearls").live, true, "live = true is copied")
+Suite.SetLook("accent", "ice")
+local gps, gpending = Suite.State("GlassPearls")
+eq(gps, "following", "live: following")
+eq(gpending, false, "live: the accent changed after it built, nothing pending")
+eq(Suite.LookLine("GlassPearls"), "suite look", "following the suite look")
+Suite.Report("GlassPearls", { api = 1, built = "pearl", live = true, look = { tint = "glasspearls", accent = "font" },
+                              own = { tint = true, accent = true } })
+eq(Suite.LookLine("GlassPearls"), "suite look, its own tint, accent", "its own-named fallbacks: named by key only")
+GUI._test.slash("suite")
+local gpLine = chat():match("Glass Pearls: [^\r\n]*") or ""
+check(gpLine:find("following Glass UI (Pearl); suite look, its own tint, accent", 1, true)
+      and not gpLine:find("reload to apply", 1, true), "/glassui suite: its own keys, no reload (" .. gpLine .. ")")
+Suite.SetLook("accent", "gold")
 -- Stakeout (#152): dynamic; its own look by the player's choice in it is
 -- "chosen", never "failed", nothing pending, no "set to follow".
 setup({})
