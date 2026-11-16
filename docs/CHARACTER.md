@@ -79,8 +79,8 @@ Paths are under `Blizzard_UIPanels_Game/` unless named. CF is `Camelot/Character
 - **Hazards:**
   - the slots' click path;
   - **the currency pane and its transfer UI stay 100% stock**: its rows and its transfer-log toggle
-    (Ellesmere WindowPacks:5331-5375: any skinning taints the warband transfer, the protected
-    `RequestCurrencyFromAccountCharacter`) (Codex);
+    (Ellesmere v9.8.6 WindowPacks, "taints warband currency transfer", ~5376: any skinning taints
+    the warband transfer, the protected `RequestCurrencyFromAccountCharacter`) (Codex);
   - the UI panel's width;
   - the gamepad stand-down (the engine's).
 - **References.** Ellesmere fades the hosts, the stats chrome, the strip and the model background,

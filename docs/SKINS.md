@@ -3,8 +3,9 @@
 Built on 2026-10-21 from three read-only surveys:
 - `wow-ui-source` origin/forever (1.60.1.70450): what loads for the camelot game type, which is in
   the mainline family, `[Family]` = Mainline, `[Game]` = Camelot;
-- EllesmereUI v9.6.1's and ElvUI's skins on Forever. These are **behaviour references only**:
-  both write geometry, which our contract forbids.
+- EllesmereUI's (read at v9.6.1; the passages our docs cite checked against v9.8.6, #183) and ElvUI's
+  skins on Forever. These are **behaviour references only**: both write geometry, which our contract
+  forbids.
 
 Each window has an issue with its frames, loading, shell, parts, hazards and the references'
 warnings. Each skin then gets its own plan (`docs/<WINDOW>.md`, Codex review), tests, mutation

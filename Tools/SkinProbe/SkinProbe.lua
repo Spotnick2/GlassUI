@@ -122,7 +122,8 @@ end
 -- State: gamepad style (W1.4), /gui (W1.5), neighbours, frames (W1.1)
 --------------------------------------------------------------------------------
 
--- Ellesmere's test (v9.6.1, EllesmereUI_UICore.lua:1308-1312): the current input interface
+-- Ellesmere's test (v9.8.6 EllesmereUI_UICore.lua, "style.GetCurrentStyle() == types.Gamepad",
+-- ~1554): the current input interface
 -- style against Enum.InputDeviceInterfaceType.Gamepad. Read live, no event.
 local function gamepad()
     local style = rawget(_G, "C_InputInterfaceStyle")

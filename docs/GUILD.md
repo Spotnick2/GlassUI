@@ -38,7 +38,8 @@ Paths are under `Blizzard_Communities/` unless named.
   `MemberList.ScrollBar.Background` (:344-353), the scrollbar's own: it stays stock with the
   scrollbar (Codex). `CommunitiesMemberList.lua:591-612` hides and shows the ColumnDisplay during
   layout.
-  - **Its taint rules** (Ellesmere WindowPacks:3209-3224):
+  - **Its taint rules** (Ellesmere v9.8.6 WindowPacks, "NEVER HookScript the secure ColumnDisplay"
+    and "NEVER re-anchor or resize the roster", ~3214-3226):
     - never `HookScript` the ColumnDisplay: its OnShow/OnHide fires inside the protected
       SetNote/SetGuildRankOrder refresh, giving `ADDON_ACTION_FORBIDDEN`;
     - never re-anchor or resize the roster: the rows size from its width, so an addon's width

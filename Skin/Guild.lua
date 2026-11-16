@@ -4,9 +4,10 @@
 --
 -- CommunitiesFrame (Blizzard_Communities, ButtonFrameTemplateMinimizable,
 -- wow-ui-source forever 70450). The member roster is taint-sensitive
--- (Ellesmere WindowPacks:3209-3224): no script hook on any roster frame,
--- nothing on its ColumnDisplay, no walking its rows, no anchor or size. Its
--- inset gets an alpha only. Our panes sit on host frames of ours parented to
+-- (Ellesmere v9.8.6 WindowPacks, "NEVER HookScript the secure ColumnDisplay"
+-- and "NEVER re-anchor or resize the roster", ~3214-3226): no script hook on
+-- any roster frame, nothing on its ColumnDisplay, no walking its rows, no
+-- anchor or size. Its inset gets an alpha only. Our panes sit on host frames of ours parented to
 -- each Blizzard section, so they show and hide with it, with no hook.
 --
 -- The window glass with the floor, a smoky header band, the portrait's disc

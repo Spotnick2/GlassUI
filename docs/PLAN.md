@@ -70,14 +70,14 @@ lines in each TOC are the authoritative list of Forever-only variants (FV below)
 | World map | `WorldMapFrame`, `QuestMapFrame` | Blizzard_WorldMap, always (Mainline with Camelot's templates; the quest log Mainline with Camelot's overrides, its side tabs hidden) | `WorldMapFrameTemplate`, `frameBuffer="true"` | Leatrix Maps rebuilds the border (below); the frame buffer doesn't flatten a child panel (W1.3, 70374; re-checked by `mapglass`). Shown from secure call chains: styled a frame later. Skinned in #99 (docs/MAP.md) |
 | Bags | `ContainerFrame1..N`, `ContainerFrameCombinedBags` | always | `PortraitFrameFlatTemplate` | opened in combat, so first pass may wait; item buttons are on the use path: alpha only |
 | Tooltips | `GameTooltip`, `ShoppingTooltip1/2`, `ItemRefTooltip`, `EmbeddedItemTooltip` | always | `SharedTooltipTemplate` + `.NineSlice` | hook `SharedTooltip_SetBackdropStyle`, deferred a frame (it fires from secure code); `GameTooltip.StatusBar` is secure and secret: fade only; skip embedded tooltips; no `OnTooltipSetItem` (porting guide :488, :862) |
-| Menus | `Menu.GetManager()` menus | Blizzard_Menu (FV `Camelot\Menu.xml`) | `MenuStyle1Mixin`/`MenuStyle2Mixin` | **never `AddMenuAcquiredCallback`** (Ellesmere v9.8.4: a tainted Whisper entry broke chat, `EUI_BlizzardSkin_TooltipSkin.lua:1109-1114`); hook `OpenMenu`/`OpenContextMenu` and the style mixins' `Generate` (flyouts), defer; no `CreateTexture` while a menu is open (`:1150-1152`), and menus are reused (`:1081-1086`): **a glass panel on a menu is unproven**, so the fallback is tint-only |
+| Menus | `Menu.GetManager()` menus | Blizzard_Menu (FV `Camelot\Menu.xml`) | `MenuStyle1Mixin`/`MenuStyle2Mixin` | **never `AddMenuAcquiredCallback`** (Ellesmere v9.8.6 `EUI_BlizzardSkin_TooltipSkin.lua`, "NEVER use menuDescription:AddMenuAcquiredCallback()", ~1210: a tainted Whisper entry broke chat); hook `OpenMenu`/`OpenContextMenu` and the style mixins' `Generate` (flyouts), defer; no `CreateTexture` while a menu is open ("disallows CreateTexture/CreateFontString/CreateLine", ~1252), and menus are reused ("Deliberately NOT memoised per frame", ~1182): **a glass panel on a menu is unproven**, so the fallback is tint-only |
 | Escape menu | `GameMenuFrame` | Blizzard_GameMenu, always | `MainMenuFrameTemplate`, buttons from a pool | the Esc path is taint-sensitive (porting guide :1536): taint pass |
 | Auction house | `AuctionHouseFrame` | Blizzard_AuctionHouseUI, LoD | `PortraitFrameTemplate` | Auctionator adds tabs |
-| Professions | `ProfessionsFrame`, `ProfessionsBookFrame` | Blizzard_Professions, Blizzard_ProfessionsBook, LoD | FV `ProfessionsFrameBase` (side tab, right tabs 1-7); `ButtonFrameTemplate` | recipe rows are protected (Ellesmere WindowPacks:1895); Skilled hooks it |
+| Professions | `ProfessionsFrame`, `ProfessionsBookFrame` | Blizzard_Professions, Blizzard_ProfessionsBook, LoD | FV `ProfessionsFrameBase` (side tab, right tabs 1-7); `ButtonFrameTemplate` | recipe rows are protected (Ellesmere v9.8.6 WindowPacks, "Row frames are PROTECTED (host secure profession spell", ~1920); Skilled hooks it |
 | Group finder | `LFGParentFrame` | Blizzard_GroupFinder_VanillaStyle, LoD | custom, side tabs | retail `PVEFrame` is excluded on Forever (`Blizzard_GroupFinder.toc:10`) |
 | Spellbook + talents | `PlayerSpellsFrame` (`SpellBookFrame`, `TalentsFrame`, `SpecFrame` inside) | Blizzard_PlayerSpells, LoD | FV `PortraitFrameTemplate, TabSystemOwnerTemplate` | spell items call protected `CastSpellBookItem` (`Blizzard_SpellBookItem.lua:610`): alpha only, nothing on the click path; taint pass |
 | Legacy (talent tree, challenges, reward track) | `LegacySystemFrame` (`TreePage.LegacyTreeTraitPanel`, challenges page, reward track page) | Blizzard_LegacySystem, LoD, **Forever only** | `PortraitFrameTemplate`, `LargeSideTabButtonTemplate` side tabs | the tree is a `Blizzard_SharedTalentUI` trait panel with pooled talent buttons (`Blizzard_LegacySystem.lua:30-40`): alpha only on the buttons, nothing on the learn path; taint pass |
-| Guild | `CommunitiesFrame` | Blizzard_Communities, always (FV overrides) | `ButtonFrameTemplateMinimizable` | never hook the roster's ColumnDisplay or move rows (Ellesmere WindowPacks:3189-3202); taint pass |
+| Guild | `CommunitiesFrame` | Blizzard_Communities, always (FV overrides) | `ButtonFrameTemplateMinimizable` | never hook the roster's ColumnDisplay or move rows (Ellesmere v9.8.6 WindowPacks, "NEVER HookScript the secure ColumnDisplay", ~3214, and "NEVER re-anchor or resize the roster", ~3222); taint pass |
 | Friends | `FriendsFrame` (FV), or `SocialUIFrame` when `SocialUIControl.IsEnabled()` | always | `ButtonFrameTemplate`, TabSystem header, `PanelTabButtonTemplate` | both must be skinned (`Camelot\FriendsFrame.lua:1262`) |
 | Damage meter | `DamageMeter` + session/source windows | Blizzard_DamageMeter (`standard, camelot`) | `EditModeDamageMeterSystemTemplate` | an Edit Mode system with secret values: chrome only |
 | Cooldown manager | `EssentialCooldownViewer`, `UtilityCooldownViewer`, `BuffIconCooldownViewer`, `BuffBarCooldownViewer` | Blizzard_CooldownViewer (`standard, camelot`) | `CooldownViewerTemplate`, `BottomManagedFrameTemplate` | managed frames with secret cooldown data: icon borders and bar chrome only |
@@ -85,7 +85,7 @@ lines in each TOC are the authoritative list of Forever-only variants (FV below)
 **Client-wide hazards** (each confirmed in source or by a reference addon):
 - The UIParent panel manager's position delegate is forbidden: never move or hide a UI panel.
 - ScrollBox windows: never force their first layout from our load pass; skin on the first `OnShow`
-  (Ellesmere WindowPacks:11993).
+  (Ellesmere v9.8.6 WindowPacks, "a skin must NEVER be the thing that triggers a ScrollBox-backed", ~12837).
 - UI widget trees hold secret values: leave them alone.
 - **Gamepad interface style:** Ellesmere v9.6.1 stood every skin down for the session in that mode
   (`EllesmereUIBlizzardSkin.lua:92-105`): hooks on Blizzard windows tainted its secure navigation
@@ -284,7 +284,7 @@ Engine.Register({
   generation number drops queued work from before the change.
 - **When it runs:** at `PLAYER_LOGIN` (every non-LoD addon, siblings included, is loaded by then),
   each enabled skin installs now, at its window's first `OnShow` (ScrollBox windows: never force
-  Blizzard's first layout, Ellesmere WindowPacks:11993), or for a load-on-demand window through
+  Blizzard's first layout, Ellesmere v9.8.6 WindowPacks, "a skin must NEVER be the thing that triggers a ScrollBox-backed", ~12837), or for a load-on-demand window through
   `EventUtil.ContinueOnAddOnLoaded(addon, ...)`. A window already shown when its skin turns on is
   styled at once.
 - **Owners:** resolved at `PLAYER_LOGIN`, before any skin installs (non-LoD siblings are loaded by
@@ -426,7 +426,7 @@ question.
 
    **Acceptance for every skin (the final implementation, not the probe's copy):** the in-game
    routine for that window with `taintLog 1` and `scriptErrors 1`, a functional check (Ellesmere's
-   ScrollBox failure doesn't show in `taintLog`, WindowPacks:11993), off and on again, after a
+   ScrollBox failure doesn't show in `taintLog`: v9.8.6 WindowPacks, "invisible to taintLog", ~12841), off and on again, after a
    /reload, in combat where it applies, and with its neighbour addon loaded.
 4. **Hub v1:** settings tree, family page, compartment entry, adapter v1. Pilot with GlassUnitFrames
    and GlassActionBars (an issue in each). Acceptance: both work unchanged with Glass UI absent.
