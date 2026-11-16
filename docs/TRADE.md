@@ -44,8 +44,9 @@ delegate. Every hook of ours only schedules.
 ## Hazards
 
 - **The money input is forbidden.** `TradePlayerInputMoneyFrame:SetForbidden()` (TF.lua:21): the
-  frame, `…Gold` and `…GoldMiddle` throw on every method but `IsForbidden` (Ellesmere measured,
-  WindowPacks.lua:13950-13981). The money calls are `HasRestrictions`.
+  frame, `…Gold` and `…GoldMiddle` throw on every method but `IsForbidden` (Ellesmere measured:
+  v9.8.6 WindowPacks, "they are forbidden and genuinely cannot be touched", ~14422, and "either call
+  THROWS", ~14472). The money calls are `HasRestrictions`.
   - **Never touch that row, never anchor to it.** Only the inset behind it (a separate frame) is
     faded.
   - **Never walk `TradeFrame:GetChildren()`:** it returns the forbidden frame. Every piece is

@@ -2146,7 +2146,7 @@ function WoW.trade()
 end
 function WoW.closeTrade() WoW.asBlizzard(function() TradeFrame:Hide() end) end
 
--- RestedXP v4.11.26 (#56, docs/RESTEDXP.md): RXPFrame (GuideWindow.lua) and
+-- RestedXP v4.11.36 (#56, docs/RESTEDXP.md): RXPFrame (GuideWindow.lua) and
 -- RXPG_ARROW (map.lua), its default window ("V1"). A third-party addon's
 -- objects, under the same contract record as Blizzard's: its function fields
 -- and the Backdrop mixin's methods are Lua methods (a call from addon code is

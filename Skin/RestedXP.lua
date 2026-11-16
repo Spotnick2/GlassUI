@@ -3,7 +3,7 @@
 -- UI"). Two switches: rxp (RXPFrame) and rxparrow (RXPG_ARROW), each attached
 -- when RXPGuides loads, never a dependency.
 --
--- RestedXP v4.11.26 (References\Addons\QuestsLeveling\RXPGuides, behaviour
+-- RestedXP v4.11.36 (References\Addons\QuestsLeveling\RXPGuides, behaviour
 -- reference only, never copied), its default window ("V1") only. Its objects
 -- get the skin contract as Blizzard's do: getters, SetAlpha (held), our
 -- texture's colour, HookScript and hooksecurefunc on an instance's own

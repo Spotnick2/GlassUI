@@ -20,8 +20,9 @@
 --
 -- Everything runs at a window's OnShow (and at once when it's already shown),
 -- never before: a ScrollBox window's first layout is Blizzard's to make
--- (Ellesmere WindowPacks:11993), and a yielding addon's login handler may
--- still be running at our PLAYER_LOGIN.
+-- (Ellesmere v9.8.6 WindowPacks, "a skin must NEVER be the thing that
+-- triggers a ScrollBox-backed", ~12837), and a yielding addon's login
+-- handler may still be running at our PLAYER_LOGIN.
 --
 -- Hooks can't be removed, so every callback checks Engine.Active first, and
 -- work queued for later (a deferred pass, a combat wait) also checks that its

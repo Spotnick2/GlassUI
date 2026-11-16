@@ -21,7 +21,7 @@ completes. Questie's tracker stays in #56 for later.
 - **Its colour is the suite accent** (gold or ice, `Suite.Accent`), not the mockup's blue.
 - **Questie is ignored for now.**
 
-Anatomy from RestedXP v4.11.26 (`References\Addons\QuestsLeveling\RXPGuides`, behaviour reference
+Anatomy from RestedXP v4.11.36 (`References\Addons\QuestsLeveling\RXPGuides`, behaviour reference
 only, never copied), `RXPGuides\GuideWindow.lua`, `Themes.lua`, `map.lua`, `UI\V2\Core.lua`.
 Measured on 70450 (FOREVER-PROBE QS.1-QS.4):
 - `RXPFrame` and `RXPG_ARROW` exist at RestedXP's load;
