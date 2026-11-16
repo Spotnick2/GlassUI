@@ -57,6 +57,9 @@ Suite.ROSTER = {
     -- LookChanged; without Look or EventRegistry it builds once (live =
     -- false). Its own look "WoW Forever" reported as declined (#163).
     { name = "GlassPearls", title = "Glass Pearls", dynamic = true },
+    -- Gear scores and upgrade markers (GlassGear's GUI-001, #167): asks at
+    -- its ADDON_LOADED; its report and look come with its GG-115.
+    { name = "GlassGear", title = "Glass Gear", dynamic = true },
 }
 local member = {}
 for _, m in ipairs(Suite.ROSTER) do member[m.name] = true end

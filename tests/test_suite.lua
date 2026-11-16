@@ -750,6 +750,31 @@ local gpLine = chat():match("Glass Pearls: [^\r\n]*") or ""
 check(gpLine:find("following Glass UI (Pearl); suite look, its own tint, accent", 1, true)
       and not gpLine:find("reload to apply", 1, true), "/glassui suite: its own keys, no reload (" .. gpLine .. ")")
 Suite.SetLook("accent", "gold")
+-- Glass Gear (#167): dynamic; asked, then following once it reports, and
+-- its Follow switch saved here, the answer changing at the next /reload.
+setup({})
+local gg
+for _, m in ipairs(Suite.ROSTER) do if m.name == "GlassGear" then gg = m end end
+check(gg and gg.dynamic and gg.title == "Glass Gear", "Glass Gear is a dynamic member")
+eq(Suite.Listed(gg), false, "not installed: not listed")
+WoW.installed.GlassGear, WoW.loaded.GlassGear = 2, true
+eq(Suite.Listed(gg), true, "loaded: listed")
+local ggt = Suite.Theme("GlassGear")
+check(ggt and ggt.preset == "pearl", "Theme answers it, following by default")
+eq(Suite.State("GlassGear"), "silent", "asked, no report yet: silent")
+Suite.Report("GlassGear", { api = 1, built = "pearl", live = false, look = { tint = "clear", accent = "gold" } })
+eq(Suite.State("GlassGear"), "following", "its report: following Pearl")
+GUI.Options._test.panel:Show()
+local ggRow = GUI.Options._test.rows.GlassGear
+check(ggRow and ggRow.card:IsShown(), "loaded and speaking the API: its card on the settings page")
+eq(ggRow and ggRow.line:GetText(), "Glass UI preset: Pearl", "the card says it follows")
+GUI.Options._test.panel:Hide()
+check(Suite.SetFollow("GlassGear", false), "its Follow switch turned off")
+eq(GUI.db.suite.follow.GlassGear, false, "saved by Glass UI")
+local ggs, ggpending = Suite.State("GlassGear")
+eq(ggs, "following", "still what it built this session")
+eq(ggpending, true, "a /reload pending")
+eq(Suite.Theme("GlassGear"), nil, "the answer now: not following (it asks once a session, so at the next /reload)")
 -- Stakeout (#152): dynamic; its own look by the player's choice in it is
 -- "chosen", never "failed", nothing pending, no "set to follow".
 setup({})
