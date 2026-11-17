@@ -65,6 +65,11 @@ Suite.ROSTER = {
     -- Theme/Report's key both read it. No OptionalDeps on us; it asks when its
     -- window is first built.
     { name = "!Bugsy", title = "Bugsy", dynamic = true },
+    -- Its wheel (#194, Apotheca#101): asks Theme and reports for itself. Its
+    -- bar's buttons stay Glass Action Bars' tenant ("Apotheca: follows Glass
+    -- Action Bars"), so the title says which part this card and its Follow
+    -- switch cover.
+    { name = "Apotheca", title = "Apotheca's wheel", dynamic = true },
 }
 local member = {}
 for _, m in ipairs(Suite.ROSTER) do member[m.name] = true end
