@@ -798,12 +798,12 @@ GUI.Options._test.panel:Hide()
 check(Suite.SetFollow("!Bugsy", false), "its Follow switch turned off")
 eq(GUI.db.suite.follow["!Bugsy"], false, "saved by Glass UI under its folder name")
 eq(Suite.Theme("!Bugsy"), nil, "the answer now: not following (at its next /reload)")
--- Apotheca (#194): dynamic, its card the wheel's; its buttons stay GAB's
--- tenant, and the two lines read apart.
+-- Apotheca (#194): dynamic; what it paints itself reports here, its buttons
+-- with GAB stay GAB's tenant, both lines shown.
 setup({})
 local ap
 for _, m in ipairs(Suite.ROSTER) do if m.name == "Apotheca" then ap = m end end
-check(ap and ap.dynamic and ap.title == "Apotheca's wheel", "Apotheca is a dynamic member, titled for its wheel")
+check(ap and ap.dynamic and ap.title == "Apotheca", "Apotheca is a dynamic member")
 eq(Suite.Listed(ap), false, "not installed: not listed")
 WoW.installed.GlassActionBars, WoW.loaded.GlassActionBars = 2, true
 ask("GlassActionBars")
@@ -817,7 +817,7 @@ eq(Suite.State("Apotheca"), "following", "its report: following Pearl")
 chat()
 GUI._test.slash("suite")
 out = chat()
-check(out:find("Apotheca's wheel: following Glass UI (Pearl)", 1, true), "/glassui suite: the wheel's line")
+check(out:find("Apotheca: following Glass UI (Pearl)", 1, true), "/glassui suite: its own line")
 check(out:find("Apotheca: follows Glass Action Bars", 1, true), "and the buttons' tenant line, unchanged")
 GUI.Options._test.panel:Show()
 local apRow = GUI.Options._test.rows.Apotheca
