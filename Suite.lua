@@ -60,6 +60,11 @@ Suite.ROSTER = {
     -- Gear scores and upgrade markers (GlassGear's GUI-001, #167): asks at
     -- its ADDON_LOADED; its report and look come with its GG-115.
     { name = "GlassGear", title = "Glass Gear", dynamic = true },
+    -- The bug reporter (#192, Bugsy#13). The name is its folder, `!Bugsy`
+    -- (loaded first, ahead of other addons' errors): the presence checks and
+    -- Theme/Report's key both read it. No OptionalDeps on us; it asks when its
+    -- window is first built.
+    { name = "!Bugsy", title = "Bugsy", dynamic = true },
 }
 local member = {}
 for _, m in ipairs(Suite.ROSTER) do member[m.name] = true end

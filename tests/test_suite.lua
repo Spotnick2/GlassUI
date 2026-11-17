@@ -775,6 +775,29 @@ local ggs, ggpending = Suite.State("GlassGear")
 eq(ggs, "following", "still what it built this session")
 eq(ggpending, true, "a /reload pending")
 eq(Suite.Theme("GlassGear"), nil, "the answer now: not following (it asks once a session, so at the next /reload)")
+-- Bugsy (#192): dynamic, keyed by its folder "!Bugsy", titled "Bugsy".
+setup({})
+local bg
+for _, m in ipairs(Suite.ROSTER) do if m.name == "!Bugsy" then bg = m end end
+check(bg and bg.dynamic and bg.title == "Bugsy", "Bugsy is a dynamic member, keyed by its folder")
+eq(Suite.Listed(bg), false, "not installed: not listed")
+WoW.installed.Bugsy, WoW.loaded.Bugsy = 2, true
+eq(Suite.Listed(bg), false, "a folder without the !: not Bugsy")
+WoW.installed["!Bugsy"], WoW.loaded["!Bugsy"] = 2, true
+eq(Suite.Listed(bg), true, "!Bugsy loaded: listed")
+local bgn, bgr = Suite.Theme("Bugsy")
+check(bgn == nil and bgr == "unknown", "the title is not the key")
+local bgt = Suite.Theme("!Bugsy")
+check(bgt and bgt.preset == "pearl", "Theme answers !Bugsy, following by default")
+Suite.Report("!Bugsy", { api = 1, built = "pearl", live = false, look = { tint = "clear", accent = "gold" } })
+eq(Suite.State("!Bugsy"), "following", "its report: following Pearl")
+GUI.Options._test.panel:Show()
+local bgRow = GUI.Options._test.rows["!Bugsy"]
+check(bgRow and bgRow.card:IsShown(), "loaded and speaking the API: its card on the settings page")
+GUI.Options._test.panel:Hide()
+check(Suite.SetFollow("!Bugsy", false), "its Follow switch turned off")
+eq(GUI.db.suite.follow["!Bugsy"], false, "saved by Glass UI under its folder name")
+eq(Suite.Theme("!Bugsy"), nil, "the answer now: not following (at its next /reload)")
 -- Stakeout (#152): dynamic; its own look by the player's choice in it is
 -- "chosen", never "failed", nothing pending, no "set to follow".
 setup({})
