@@ -36,7 +36,7 @@ local function fakeLib(minor, err)
     end
 end
 
--- The library as checked out: Pearl from r11 on. CI loads the .pkgmeta pin (r11).
+-- The library as checked out: Pearl from r11 on. CI loads the .pkgmeta pin (r13).
 local GUI = loadAddon()
 local _, minor = LibStub("LibGlass-1.0")
 if minor >= 11 then

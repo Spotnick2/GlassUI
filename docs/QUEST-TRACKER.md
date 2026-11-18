@@ -36,7 +36,7 @@ Codex `gpt-6-astra` review: consensus in round 2, 2026-10-19.
 - **Kit and Theme** read `GUI.Glass` when they use it, not at file load: `Skin\Kit.lua:27` and
   `Theme.lua:27` today. Theme's painting path (`Theme.lua:63`) reads it too, so a later refresh uses
   the built instance. `Options.lua`'s `pageGlass()` already reads it on call.
-- **An older LibGlass.** The embedded copy is pinned at r11 (`.pkgmeta`), and r11 has Pearl. LibStub
+- **An older LibGlass.** The embedded copy is pinned at r13 (`.pkgmeta`), and Pearl is there from r11 on. LibStub
   keeps the highest minor loaded, so a sibling's older copy can't displace ours. The check only
   protects against an older or mispackaged development embed.
   - We borrow GlassChat's version check (`GlassChat\Glass.lua:18`, Pearl at minor >= 11), but fall
