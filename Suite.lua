@@ -65,6 +65,11 @@ Suite.ROSTER = {
     -- Theme/Report's key both read it. No OptionalDeps on us; it asks when its
     -- window is first built.
     { name = "!Bugsy", title = "Bugsy", dynamic = true },
+    -- The consumable bar (#194, Apotheca#101): what it paints itself (the
+    -- wheel, its own Glass button style without GAB, Apotheca#41) asks Theme
+    -- and reports here. With GAB, its buttons are GAB's tenant instead
+    -- ("Apotheca: follows Glass Action Bars"), under GAB's switch.
+    { name = "Apotheca", title = "Apotheca", dynamic = true },
 }
 local member = {}
 for _, m in ipairs(Suite.ROSTER) do member[m.name] = true end

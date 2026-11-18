@@ -798,6 +798,37 @@ GUI.Options._test.panel:Hide()
 check(Suite.SetFollow("!Bugsy", false), "its Follow switch turned off")
 eq(GUI.db.suite.follow["!Bugsy"], false, "saved by Glass UI under its folder name")
 eq(Suite.Theme("!Bugsy"), nil, "the answer now: not following (at its next /reload)")
+-- Apotheca (#194): dynamic; what it paints itself reports here, its buttons
+-- with GAB stay GAB's tenant, both lines shown.
+setup({})
+local ap
+for _, m in ipairs(Suite.ROSTER) do if m.name == "Apotheca" then ap = m end end
+check(ap and ap.dynamic and ap.title == "Apotheca", "Apotheca is a dynamic member")
+eq(Suite.Listed(ap), false, "not installed: not listed")
+WoW.installed.GlassActionBars, WoW.loaded.GlassActionBars = 2, true
+ask("GlassActionBars")
+Suite.Report("GlassActionBars", { api = 1, built = "pearl", tenants = { "Apotheca" } })
+WoW.installed.Apotheca, WoW.loaded.Apotheca = 2, true
+eq(Suite.Listed(ap), true, "loaded: listed")
+local apt = ask("Apotheca")
+check(apt and apt.preset == "pearl", "Theme answers Apotheca, following by default")
+Suite.Report("Apotheca", { api = 1, built = "pearl", live = true, options = function() end })
+eq(Suite.State("Apotheca"), "following", "its report: following Pearl")
+chat()
+GUI._test.slash("suite")
+out = chat()
+check(out:find("Apotheca: following Glass UI (Pearl)", 1, true), "/glassui suite: its own line")
+check(out:find("Apotheca: follows Glass Action Bars", 1, true), "and the buttons' tenant line, unchanged")
+GUI.Options._test.panel:Show()
+local apRow = GUI.Options._test.rows.Apotheca
+check(apRow and apRow.card:IsShown(), "loaded and speaking the API: its card on the settings page")
+check(GUI.Options._test.rows.GlassActionBars.line:GetText():find("Apotheca follow it", 1, true),
+      "GAB's card still names its tenant")
+GUI.Options._test.panel:Hide()
+check(Suite.SetFollow("Apotheca", false), "its Follow switch turned off")
+eq(GUI.db.suite.follow.Apotheca, false, "saved by Glass UI")
+eq(GUI.db.suite.follow.GlassActionBars, nil, "GAB's switch, and so the buttons, untouched")
+eq(Suite.Theme("Apotheca"), nil, "the answer now: not following (at its next /reload)")
 -- Stakeout (#152): dynamic; its own look by the player's choice in it is
 -- "chosen", never "failed", nothing pending, no "set to follow".
 setup({})
