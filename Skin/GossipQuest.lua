@@ -61,18 +61,61 @@ local function glassAt(kit, frame, level)
     return glass, g
 end
 
+-- Blizzard's three pieces carry the button's state (UIPanelButtonTemplate
+-- re-textures them on press and on disable), and they're faded: so the state
+-- is on our glass (Codex on #201). Disabled (Accept while the text types,
+-- Continue on an incomplete quest): the glass at BUTTON_OFF. Held down: a
+-- white light on it.
+local BUTTON_OFF, PRESS_LIGHT = 0.4, 0.15
+
+local function enabled(b)
+    local ok, on = pcall(b.IsEnabled, b)
+    return not ok or API.Plain(on) ~= false
+end
+
+local function feedback(st, pressed)
+    local on = enabled(st.button)
+    st.glass:SetAlpha(on and 1 or BUTTON_OFF)
+    st.press:SetShown(on and pressed == true)
+end
+
+local function pushedNow(b)
+    local ok, state = pcall(b.GetButtonState, b)
+    return ok and API.Plain(state) == "PUSHED"
+end
+
 -- A button's glass is its child, so it hides with the button (Decline under
 -- auto-accept, the gamepad's hidden buttons).
 local function installButton(kit, b)
     if buttons[b] then return end
     local glass, g = glassAt(kit, b, b:GetFrameLevel() - 1)
-    buttons[b] = { glass = glass, g = g, kit = kit }
+    local press = glass:CreateTexture(nil, "ARTWORK")
+    press:SetAllPoints(glass)
+    press:SetColorTexture(1, 1, 1, PRESS_LIGHT)
+    if g and g.mask then press:AddMaskTexture(g.mask) end
+    press:Hide()
+    local st = { glass = glass, g = g, kit = kit, button = b, press = press }
+    buttons[b] = st
+    local function now(pressed)
+        if GUI.Engine.Active(kit.key) then GUI.Engine.Run(kit.skin, "button", feedback, st, pressed) end
+    end
+    -- Enable/Disable come inside a panel's show: read again a frame later.
+    local function later()
+        if GUI.Engine.Active(kit.key) then
+            GUI.Engine.Defer(kit.skin, "button", function() feedback(st, pushedNow(b)) end)
+        end
+    end
+    b:HookScript("OnMouseDown", function() now(true) end)
+    b:HookScript("OnMouseUp", function() now(false) end)
+    b:HookScript("OnEnable", later)
+    b:HookScript("OnDisable", later)
 end
 
 local function styleButton(kit, b)
     for _, key in ipairs(BUTTON_ART) do kit:Fade(kit:Child(b, key)) end
     local ok, hl = pcall(b.GetHighlightTexture, b)
     if ok and tbl(hl) then kit:Tint(hl, 1, 1, 1, HOVER) end
+    feedback(buttons[b], pushedNow(b))
 end
 
 local function isDark(page)
@@ -236,4 +279,5 @@ GUI.Engine.Register({
 })
 
 GUI.GossipQuest = { _test = { wins = wins, buttons = buttons, DARK = DARK, HOVER = HOVER, PAGE_TOP = PAGE_TOP,
+                              BUTTON_OFF = BUTTON_OFF, PRESS_LIGHT = PRESS_LIGHT,
                               PANELS = PANELS, QUEST_BUTTONS = QUEST_BUTTONS } }

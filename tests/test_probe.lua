@@ -1961,6 +1961,8 @@ gh.pane.fill:SetPoint("TOPLEFT", gf.Background)
 gh.pane.fill:Show()
 ok, why = T.gqOn("g", { window = "gossip", dark = true })()
 check(ok, "faded, the pane on it: pass: " .. tostring(why))
+ok, why = T.gqOn("g", { window = "gossip", atlas = "QuestBG-Parchment-Accessibility3" })()
+check(not ok and why:find("the page QuestBG-Parchment-Accessibility4", 1, true), "another atlas than the one wanted: fails")
 ok, why = T.gqOn("g", { window = "gossip", dark = false })()
 check(not ok and why:find("the page " .. "QuestBG-Parchment-Accessibility4", 1, true), "dark when the default was wanted: fails")
 WoW.contrast = 0
@@ -2040,6 +2042,21 @@ rawset(_G, "QuestLogPopupDetailFrame", nil)
 -- The player's setting, saved at the start and put back at the end.
 local set = {}
 rawset(_G, "C_CVar", { SetCVar = function(name, value) set[name] = value; return true end })
+-- A stopped run (Codex on #201): the snapshot from the first start is kept
+-- over the probe's own value, and the command puts it back.
+rawset(_G, "GetCVar", function(name) return name == "questTextContrast" and "0" or nil end)
+SkinProbeDB.gqContrastWas = "2"
+check(T.contrastSave(), "a second start")
+eq(SkinProbeDB.gqContrastWas, "2", "keeps the player's value, not the probe's 0")
+SkinProbeDB.gqContrastWas = nil
+T.contrastSave()
+eq(SkinProbeDB.gqContrastWas, "0", "a fresh start saves the value now")
+rawset(_G, "GetCVar", function(name) return name == "GamePadEnable" and "0" or nil end)
+SkinProbeDB.gqContrastWas = "2"
+SlashCmdList.FOREVERPROBE("skin gqrestore")
+eq(set.questTextContrast, "2", "/fp skin gqrestore puts it back")
+eq(SkinProbeDB.gqContrastWas, nil, "and drops the snapshot")
+set.questTextContrast = nil
 SkinProbeDB.gqContrastWas = "2"
 check(T.contrastRestore(), "the setting restored")
 eq(set.questTextContrast, "2", "to the player's value")

@@ -205,6 +205,39 @@ for _, k in ipairs({ "Left", "Middle", "Right" }) do
     eq(QuestFrameGreetingGoodbyeButton[k]:GetAlpha(), 0, "quest: Goodbye's " .. k .. " faded through its SetTexture")
 end
 
+-- The buttons' state on our glass (their own pieces are faded): disabled
+-- (Accept while the text types) dims it a frame later, held down lights it.
+WoW.quest("Detail")
+WoW.flushTimers(0)
+local acc = T.buttons[QuestFrameAcceptButton]
+eq(acc.glass:GetAlpha(), 1, "quest: Accept enabled, its glass full")
+check(not acc.press:IsShown(), "quest: not pressed")
+WoW.asBlizzard(function() QuestFrameAcceptButton:Disable() end)
+eq(acc.glass:GetAlpha(), 1, "quest: nothing inside Blizzard's Disable")
+WoW.flushTimers(0)
+eq(acc.glass:GetAlpha(), T.BUTTON_OFF, "quest: Accept disabled: its glass dimmed")
+QuestFrameAcceptButton._scripts.OnMouseDown(QuestFrameAcceptButton)
+check(not acc.press:IsShown(), "quest: no press light while disabled")
+WoW.asBlizzard(function() QuestFrameAcceptButton:Enable() end)
+WoW.flushTimers(0)
+eq(acc.glass:GetAlpha(), 1, "quest: enabled again: full")
+QuestFrameAcceptButton._scripts.OnMouseDown(QuestFrameAcceptButton)
+check(acc.press:IsShown(), "quest: held down: the press light")
+eq(acc.press._color[4], T.PRESS_LIGHT, "quest: at its strength")
+QuestFrameAcceptButton._scripts.OnMouseUp(QuestFrameAcceptButton)
+check(not acc.press:IsShown(), "quest: released: gone")
+-- Disabled while the skin is off: read again when on; nothing scheduled while off.
+GUI._test.slash("skin quest off")
+WoW.asBlizzard(function() QuestFrameCompleteButton:Disable() end)
+eq(#WoW.timers, 0, "quest off: a button's Disable schedules nothing")
+GUI._test.slash("skin quest on")
+WoW.flushTimers(0)
+eq(T.buttons[QuestFrameCompleteButton].glass:GetAlpha(), T.BUTTON_OFF, "quest on: Continue's disabled state read again")
+WoW.asBlizzard(function() QuestFrameCompleteButton:Enable() end)
+WoW.flushTimers(0)
+WoW.quest("Greeting")
+WoW.flushTimers(0)
+
 -- The setting changed with the greeting open, no refresh: nothing changes
 -- (Blizzard's text is still dark).
 WoW.setContrast(4)

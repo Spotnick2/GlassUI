@@ -322,6 +322,11 @@ is about:
 
 Saved as `SkinProbeDB.results["GQ.<label>"]`.
 
+**Rev 2 (Codex on #201):** a stopped run keeps the first snapshot of the player's setting (a restart
+no longer saves the probe's own value over it), and `/fp skin gqrestore` puts it back by hand;
+contrast 1, 2 and 3 are set and checked one at a time, each on its own atlas; with a quest panel
+open, the set-back check requires the page still dark.
+
 **Run #482-#483 (rev 1, 70938, 2026-11-19): passed.** 26 checks PASS, none failed; 0 failures and
 0 blocked actions all through, in combat included; the owner: "yes" to every look question. Skipped:
 the reward panel, a greeting list, a quest needing money, auto-accept (none at hand). Measured:

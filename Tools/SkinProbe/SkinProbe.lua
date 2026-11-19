@@ -5987,6 +5987,7 @@ local function gqOn(label, want)
         end
         if want.window == "quest" and w.pageAlpha == 0 then want_(w.light ~= false, "dark text over a faded page") end
         if want.dark ~= nil then want_(w.dark == want.dark, "the page " .. tostring(w.atlas)) end
+        if want.atlas then want_(w.atlas == want.atlas, "the page " .. tostring(w.atlas)) end
         if want.closeOff then want_(w.closeEnabled == false and w.closeAlpha == 0.35, "the close button not dimmed") end
         if want.combat ~= nil then want_(r.combat == want.combat, "combat " .. tostring(r.combat)) end
         want_(r.failures == 0, r.failures .. " failure(s): /glassui failures")
@@ -6056,8 +6057,14 @@ local function contrast(v)
     end
 end
 
--- Your setting, kept across the run's reloads and put back at its end.
+-- Your setting, kept across the run's reloads and put back at its end. A
+-- snapshot still waiting (a run stopped after the probe changed it) is kept:
+-- the value now may be the probe's (Codex on #201). /fp skin gqrestore puts
+-- it back by hand.
 local function contrastSave()
+    if type(SkinProbeDB) == "table" and type(SkinProbeDB.gqContrastWas) == "string" then
+        return true, "your Quest Text Contrast, kept from a stopped run: " .. SkinProbeDB.gqContrastWas
+    end
     local okV, v = pcall(GetCVar, "questTextContrast")
     v = okV and plain(v) or nil
     if type(SkinProbeDB) == "table" and type(v) == "string" then SkinProbeDB.gqContrastWas = v end
@@ -6118,9 +6125,9 @@ end
 
 Probe:Steps("gossipglass", {
     title = "Glass UI: the gossip window and the quest dialog in glass (#115, #114)",
-    rev = 1,
+    rev = 2,
     { text = "Turns on script errors, counts blocked actions from now, and saves your Quest Text Contrast setting "
-          .. "(put back at the end).", auto = true,
+          .. "(put back at the end; if you stop early, /fp skin gqrestore puts it back).", auto = true,
       run = function()
           if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
           gqHook()
@@ -6172,13 +6179,17 @@ Probe:Steps("gossipglass", {
     { text = "Sets it back to the default.", button = "Default", run = contrast(0) },
     settled("The parchment back at once. Goes on by itself.",
             gqOn("gossip default", { window = "gossip", dark = false })),
-    { text = "Contrast 1, 2 and 3 in turn (lighter parchments with dark text).", button = "1 to 3",
-      run = function()
-          for v = 1, 3 do setCVar("questTextContrast", tostring(v)) end
-          return true
-      end },
-    settled("Each keeps the page. Goes on by itself.",
-            gqOn("gossip contrast 3", { window = "gossip", dark = false })),
+    -- Contrast 1-3 (lighter parchments with dark text), each set and checked
+    -- on its own atlas (Codex on #201).
+    { text = "Contrast 1.", button = "1", run = contrast(1) },
+    settled("Its lighter parchment, kept. Goes on by itself.",
+            gqOn("gossip contrast 1", { window = "gossip", atlas = "QuestBG-Parchment-Accessibility1" })),
+    { text = "Contrast 2.", button = "2", run = contrast(2) },
+    settled("Kept. Goes on by itself.",
+            gqOn("gossip contrast 2", { window = "gossip", atlas = "QuestBG-Parchment-Accessibility2" })),
+    { text = "Contrast 3.", button = "3", run = contrast(3) },
+    settled("Kept. Goes on by itself.",
+            gqOn("gossip contrast 3", { window = "gossip", atlas = "QuestBG-Parchment-Accessibility3" })),
     setTo(4, "Sets Dark again."),
     { text = "Close the gossip window, then open a quest's details (Dark from the start). Goes on by itself; a "
           .. "screenshot.", timeout = 600, wait = gqWait("quest", { new = true }), screenshot = "quest, dark",
@@ -6187,7 +6198,7 @@ Probe:Steps("gossipglass", {
           .. "Note.", ask = true },
     { text = "With that panel still open: sets the default back.", button = "Default", run = contrast(0) },
     settled("The panel keeps Blizzard's dark page and light text until Blizzard refreshes it. Goes on by itself.",
-            gqOn("quest open, set back", { window = "quest" })),
+            gqOn("quest open, set back", { window = "quest", dark = true })),
     { text = "Move to another panel (accept, or close and open the quest again): the parchment and dark text "
           .. "together. Press Next on it.", check = gqOn("quest refreshed", { window = "quest", dark = false }) },
     setTo(4, "Sets Dark for the next step."),
@@ -6251,7 +6262,12 @@ Probe:Steps("gossipglass", {
 
 Probe:Command("gossipquest", function() gqMeasure(); gqState("now") end,
               "#115/#114: the gossip window and the quest dialog: portraits, levels, pages, buttons now")
+Probe:Command("gqrestore", function()
+    local ok, why = contrastRestore()
+    say("GQ restore: " .. tostring(ok) .. ", " .. tostring(why))
+end, "#115/#114: put your Quest Text Contrast back after a stopped gossipglass run")
 skinChecks.gqState, skinChecks.gqOn, skinChecks.gqMeasure, skinChecks.gqHook = gqState, gqOn, gqMeasure, gqHook
+skinChecks.contrastSave = contrastSave
 skinChecks.contrastRestore = contrastRestore
 end)() end
 
@@ -6293,4 +6309,5 @@ NS._test = { ltState = skinChecks.ltState, ltOn = skinChecks.ltOn, ltClosed = sk
              merchantRows = merchantRows, rowsOn = rowsOn, floorTry = floorTry, floorRestore = floorRestore,
              rxState = rxState, rxOn = rxOn, raState = raState, raOn = raOn, rxpEnable = rxpEnable,
              gqState = skinChecks.gqState, gqOn = skinChecks.gqOn, gqMeasure = skinChecks.gqMeasure,
-             gqHook = skinChecks.gqHook, contrastRestore = skinChecks.contrastRestore }
+             gqHook = skinChecks.gqHook, contrastRestore = skinChecks.contrastRestore,
+             contrastSave = skinChecks.contrastSave }
