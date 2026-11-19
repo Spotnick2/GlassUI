@@ -191,6 +191,24 @@ WoW.closeQuest()
 WoW.questAutoAccept = false
 WoW.closeGossip()
 WoW.flushTimers(0)
+-- The quest details popup (#202): opened in combat, Dark, a quest-log
+-- update, the setting changed, off and on.
+WoW.combat = true
+WoW.popupShow(7)
+WoW.flushTimers(0)
+WoW.combat = false
+WoW.setCVar("questTextContrast", "4")
+WoW.popupShow(7)
+WoW.popupShow(8)
+WoW.popupFullUpdate()
+WoW.flushTimers(0)
+WoW.setCVar("questTextContrast", "0")
+WoW.popupFullUpdate()
+WoW.flushTimers(0)
+GUI._test.slash("skin questpopup off")
+GUI._test.slash("skin questpopup on")
+WoW.flushTimers(0)
+WoW.closePopup()
 -- The world map (#99): opened in combat, maximised, a map change, a quest
 -- log update, scrolled, off and on.
 WoW.combat = true

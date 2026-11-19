@@ -288,6 +288,174 @@ GUI.Engine.Register({
     end,
 })
 
+--------------------------------------------------------------------------------
+-- The quest details popup (#202, docs/QUEST-POPUP.md): QuestLogPopupDetailFrame
+-- (QuestMapFrame.xml:311), the objective tracker's details. It inherits both
+-- ButtonFrameTemplate and QuestFramePanelTemplate, and both name a texture
+-- parentKey "Bg": the shell's rock and the panel's page. So kit:Shell (which
+-- fades .Bg) is never called on it, and both are found by structure.
+--
+-- Its text is repainted without its page: QuestMapFrame_DoFullUpdate calls
+-- Update (QuestInfo_Display, by the setting as it is then) while the page is
+-- only set in ShowQuest. So the page follows what Blizzard last painted:
+-- Update's instance hook records it, and the page fades only while it is the
+-- dark one AND that paint was light. Unknown (the skin was off): kept.
+--------------------------------------------------------------------------------
+
+local POPUP_BUTTONS = { "AbandonButton", "TrackButton", "ShareButton" }
+local popup = { paintLight = nil, hooked = false }   -- what Blizzard last painted
+
+local function near(a, b) return type(a) == "number" and math.abs(a - b) < 0.5 end
+
+-- A texture's draw layer and sublevel, and its points as { point, x, y }.
+local function shape(t)
+    local okL, layer, sub = pcall(t.GetDrawLayer, t)
+    local okN, n = pcall(t.GetNumPoints, t)
+    local pts = {}
+    for i = 1, (okN and API.Plain(n)) or 0 do
+        local ok, p, _, _, x, y = pcall(t.GetPoint, t, i)
+        if ok then pts[i] = { API.Plain(p), API.Plain(x), API.Plain(y) } end
+    end
+    return okL and API.Plain(layer) or nil, okL and API.Plain(sub) or nil, pts
+end
+
+-- The page: .Bg, BACKGROUND, at 7,-62, a QuestBG atlas (QuestFrameTemplates.xml:9).
+local function pageOf(frame)
+    local bg = tbl(frame.Bg)
+    if not bg then return nil end
+    local layer, _, pts = shape(bg)
+    local ok, atlas = pcall(bg.GetAtlas, bg)
+    atlas = ok and API.Plain(atlas) or nil
+    local p = pts[1]
+    if layer == "BACKGROUND" and #pts == 1 and p[1] == "TOPLEFT" and near(p[2], 7) and near(p[3], PAGE_TOP)
+        and type(atlas) == "string" and atlas:find("^QuestBG") then
+        return bg
+    end
+    return nil
+end
+
+-- The rock: the one direct BACKGROUND -6 texture at 2,-21 and -2,2
+-- (SharedUIPanelTemplates.xml:689-695). None, or two: nil.
+local function rockOf(frame, page)
+    local found
+    local ok, regions = pcall(function() return { frame:GetRegions() } end)
+    for _, r in ipairs(ok and regions or {}) do
+        local okT, objType = pcall(r.GetObjectType, r)
+        if r ~= page and okT and API.Plain(objType) == "Texture" then
+            local layer, sub, pts = shape(r)
+            if layer == "BACKGROUND" and sub == -6 and #pts == 2 then
+                local tl, br
+                for _, p in ipairs(pts) do
+                    if p[1] == "TOPLEFT" and near(p[2], 2) and near(p[3], -21) then tl = true end
+                    if p[1] == "BOTTOMRIGHT" and near(p[2], -2) and near(p[3], 2) then br = true end
+                end
+                if tl and br then
+                    if found then return nil end
+                    found = r
+                end
+            end
+        end
+    end
+    return found
+end
+
+-- The book icon: the direct OVERLAY -1 texture, 64 px (QuestMapFrame.xml:314).
+local function bookOf(frame)
+    local ok, regions = pcall(function() return { frame:GetRegions() } end)
+    for _, r in ipairs(ok and regions or {}) do
+        local okT, objType = pcall(r.GetObjectType, r)
+        if okT and API.Plain(objType) == "Texture" then
+            local layer, sub = shape(r)
+            local okW, w = pcall(r.GetWidth, r)
+            if layer == "OVERLAY" and sub == -1 and okW and near(API.Plain(w), 64) then return r end
+        end
+    end
+    return nil
+end
+
+local function decidePopup(kit, h)
+    if not decide(kit, h, h.page, popup.paintLight == true) then
+        Kit.ShowSection(h.pane, false)
+        h.paneOn = nil
+    end
+end
+
+local popupSkin
+-- Two instance hooks, on from the skin's attach (its frames call at login),
+-- so ShowQuest's first Update, which runs before ShowUIPanel, is seen. They
+-- style nothing: they record the paint and schedule a decision, and only
+-- once the popup's pieces exist (Codex on #202, r2).
+local function hookPopup(frame)
+    if popup.hooked then return end
+    popup.hooked = true
+    if type(frame.Update) == "function" then
+        hooksecurefunc(frame, "Update", function()
+            if not GUI.Engine.Active("questpopup") then return end
+            local QT = GUI.QuestText
+            popup.paintLight = QT and QT.LightText() or false
+            local h = wins[frame]
+            if h then GUI.Engine.Defer(popupSkin, "page", function() decidePopup(h.kit, h) end) end
+        end)
+    end
+    local page = pageOf(frame)
+    if page then
+        -- The page set (ShowQuest): only a decision, never the paint (Codex r2).
+        hooksecurefunc(page, "SetAtlas", function()
+            if not GUI.Engine.Active("questpopup") then return end
+            local h = wins[frame]
+            if h then GUI.Engine.Defer(popupSkin, "page", function() decidePopup(h.kit, h) end) end
+        end)
+    end
+end
+
+popupSkin = GUI.Engine.Register({
+    key = "questpopup",
+    title = "Quest details popup",
+    risk = "plain",
+    defer = true,
+    live = true,
+    backing = "window",
+    frames = function()
+        local f = rawget(_G, "QuestLogPopupDetailFrame")
+        if tbl(f) then hookPopup(f) end
+        return f
+    end,
+    install = function(kit, frame)
+        local book = bookOf(frame)
+        if not book then API.Fail("missing:questpopup:book", "the book icon not found by structure") end
+        -- The book is the popup's own texture: #201's own-texture path, the
+        -- disc under the window's regions, the window glass one lower.
+        local h = installWindow(kit, frame, book)
+        h.page = pageOf(frame)
+        if not h.page then API.Fail("missing:questpopup:page", ".Bg isn't the page on this build") end
+        h.rock = rockOf(frame, h.page)
+        if not h.rock then API.Fail("missing:questpopup:rock", "the rock: none or two by structure") end
+        for _, key in ipairs(POPUP_BUTTONS) do
+            local b = kit:Child(frame, key)
+            if tbl(b) then installButton(kit, b) end
+        end
+    end,
+    style = function(kit, frame)
+        local h = wins[frame]
+        if not h then return end
+        -- Not kit:Shell: its .Bg is the page here.
+        kit:Fade(kit:Child(frame, "NineSlice"))
+        kit:Fade(kit:Child(frame, "TopTileStreaks"))
+        kit:Inset(kit:Child(frame, "Inset"))
+        kit:Fade(h.rock)
+        kit:CloseFades(tbl(frame.CloseButton))
+        for b, st in pairs(buttons) do
+            if st.kit == kit then styleButton(kit, b) end
+        end
+        Kit.PlaceHeader(h)
+        Kit.CloseSync(h)
+        decidePopup(kit, h)
+    end,
+    -- Off: the hooks can't record, so the paint is unknown when on again.
+    restored = function() popup.paintLight = nil end,
+})
+
 GUI.GossipQuest = { _test = { wins = wins, buttons = buttons, DARK = DARK, HOVER = HOVER, PAGE_TOP = PAGE_TOP,
                               BUTTON_OFF = BUTTON_OFF, PRESS_LIGHT = PRESS_LIGHT,
-                              PANELS = PANELS, QUEST_BUTTONS = QUEST_BUTTONS } }
+                              PANELS = PANELS, QUEST_BUTTONS = QUEST_BUTTONS, popup = popup,
+                              pageOf = pageOf, rockOf = rockOf, bookOf = bookOf } }

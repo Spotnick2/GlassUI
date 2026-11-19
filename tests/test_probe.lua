@@ -2033,9 +2033,12 @@ for _, st in ipairs(proc.steps) do
     if st.text:find("objective tracker", 1, true) then notInherited = st.check end
 end
 check(notInherited ~= nil and notInherited(), "nothing faded under the popup: pass")
-faded[region] = { kit = {} }
+faded[region] = { kit = { key = "quest" } }
 ok, why = notInherited()
-check(not ok and why:find("1 region", 1, true), "a region of the popup faded: fails")
+check(not ok and why:find("1 region", 1, true), "a dialog fade carried into the popup: fails")
+-- The popup's own skin fades its rock there (#202): that passes.
+faded[region] = { kit = { key = "questpopup" } }
+check(notInherited(), "the popup skin's own fade: pass")
 faded[region] = nil
 rawset(_G, "QuestLogPopupDetailFrame", nil)
 
@@ -2202,6 +2205,72 @@ rawset(_G, "GetCVar", function(name) return name == "GamePadEnable" and "0" or n
 rawset(_G, "GlassUI", savedG)
 end)() end
 
+do (function() -- its own function: the main chunk is near Lua 5.1's 200 locals
+-- #202: the quest details popup as the procedure reads it, on the stub's
+-- popup with a skin's result faked: the shell and the rock faded, the band,
+-- the disc, the buttons' glass, the pane.
+local savedQP = rawget(_G, "GlassUI")
+WoW.makeQuestPopup()
+local PF = QuestLogPopupDetailFrame
+local title = WoW.blizzObject("FontString", PF.ScrollFrame.ScrollChild, "QuestInfoTitleHeader", "ARTWORK")
+local win = CreateFrame("Frame", nil, PF)
+local h = { win = win, header = win:CreateTexture(), disc = CreateFrame("Frame", nil, PF),
+            pane = { fill = win:CreateTexture() }, page = PF.Bg, rock = PF._rock }
+h.pane.fill:Hide()
+for _, x in ipairs({ PF.NineSlice, PF.TopTileStreaks, PF.Inset.Bg, PF._rock }) do x:SetAlpha(0) end
+local qbuttons = {}
+for _, key in ipairs({ "AbandonButton", "TrackButton", "ShareButton" }) do
+    PF[key].Left:SetAlpha(0)
+    qbuttons[PF[key]] = { glass = CreateFrame("Frame", nil, PF[key]) }
+end
+local structure = { page = true, rock = true, book = true }
+local popupT = { wins = { [PF] = h }, buttons = qbuttons, popup = { paintLight = false },
+                 pageOf = function() return structure.page and PF.Bg or nil end,
+                 rockOf = function() return structure.rock and PF._rock or nil end,
+                 bookOf = function() return structure.book and PF._book or nil end }
+rawset(_G, "GlassUI", { failures = {}, GossipQuest = { _test = popupT } })
+SkinProbeDB.suiteBlocked = 0
+WoW.asBlizzard(function() PF:Show() end)
+title:SetTextColor(0.18, 0.12, 0.06)
+local ok, why = T.qpOn("p", { faded = false })()
+check(ok, "the popup in glass, its page kept: pass: " .. tostring(why))
+PF.Bg:SetAtlas("QuestBG-Parchment-Accessibility4")
+PF.Bg:SetAlpha(0)
+ok, why = T.qpOn("p")()
+check(not ok and why:find("dark text over a faded page", 1, true), "a faded page under dark text: fails")
+title:SetTextColor(1, 0.86, 0.7)
+ok, why = T.qpOn("p")()
+check(not ok and why:find("no pane on the faded page", 1, true), "faded without our pane: fails")
+h.pane.fill:SetPoint("TOPLEFT", PF.Bg)
+h.pane.fill:Show()
+check(T.qpOn("p", { faded = true })(), "faded, light text, the pane on it: pass")
+PF.Bg:SetAtlas("QuestBG-Parchment")
+ok, why = T.qpOn("p")()
+check(not ok and why:find("a page faded that isn't the dark one", 1, true), "the parchment faded: fails")
+PF.Bg:SetAlpha(1)
+ok, why = T.qpOn("p")()
+check(not ok and why:find("a pane over a kept page", 1, true), "a pane left over a kept page: fails")
+h.pane.fill:Hide()
+PF._rock:SetAlpha(1)
+ok, why = T.qpOn("p")()
+check(not ok and why:find("shell 1", 1, true), "the rock back: fails")
+PF._rock:SetAlpha(0)
+-- The structure step stays when a piece is missing.
+local steps = FP.procedures["SkinProbe/questpopup"].steps
+local structureStep
+for _, st in ipairs(steps) do
+    if st.text:find("Reads the structure", 1, true) then structureStep = st end
+end
+check(pcall(structureStep.run), "the structure as planned: the step goes on")
+structure.rock = false
+check(not pcall(structureStep.run), "no rock by structure: the step stays")
+structure.rock = true
+eq(SkinProbeDB.results["QP.structure"].globalIsKey, true, "the stub's global is .Bg (recorded)")
+WoW.asBlizzard(function() PF:Hide() end)
+for _, n in ipairs({ "QuestLogPopupDetailFrame", "QuestInfoTitleHeader" }) do rawset(_G, n, nil) end
+rawset(_G, "GlassUI", savedQP)
+end)() end
+
 -- The procedures are defined and every step's run, wait and check works here.
 -- The contrast procedures run with a saved setting and readable flags, as
 -- after their first steps in game.
@@ -2216,10 +2285,13 @@ local savedLoop = rawget(_G, "GlassUI")
 rawset(_G, "GlassUI", { QuestText = {
     trace = { { event = "VARIABLES_LOADED", loaded = true, value = "0" }, { event = "decision", outcome = "off", value = "0" } },
     IsOn = function() return false end, Status = function() return "off" end,
-    On = function() return true, "on" end, Off = function() return true, "off" end } })
+    On = function() return true, "on" end, Off = function() return true, "off" end },
+    GossipQuest = { _test = { wins = {}, buttons = {}, popup = {}, pageOf = function() return {} end,
+                              rockOf = function() return {} end, bookOf = function() return {} end } } })
+WoW.makeQuestPopup()   -- the questpopup steps read a popup
 for _, name in ipairs({ "wave1", "map", "gradient", "merchant", "card", "suite", "suitecombat", "meter",
                         "meterskin", "meterbars", "suitepanel", "pearl", "tracker", "questing", "accent",
-                        "rxpglass", "mirrorglass", "gossipglass", "questtext" }) do
+                        "rxpglass", "mirrorglass", "gossipglass", "questtext", "questpopup" }) do
     local p = FP.procedures["SkinProbe/" .. name]
     check(p ~= nil, "procedure " .. name .. " is defined")
     if p then
@@ -2243,6 +2315,7 @@ rawset(_G, "C_CVar", nil)
 rawset(_G, "GetCVar", function(name) return name == "GamePadEnable" and "0" or nil end)
 SkinProbeDB.gqContrastWas, SkinProbeDB.qtFlagsOk = nil, nil
 rawset(_G, "GlassUI", savedLoop)
+rawset(_G, "QuestLogPopupDetailFrame", nil)
 T.panelsOff(); T.borderRestore(); T.gradientOff(); T.barsOff()
 T.suiteRestore(); T.panelRestore()
 rawset(_G, "GlassUI", nil)

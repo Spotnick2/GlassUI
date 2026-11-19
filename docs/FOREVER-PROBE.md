@@ -298,6 +298,34 @@ are saved as `SkinProbeDB.results["MS.<label>"]`.
 | MS.3 | The portrait's disc: a ring round the face, centred on the mask, on the NPC's portrait and the buyback tab's | **Run 1:** PASS: seen on both tabs, 70 px (58 + 2 x 6), off-centre 0.00001 px; centred and the right width (the owner). "The ring should probably be pearl/clear": it was dark, with a backing at the window's floor. Now Pearl, clear and without a backing. |
 | MS.4 | Off live: Blizzard's plates, slots and portrait ring back, no glass of ours; on again | **Run 1:** PASS: the border back, 0 rows on glass, no disc; the owner: exactly Blizzard's; on again, faded; after a /reload, still on. The "too many errors" warnings in the screenshots were the taint log's micro menu noise (BugGrabber: `MainMenuBarMicroButtons.lua:2008`, x301), not Glass UI. |
 
+### The quest details popup (#202, docs/QUEST-POPUP.md)
+
+`/fp steps skin questpopup`; `/fp skin questpopup` reads its structure and state now. It saves the
+player's Quest Text Contrast first (stage 1's strict snapshot; Light quest text must be off), sets
+Dark through Light quest text, and turns it off and restores the setting at its end.
+- **Measured first, after the first opening:** `QP.structure`. That is `.Bg` and
+  `QuestLogPopupDetailFrameBg`, each with its layer, sublevel, atlas and points; whether the skin
+  found the page, the rock and the book icon by structure; and the shown popup's levels. A missing
+  piece keeps the step: the plan goes back for review.
+- **Each check reads:**
+  - the shell (`NineSlice`, streaks, inset, the rock);
+  - the page's atlas and alpha, and our pane;
+  - the skin's recorded last paint, and the title's colour: a faded page under dark text fails;
+  - the band, the book's disc, the buttons' glass;
+  - failures and blocked actions.
+- **The repaint step** waits for a new paint with the same popup open and its page still dark. A
+  reopening doesn't count.
+- `gossipglass`'s popup check now counts only the dialog skins' fades (`gossip`, `quest`). The
+  popup's own skin fades its rock.
+
+Saved as `QP.<label>`. Not run yet.
+
+| # | Question | Result |
+|---|---|---|
+| QP.1 | The structure: `.Bg` the page, the rock and the book found by structure; the levels; the disc visible under the book | Waits for the owner |
+| QP.2 | Default and Dark; Dark off with it open, then a quest-log update (the page back a frame later); Dark on again without a redraw (kept); reopened (faded) | Waits for the owner |
+| QP.3 | The buttons, Show Map, Abandon, closing; off and on (kept until the next paint), the master switch; combat | Waits for the owner |
+
 ### Light quest text on glass (#203, docs/QUEST-TEXT.md)
 
 `/fp steps skin questtext`; `/fp skin questtext` reads the flags, the startup trace and the switch

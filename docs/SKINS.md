@@ -46,6 +46,7 @@ it can be reached at all.
 |---|---|---|
 | #113 | Trade (`TradeFrame`) | Built and tested offline (branch `trade-glass`); the in-game probe waits for the beta. The money input is forbidden; the recipient's red is mirrored. |
 | #114 | NPC quest dialog (`QuestFrame`) | Accepted on 70938 with #115 (docs/GOSSIP-QUEST.md, `/fp steps skin gossipglass`). The page and text stay Blizzard's unless Blizzard shows its dark page. The quest details popup (`QuestLogPopupDetailFrame`) is its own issue. |
+| #202 | The quest details popup (`QuestLogPopupDetailFrame`) | Built and tested offline (docs/QUEST-POPUP.md); `/fp steps skin questpopup` waits for the owner. Its page follows Blizzard's last paint of the text. |
 | #115 | Gossip (`GossipFrame`) | Accepted on 70938 with #114, the same file and procedure. |
 | #116 | Taxi / flight map | `probe-first`: which one Forever opens. |
 | #117 | Bank (character and account) | The use path; `TabContentsChangedAnim` (#109). |

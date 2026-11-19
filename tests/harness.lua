@@ -99,6 +99,7 @@ function loadAddon(opts)
     if not opts.noTrade then WoW.makeTrade() end
     if not opts.noGossip then WoW.makeGossip() end
     if not opts.noQuest then WoW.makeQuest(opts.questOwn) end
+    if not opts.noPopup then WoW.makeQuestPopup() end
     if not opts.noMirror then WoW.makeMirrorTimers() end
     if not opts.noTracker then WoW.makeTracker() end
     if not (opts.noTracker or opts.noTimer) then WoW.makeQuestTimer() end
