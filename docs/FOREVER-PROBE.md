@@ -298,6 +298,104 @@ are saved as `SkinProbeDB.results["MS.<label>"]`.
 | MS.3 | The portrait's disc: a ring round the face, centred on the mask, on the NPC's portrait and the buyback tab's | **Run 1:** PASS: seen on both tabs, 70 px (58 + 2 x 6), off-centre 0.00001 px; centred and the right width (the owner). "The ring should probably be pearl/clear": it was dark, with a backing at the window's floor. Now Pearl, clear and without a backing. |
 | MS.4 | Off live: Blizzard's plates, slots and portrait ring back, no glass of ours; on again | **Run 1:** PASS: the border back, 0 rows on glass, no disc; the owner: exactly Blizzard's; on again, faded; after a /reload, still on. The "too many errors" warnings in the screenshots were the taint log's micro menu noise (BugGrabber: `MainMenuBarMicroButtons.lua:2008`, x301), not Glass UI. |
 
+### Light quest text on glass (#203, docs/QUEST-TEXT.md)
+
+`/fp steps skin questtext`; `/fp skin questtext` reads the flags, the startup trace and the switch
+now. It saves the player's Quest Text Contrast first (stage 1's snapshot, which now refuses to go on
+without a usable value), turns the switch off, and at its end turns it off again and restores the
+setting. The snapshot is dropped only once the setting reads it back; `/fp skin gqrestore` tries
+again by hand.
+
+Measured first, with the switch off:
+- `QT.info`: `GetCVarInfo` (storage, locked, secure, read-only). Locked, secure or read-only stops
+  the run: the design goes back for review.
+- `QT.trace <label>`: Glass UI's own startup samples (`QuestText.trace`, kept in memory by Glass UI,
+  since the probe loads after it). Each has the event, `AreCVarsLoaded`, the value and whether the
+  decision ran. Saved with the probe's own `CVAR_UPDATE`s and the settled value. A value at the
+  decision point that differs from the settled one fails: the startup gate goes back for review.
+- `QT.persist addon` and `QT.persist blizzard`: the value after a full exit, for 2 written by addon
+  code and 3 chosen in Blizzard's settings; a `/reload` as the control.
+- `QT.boundary <label>`: for On, Off and a quick Off then On, the `CVAR_UPDATE`s that arrive inside
+  the call and after it. Any after it fails: the design rests on synchronous delivery and goes back
+  for review.
+
+Then the switch in use: gossip and quest dialog light on glass, books or the popup and the map's
+details, letting go when Blizzard's settings change it, On twice then Off, On while already Dark,
+refused in combat, a `/reload` and a full exit with it on, and Blizzard's side afterwards (an XP or
+reputation gain, Edit Mode, another setting, action bars in combat). Saved as `QT.<label>`.
+
+**Rev 3 (Codex on #204):**
+- **Nothing is written until the run is ready:** the player's value saved (the switch must be off
+  first, so the saved value is theirs, not the switch's Dark) and the flags allowing it. A failed
+  first step stays put, and every contrast write refuses otherwise, in `gossipglass` too.
+- **The timing check needs evidence:** a changed value and an event inside the call.
+- **The startup check follows the switch:** switch off, the value at the decision must be the
+  settled one, decision "off". Switch on, the decision must have kept or re-applied Dark. Glass UI's
+  trace now records each decision's outcome.
+
+**Rev 4 (Codex on #204, round 2):**
+- **Every write through the gate:** the switch's own calls (On twice then Off, On then Off, the quick
+  On, Off, On) too. Cleanup turns the switch off only if the run got ready, and restores only a valid
+  snapshot.
+- **A passive startup check that fails closes the gate**, and the step stays.
+- **The quick sequence is three calls, each timed on its own:** an event inside each call carrying
+  the value it ended on, none after.
+- **Full exits:** the steps ask for `/reload`, the owner's call (2026-11-19, "we don't have to fully
+  exit the client anymore for addons"), and the labels say so. A full exit would also show what a
+  fresh client presents at login, and whether the switch's re-apply runs. Codex asks for one; it
+  stays the owner's decision.
+
+**Run #491-#496 (rev 1, 70959, 2026-11-19): passed.** The owner did a `/reload` at each "full exit"
+step: since 70009 a reload reads the SavedVariables back. This CVar is Blizzard's own setting, which its
+settings dropdown writes with the same `SetCVar` the switch calls, so its persistence across a restart
+is Blizzard's. Measured:
+- **The flags:** stored locally (neither `isStoredServerAccount` nor `isStoredServerCharacter`); not
+  locked, secure or read-only. So the switch keeps one account-wide record.
+- **Startup:** at Glass UI's `ADDON_LOADED`, `AreCVarsLoaded()` is false (the value already reads); at
+  `VARIABLES_LOADED`, true. The decision ran there in every load (5), and its value was the settled
+  one every time.
+- **Delivery:** every `CVAR_UPDATE` for the switch's writes arrived inside the call (On 1, Off 1, Off
+  then On 3), none after. Synchronous: the letting-go rule holds.
+- **The switch:**
+  - the gossip window and the quest dialog in Blizzard's light text on glass (screenshots; the owner:
+    readable);
+  - the map's details and Blizzard's settings showing Dark (the owner: yes);
+  - letting go when the setting was changed in Blizzard's settings: the switch off, nothing written;
+  - On twice then Off gave the player's value back;
+  - On while Dark, then Off: Dark kept;
+  - refused in combat, on after it;
+  - on after a `/reload` (twice).
+- **Blizzard's side:** an XP or reputation gain, Edit Mode, another setting, action bars in combat: 0
+  blocked, and `Logs\taint.log` not written this session (at level 1 it's written only on a block).
+
+Two checks failed on the expected value, not the behaviour. The step text said "the second Light
+option", and the options are named Default, Brown, White, Grey, Black, so the owner picked Grey (3)
+where the check wanted White (2). The switch let go and restored 3, as it should. The step texts name
+the options now.
+
+**By hand (70959, 2026-11-19, sessions #498-#501): reloads, not full exits.** The sessions start 11 s
+apart, too fast for a client restart. With the switch on (#500), the value at the startup decision was
+Dark and the switch kept it; after Grey chosen in Blizzard's settings (#501), it read 3. Within one
+client process, as the rev 1 run.
+
+**Full exits (70959, 2026-11-19, sessions #504-#505, the rev 4 build):** the owner quit and
+relaunched twice, reading `/fp skin questtext` after each. The starting setting was Grey (3), left
+from the reloads above.
+- **The switch on (#504):** the fresh client read Dark (4) at the startup decision
+  (`VARIABLES_LOADED`; at `ADDON_LOADED` the CVars weren't loaded yet). The decision was "kept": no
+  write, the switch still on.
+- **The switch off (#505):** Off had restored Grey, the value it replaced, and the fresh client read 3
+  at the decision (outcome "off", 3 settled).
+
+So the CVar persists across a client restart, and the switch's re-apply branch (a dropped value)
+never runs on this client. It stays covered offline only.
+
+| # | Question | Result |
+|---|---|---|
+| QT.1 | The CVar's flags; the startup trace; persistence across a full exit (addon-written and Blizzard-chosen); the setter boundary | **Local storage, no locks; decided at `VARIABLES_LOADED` on the settled value; synchronous delivery** (#491-#496, #498-#501: reloads); **persists across a full exit, the decision "kept" with the switch on** (#504-#505) |
+| QT.2 | The switch: light text on glass, the other readers, letting go, On twice, On while Dark, combat, a reload and a full exit | **Pass** (the book or popup step skipped); two value checks off by the step's wording, not the switch |
+| QT.3 | Blizzard's side after the writes: XP or reputation, Edit Mode, settings, action bars in combat; `taint.log` read | **Pass**: 0 blocked, `taint.log` not written |
+
 ### The gossip window and the quest dialog (#115, #114, docs/GOSSIP-QUEST.md)
 
 `/fp steps skin gossipglass`; `/fp skin gossipquest` measures and reads them now. It saves the

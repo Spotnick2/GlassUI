@@ -393,6 +393,65 @@ Settings = {
 }
 
 function GetCVarBool(name) return WoW.cvars[name] == true end
+
+-- C_CVar (API dump 70959) for the settings the addon writes (#203,
+-- QuestText.lua): WoW.cvar.values over .defaults; .loaded for
+-- AreCVarsLoaded; .perChar for GetCVarInfo's isStoredServerCharacter;
+-- .unreadable makes GetCVar answer nothing, .noDefault GetCVarDefault;
+-- .refuse = "false" (SetCVar returns false), "ignore" (returns true, the value
+-- unchanged) or "throw"; .late fires CVAR_UPDATE a frame later instead of
+-- inside the call. Every SetCVar from addon code is in .sets as { name, value }.
+-- .onUpdate(name, value), when set, runs inside each CVAR_UPDATE before the
+-- addon's handlers (another listener).
+local function newCVarState()
+    return { values = {}, defaults = { questTextContrast = "0" }, loaded = true, perChar = false, sets = {} }
+end
+WoW.cvar = newCVarState()
+table.insert(WoW.onReset, function() WoW.cvar = newCVarState() end)
+local function cvarUpdate(name, value)
+    local function fire()
+        -- Blizzard's own listener: a shown gossip window re-themes (the stub's
+        -- contrast follows the CVar).
+        if name == "questTextContrast" then
+            WoW.contrast = tonumber(C_CVar.GetCVar(name)) or 0
+            if WoW.onContrast then WoW.onContrast() end
+        end
+        if WoW.cvar.onUpdate then WoW.cvar.onUpdate(name, value) end
+        WoW.fire("CVAR_UPDATE", name, value)
+    end
+    if WoW.cvar.late then C_Timer.After(0, fire) else fire() end
+end
+-- Blizzard's settings (or another addon) writing a CVar: no record in .sets.
+function WoW.setCVar(name, value)
+    WoW.cvar.values[name] = tostring(value)
+    cvarUpdate(name, tostring(value))
+end
+C_CVar = {
+    GetCVar = function(name)
+        if WoW.cvar.unreadable then return nil end
+        local v = WoW.cvar.values[name]
+        if v == nil then v = WoW.cvar.defaults[name] end
+        return v
+    end,
+    GetCVarDefault = function(name)
+        if WoW.cvar.noDefault then return nil end
+        return WoW.cvar.defaults[name]
+    end,
+    AreCVarsLoaded = function() return WoW.cvar.loaded end,
+    GetCVarInfo = function(name)
+        return C_CVar.GetCVar(name), WoW.cvar.defaults[name], not WoW.cvar.perChar, WoW.cvar.perChar, false, false, false
+    end,
+    SetCVar = function(name, value)
+        table.insert(WoW.cvar.sets, { name, value })
+        local r = WoW.cvar.refuse
+        if r == "throw" then error("SetCVar refused " .. tostring(name)) end
+        if r == "false" then return false end
+        if r == "ignore" then return true end
+        WoW.cvar.values[name] = tostring(value)
+        cvarUpdate(name, tostring(value))
+        return true
+    end,
+}
 function UnitClass() return "Mage", WoW.class, 8 end
 C_ClassColor = { GetClassColor = function(class)
     if class == "MAGE" then return { r = 0.25, g = 0.78, b = 0.92 } end
@@ -2248,6 +2307,13 @@ local function gossipTheme()
     f.Background:SetAtlas(pageAtlas(f._kit), true)
 end
 
+-- The CVar written by the addon or by WoW.setCVar: a shown gossip window
+-- re-themes, as its UIThemeContainer's CVAR_UPDATE handler does.
+function WoW.onContrast()
+    local f = rawget(_G, "GossipFrame")
+    if f and f:IsShown() then WoW.asBlizzard(gossipTheme) end
+end
+
 -- GOSSIP_SHOW (HandleShow): ShowUIPanel, then the background registered with
 -- the NPC's kit, the friendship bar, Update (the theme, Goodbye's art).
 function WoW.gossip(kit)
@@ -2370,6 +2436,7 @@ end
 -- blizzFirst: Blizzard's handler before the addon's.
 function WoW.setContrast(v, blizzFirst)
     WoW.contrast = v
+    WoW.cvar.values.questTextContrast = tostring(v)
     local function theme()
         local f = rawget(_G, "GossipFrame")
         if f and f:IsShown() then WoW.asBlizzard(gossipTheme) end

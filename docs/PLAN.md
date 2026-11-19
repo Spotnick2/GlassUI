@@ -140,6 +140,17 @@ lines in each TOC are the authoritative list of Forever-only variants (FV below)
   `MenuStyle1Mixin.Generate`/`MenuStyle2Mixin.Generate` (submenus: `GetOpenMenu()` returns only the
   root, `Blizzard_Menu\Menu.lua:1952`). Inside them we only **collect and schedule**: the styling
   runs a frame later.
+- **One Blizzard setting, through one switch** (#203, docs/QUEST-TEXT.md; the owner, 2026-11-16:
+  "We can be flexible on that rule with a proper setting to have the option"). Glass UI changes
+  `questTextContrast` (Quest Text Contrast: Dark, Blizzard's light quest text), and only through
+  `QuestText.Write`, the only CVar write in the shipped code:
+  - three triggers: the player's On, Off's conditional restore (the value it replaced, only while
+    the setting is still Dark), and the login re-apply of a value the client dropped;
+  - never in combat;
+  - anyone else's change lets the switch go;
+  - the skins' switches and the master switch never touch it.
+
+  `test_contract` checks the single writer, the name written once, and every setter call's target.
 - **The accent on Blizzard's titles** (the owner, 2026-10-19: "the accent should recolor the yellow
   header"; #71). `SetTextColor` is allowed on these title font strings only, named in the skin
   files:

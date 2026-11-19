@@ -303,11 +303,12 @@ eq(rows.GlassUnitFrames.card:GetParent(), P, "the cards scroll with it")
 eq(O.clickCast:GetParent(), P, "and the raid frames lines")
 eq(O.note:GetParent(), O.panel, "the footer stays on the panel")
 eq(O.spot:GetParent(), O.panel, "so the Reload UI button's spot never scrolls")
-S._width, P._top, O.clickCast._bottom = 600, 900, 300
+-- The last line is the Quest text section's (#203).
+S._width, P._top, O.questText.line._bottom = 600, 900, 300
 O.panel:Show()
 eq(P:GetWidth(), 600, "the page as wide as the scroll frame")
 eq(P:GetHeight(), 616, "and as tall as its content, to the last line plus the margin")
-P._top, O.clickCast._bottom = 900, 200
+P._top, O.questText.line._bottom = 900, 200
 WoW.flushTimers(0)
 eq(P:GetHeight(), 716, "measured again once the layout has settled")
 S._scripts.OnSizeChanged(S, 640, 400)

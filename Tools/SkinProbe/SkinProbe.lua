@@ -6050,8 +6050,12 @@ local function gqMaster(on)
     return true, "master " .. (on and "on" or "off")
 end
 
+-- Never without the player's value saved first (Codex on #204).
 local function contrast(v)
     return function()
+        if not (type(SkinProbeDB) == "table" and type(SkinProbeDB.gqContrastWas) == "string") then
+            error("your setting wasn't saved: press Stop", 0)
+        end
         local ok = setCVar("questTextContrast", tostring(v))
         return ok, "questTextContrast " .. tostring(v)
     end
@@ -6067,17 +6071,26 @@ local function contrastSave()
     end
     local okV, v = pcall(GetCVar, "questTextContrast")
     v = okV and plain(v) or nil
-    if type(SkinProbeDB) == "table" and type(v) == "string" then SkinProbeDB.gqContrastWas = v end
     record("GQ.contrastWas", v)
-    return true, "your Quest Text Contrast: " .. tostring(v)
+    -- Nothing usable saved: the run mustn't write (Codex on #203, r4).
+    if type(SkinProbeDB) ~= "table" or type(v) ~= "string" or v == "" then
+        return false, "your Quest Text Contrast couldn't be read: press Stop, nothing was changed"
+    end
+    SkinProbeDB.gqContrastWas = v
+    return true, "your Quest Text Contrast: " .. v
 end
 
+-- The snapshot is dropped only once the setting reads it back, so the run's
+-- last step and /fp skin gqrestore can be tried again (Codex on #203, r4).
 local function contrastRestore()
     local was = type(SkinProbeDB) == "table" and SkinProbeDB.gqContrastWas or nil
     if type(was) ~= "string" then return true, "nothing saved" end
-    local ok = setCVar("questTextContrast", was)
-    if ok then SkinProbeDB.gqContrastWas = nil end
-    return ok, "questTextContrast back to " .. was
+    setCVar("questTextContrast", was)
+    local okV, now = pcall(GetCVar, "questTextContrast")
+    now = okV and plain(now) or nil
+    if now ~= was then return false, "questTextContrast reads " .. tostring(now) .. ", not " .. was .. ": try again" end
+    SkinProbeDB.gqContrastWas = nil
+    return true, "questTextContrast back to " .. was
 end
 
 -- The popup and the map's details: Blizzard's, nothing of ours faded there.
@@ -6131,7 +6144,9 @@ Probe:Steps("gossipglass", {
       run = function()
           if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
           gqHook()
-          contrastSave()
+          -- No usable snapshot: the step stays, nothing is written (Codex on #204).
+          local ok, why = contrastSave()
+          if not ok then error(why, 0) end
           return setCVar("scriptErrors", "1")
       end },
     setTo(0, "Sets Quest Text Contrast to the default (the parchment) for the first part."),
@@ -6220,7 +6235,7 @@ Probe:Steps("gossipglass", {
       run = function() return gqSwitch("gossip", false) end, screenshot = "gossip, skin off",
       check = gqOff("gossip off", "gossip") },
     { text = "A setting change while off: sets the default, then Dark again. Blizzard's look stays.",
-      button = "Change", run = function() setCVar("questTextContrast", "0"); return contrast(4)() end },
+      button = "Change", run = function() contrast(0)(); return contrast(4)() end },
     settled("Goes on by itself.", gqOff("gossip off, changed", "gossip")),
     { text = "Switches it on again.", button = "Skin on", run = function() return gqSwitch("gossip", true) end },
     settled("Goes on by itself.", gqOn("gossip on again", { window = "gossip", dark = true })),
@@ -6273,6 +6288,405 @@ skinChecks.contrastRestore = contrastRestore
 end)() end
 
 --------------------------------------------------------------------------------
+-- Light quest text on glass (#203, docs/QUEST-TEXT.md). First, with the
+-- switch off, what the design rests on: the CVar's flags (QT.info), Glass
+-- UI's own startup trace (QT.trace.<label>: the probe loads after Glass UI and
+-- can't see its ADDON_LOADED), persistence across full exits for a value
+-- written by addon code and one chosen in Blizzard's settings, and whether
+-- CVAR_UPDATE arrives inside the call that caused it (QT.boundary.<label>).
+-- Then the switch in use. Its own listener records every CVAR_UPDATE for the
+-- CVar with the phase it arrived in. Saved as QT.<label>.
+--------------------------------------------------------------------------------
+
+do (function()
+local CVAR = "questTextContrast"
+local phase = "idle"          -- "inside" while the probe's own call runs
+local seen = {}               -- this load's CVAR_UPDATEs for the CVar
+local qtEvents = CreateFrame("Frame")
+Probe:RegisterEvents(qtEvents, { "CVAR_UPDATE" })
+qtEvents:SetScript("OnEvent", function(_, _, name, value)
+    name = plain(name)
+    if type(name) ~= "string" or name:lower() ~= CVAR:lower() then return end
+    local okV, v = pcall(GetCVar, CVAR)
+    if #seen < 40 then
+        seen[#seen + 1] = { name = name, value = plain(value), live = okV and plain(v) or nil, phase = phase,
+                            at = GetTime() }
+    end
+end)
+
+local function qt()
+    local G = glassUI()
+    return G and G.QuestText
+end
+
+local function liveValue()
+    local ok, v = pcall(GetCVar, CVAR)
+    v = ok and plain(v) or nil
+    return type(v) == "string" and v or nil
+end
+
+local function blocked() return type(SkinProbeDB) == "table" and SkinProbeDB.suiteBlocked or 0 end
+
+local function qtState(label)
+    local Q = qt()
+    local rec = { value = liveValue(), on = Q and Q.IsOn() or false, status = Q and Q.Status() or "?",
+                  blocked = blocked(), events = #seen }
+    say("QT " .. label .. ": value " .. tostring(rec.value) .. ", switch " .. rec.status .. ", " .. rec.events
+        .. " event(s) this load, blocked " .. rec.blocked)
+    record("QT." .. label, rec)
+    return rec
+end
+
+-- The flags. Secure, locked or read-only: the design goes back for review.
+local function info()
+    local cv = rawget(_G, "C_CVar")
+    local ok, value, def, account, char, locked, secure, readOnly = pcall(cv and cv.GetCVarInfo, CVAR)
+    local r = { ok = ok, value = plain(value), default = plain(def), account = plain(account), character = plain(char),
+                locked = plain(locked), secure = plain(secure), readOnly = plain(readOnly) }
+    local okL, loaded = pcall(cv and cv.AreCVarsLoaded)
+    r.loaded = okL and plain(loaded) or nil
+    record("QT.info", r)
+    say("QT info: value " .. tostring(r.value) .. ", default " .. tostring(r.default) .. ", account "
+        .. tostring(r.account) .. ", character " .. tostring(r.character) .. ", locked " .. tostring(r.locked)
+        .. ", secure " .. tostring(r.secure) .. ", read-only " .. tostring(r.readOnly))
+    local stop = r.locked == true or r.secure == true or r.readOnly == true
+    return ok and not stop, stop and "locked, secure or read-only: stop, the design goes back for review"
+        or "the flags allow the switch"
+end
+
+-- Glass UI's startup samples this load, its decision's outcome, and the
+-- settled value now. switchOn false (the passive measurement): the value at
+-- the decision must be the settled one, and the decision "off". switchOn
+-- true: the decision kept Dark or re-applied it, and Dark is settled; a
+-- re-apply makes the early read differ from the settled one by design
+-- (Codex on #204). No decision recorded fails either way.
+local function startup(label, switchOn)
+    local Q = qt()
+    local list = {}
+    for i, t in ipairs(Q and Q.trace or {}) do
+        list[i] = { event = t.event, loaded = t.loaded, value = t.value, was = t.was, decided = t.decided,
+                    outcome = t.outcome }
+    end
+    local settled = liveValue()
+    local atDecision, decision
+    for _, t in ipairs(list) do
+        if t.outcome then decision = t.outcome
+        elseif t.loaded and t.value and not decision then atDecision = t.value end
+    end
+    local events = {}
+    for i, e in ipairs(seen) do events[i] = { value = e.value, live = e.live, phase = e.phase } end
+    record("QT.trace " .. label, { samples = list, events = events, settled = settled, atDecision = atDecision,
+                                   decision = decision })
+    say("QT trace " .. label .. ": " .. #list .. " sample(s), value at the decision " .. tostring(atDecision)
+        .. ", decision " .. tostring(decision) .. ", settled " .. tostring(settled))
+    local why = "at the decision " .. tostring(atDecision) .. ", decision " .. tostring(decision) .. ", settled "
+        .. tostring(settled)
+    if not decision or not atDecision then return false, "no decision recorded: " .. why end
+    if switchOn then
+        return (decision == "kept" or decision == "reapplied") and settled == "4", why
+    end
+    return decision == "off" and atDecision == settled, why
+end
+
+-- A call of ours, with the events that arrive inside it and in the next
+-- frame: inside only means synchronous delivery.
+-- One call of ours: the value before and after it, the CVAR_UPDATEs that
+-- arrive inside it (and whether one carries the value it ended on), and,
+-- half a second on, those that arrived after it (Codex on #204: each call
+-- its own window, events matched to its transition).
+local function boundary(label, fn)
+    local from = #seen + 1
+    local before = liveValue()
+    phase = label .. ":in"
+    local ok, a, b = pcall(fn)
+    local final = liveValue()
+    local inside, matched = 0, false
+    for i = from, #seen do
+        if seen[i].phase == label .. ":in" then
+            inside = inside + 1
+            if seen[i].value == final then matched = true end
+        end
+    end
+    phase = label .. ":after"
+    C_Timer.After(0.5, function()
+        local after = 0
+        for i = from, #seen do
+            if seen[i].phase == label .. ":after" then after = after + 1 end
+        end
+        if phase == label .. ":after" then phase = "idle" end
+        record("QT.boundary " .. label, { inside = inside, matched = matched, after = after, ok = ok,
+                                          line = plain(b), before = before, final = final })
+        say("QT boundary " .. label .. ": " .. tostring(before) .. " to " .. tostring(final) .. ", " .. inside
+            .. " event(s) inside the call (its value " .. tostring(matched) .. "), " .. after .. " after it")
+    end)
+    return ok and a ~= false, tostring(b)
+end
+
+-- The value changed, an event arrived inside the call, none after it. No
+-- change, or no event, is no evidence: it fails (Codex on #204).
+local function lastBoundaryOk(label)
+    return function()
+        local r = type(SkinProbeDB) == "table" and type(SkinProbeDB.results) == "table"
+            and SkinProbeDB.results["QT.boundary " .. label]
+        if not r then return false, "not recorded" end
+        local why = tostring(r.before) .. " to " .. tostring(r.final) .. ", " .. r.inside .. " inside, " .. r.after
+            .. " after"
+        if r.before == r.final then return false, "the value didn't change: " .. why end
+        return r.inside >= 1 and r.matched == true and r.after == 0, why
+    end
+end
+
+-- The probe writes only once the player's value is saved and the flags allow
+-- it (Codex on #204): a run that couldn't save or that found a lock never
+-- writes, even if a step is skipped.
+local function ready()
+    return type(SkinProbeDB) == "table" and type(SkinProbeDB.gqContrastWas) == "string"
+        and SkinProbeDB.qtFlagsOk == true
+end
+
+local function write(v)
+    return function()
+        if not ready() then error("not ready: no saved setting or the flags failed, press Stop", 0) end
+        local ok = setCVar(CVAR, v)
+        return ok, "questTextContrast " .. v .. " (the probe's write), reads " .. tostring(liveValue())
+    end
+end
+
+local function want(label, v, on)
+    return function()
+        local r = qtState(label)
+        local bad = {}
+        if v and r.value ~= v then bad[#bad + 1] = "reads " .. tostring(r.value) .. ", not " .. v end
+        if on ~= nil and r.on ~= on then bad[#bad + 1] = "switch " .. r.status end
+        if r.blocked > 0 then bad[#bad + 1] = r.blocked .. " blocked" end
+        return #bad == 0, #bad == 0 and (tostring(r.value) .. ", switch " .. r.status) or table.concat(bad, "; ")
+    end
+end
+
+local function settle(text, check, screenshot)
+    local t0
+    return { text = text, timeout = 15, screenshot = screenshot, check = check,
+             wait = function()
+                 t0 = t0 or GetTime()
+                 return GetTime() - t0 >= 1, "a moment"
+             end,
+             leave = function() t0 = nil end }
+end
+
+-- The switch's own writes, through the same gate as the probe's.
+local function guarded()
+    if not ready() then error("not ready: no saved setting or the flags failed, press Stop", 0) end
+    local Q = qt()
+    if not Q then error("Glass UI not loaded", 0) end
+    return Q
+end
+
+local function switch(on)
+    return function()
+        local Q = guarded()
+        return (on and Q.On or Q.Off)()
+    end
+end
+
+local gqOn = skinChecks.gqOn
+
+-- A passive startup check that fails holds the run: the gate closes and the
+-- step stays, so no write follows a startup the design doesn't hold for
+-- (Codex on #204).
+local function passive(ok, why)
+    if not ok then
+        if type(SkinProbeDB) == "table" then SkinProbeDB.qtFlagsOk = nil end
+        error(why, 0)
+    end
+    return true, why
+end
+
+Probe:Steps("questtext", {
+    title = "Glass UI: light quest text on glass (#203)",
+    rev = 4,
+    -- Measured first, the switch off.
+    { text = "Turns on script errors, counts blocked actions from now and saves your Quest Text Contrast (put "
+          .. "back at the end; if you stop early, /fp skin gqrestore puts it back). If Light quest text is on, "
+          .. "this step stays: type /glassui questtext off, then press Retry. If it can't save, press Stop.",
+      auto = true,
+      run = function()
+          if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0; SkinProbeDB.qtFlagsOk = nil end
+          setCVar("scriptErrors", "1")
+          -- Off by the player first, so the snapshot is their own setting,
+          -- not the switch's Dark (Codex on #204).
+          local Q = qt()
+          if Q and Q.IsOn() then error("Light quest text is on: /glassui questtext off, then Retry", 0) end
+          local ok, why = skinChecks.contrastSave()
+          if not ok then error(why, 0) end
+          return true, why
+      end },
+    { text = "Reads the setting's flags (account, character, locked, secure, read-only). If this step stays, "
+          .. "press Stop and tell Claude: the design goes back for review.", auto = true,
+      run = function()
+          local ok, why = info()
+          if not ok then error(why, 0) end
+          SkinProbeDB.qtFlagsOk = true
+          return true, why
+      end },
+    { text = "Records Glass UI's startup trace for this load. If this step stays, press Stop and tell Claude.",
+      auto = true, run = function() return passive(startup("load", false)) end },
+    -- Persistence: a value written by addon code.
+    { text = "Writes 2 (Light 2) as an addon would.", auto = true, run = write("2") },
+    { text = "Type /reload (the value written by addon code, read back at login).", reload = true },
+    { text = "Records the startup trace and the value after the reload. If this step stays, press Stop and tell "
+          .. "Claude.", auto = true,
+      run = function()
+          local ok, why = startup("reload, addon wrote 2", false)
+          record("QT.persist addon", liveValue())
+          return passive(ok, why .. "; kept " .. tostring(liveValue() == "2"))
+      end },
+    -- A value chosen in Blizzard's settings.
+    { text = "Open Settings > Accessibility > General, set Quest Text Contrast to Grey "
+          .. "(the options: Default, Brown, White, Grey, Black), close "
+          .. "the settings. Press Next.", check = want("blizzard set 3", "3") },
+    { text = "Type /reload (the value chosen in Blizzard's settings).", reload = true },
+    { text = "Records the startup trace and the value after the reload. If this step stays, press Stop and tell "
+          .. "Claude.", auto = true,
+      run = function()
+          local ok, why = startup("reload, Blizzard set 3", false)
+          record("QT.persist blizzard", liveValue())
+          return passive(ok, why .. "; kept " .. tostring(liveValue() == "3"))
+      end },
+    { text = "Type /reload (the control: a reload keeps the value in memory).", reload = true },
+    { text = "Records the trace after the reload, and turns the taint log on (a reload turns it off). "
+          .. TAINT_NOISE, auto = true,
+      run = function()
+          setCVar("taintLog", "1")
+          return passive(startup("reload", false))
+      end },
+    -- The setter boundary, with the switch.
+    { text = "Sets the default (0), then turns the switch on: records whether the event arrives inside the call.",
+      button = "Switch on",
+      run = function()
+          write("0")()
+          return boundary("on", switch(true))
+      end },
+    settle("Goes on by itself.", lastBoundaryOk("on")),
+    { text = "Turns it off: the restore's event.", button = "Switch off",
+      run = function() return boundary("off", switch(false)) end },
+    settle("Goes on by itself.", lastBoundaryOk("off")),
+    { text = "Off then on again at once: three calls, each timed on its own.", button = "On, off, on",
+      run = function()
+          guarded()
+          boundary("rapid on", switch(true))
+          boundary("rapid off", switch(false))
+          return boundary("rapid on again", switch(true))
+      end },
+    settle("Goes on by itself: the switch on, Dark.", function()
+        local bad, why = {}, {}
+        for _, l in ipairs({ "rapid on", "rapid off", "rapid on again" }) do
+            local ok, w = lastBoundaryOk(l)()
+            why[#why + 1] = l .. ": " .. w
+            if not ok then bad[#bad + 1] = l end
+        end
+        local okS, whyS = want("off then on", "4", true)()
+        return #bad == 0 and okS, table.concat(why, "; ") .. "; " .. whyS
+    end),
+    -- The switch in use.
+    { text = "Talk to a gossip NPC with the ordinary parchment (an innkeeper, a guard) and keep the window open. "
+          .. "Press Next with it open; a screenshot.", screenshot = "questtext, gossip",
+      check = gqOn("questtext gossip", { window = "gossip", dark = true }) },
+    { text = "Is the gossip text light and readable on the glass?", ask = true },
+    { text = "Open a quest's details at a quest giver. Press Next with it open; a screenshot.",
+      screenshot = "questtext, quest", check = gqOn("questtext quest", { window = "quest", dark = true }) },
+    { text = "Is the quest text readable on the glass?", ask = true },
+    { text = "If you have a book or letter to read, open it; else open the quest log's details popup (the "
+          .. "objective tracker, right-click a quest). Press Next with it open; a screenshot.",
+      screenshot = "questtext, book or popup" },
+    { text = "Open the world map's quest details. Press Next with them open; a screenshot.",
+      screenshot = "questtext, map details" },
+    { text = "Were the book (or popup) and the map's details readable, as Blizzard's Dark mode draws them?",
+      ask = true },
+    { text = "Open Settings > Accessibility: does Quest Text Contrast show Black (Dark)? Then pick White "
+          .. "and close the settings.", ask = true },
+    settle("The switch should have turned itself off, with one line in chat, and nothing written back.",
+           want("let go", "2", false)),
+    { text = "Switch on, then again with /glassui questtext on, then off: White comes back.",
+      button = "On, on, off",
+      run = function()
+          local Q = guarded()
+          Q.On()
+          Q.On()
+          return Q.Off()
+      end },
+    settle("Goes on by itself.", want("on twice, off", "2", false)),
+    { text = "Set Black yourself in Settings (Accessibility > Quest Text Contrast: Black), close it, then press "
+          .. "the button: the switch on (Dark already), then off.", button = "On, off",
+      run = function()
+          local Q = guarded()
+          Q.On()
+          return Q.Off()
+      end },
+    settle("Dark stays: it was yours.", want("on while dark, off", "4", false)),
+    { text = "Sets the default for the next steps.", auto = true, run = write("0") },
+    { text = "Get into combat (a mob hitting you), then press the button while still in combat: the switch "
+          .. "refuses.", button = "Switch on", run = switch(true),
+      check = function()
+          local okC, c = pcall(InCombatLockdown)
+          local r = qtState("in combat")
+          return okC and plain(c) == true and not r.on, "combat " .. tostring(okC and plain(c)) .. ", switch "
+              .. r.status
+      end },
+    { text = "Out of combat: the switch on.", button = "Switch on", run = switch(true) },
+    settle("Goes on by itself.", want("after combat", "4", true)),
+    { text = "Open Glass UI's settings (/glassui options): the Quest text section's checkbox is ticked. Hover it: "
+          .. "the tooltip says to turn it off before uninstalling. Right?", ask = true },
+    { text = "Type /reload with the switch on.", reload = true },
+    { text = "Records the startup with the switch on, and turns the taint log on again.", auto = true,
+      run = function() return setCVar("taintLog", "1") end,
+      check = function()
+          local ok, why = startup("reload, switch on", true)
+          local r = qtState("after reload")
+          return ok and r.on and r.value == "4", why .. "; switch " .. r.status .. ", " .. tostring(r.value)
+      end },
+    { text = "Type /reload once more with the switch on.", reload = true },
+    { text = "Records the startup after the reload (a re-apply only if the value was dropped), and the taint "
+          .. "log on again.", auto = true,
+      run = function() return setCVar("taintLog", "1") end,
+      check = function()
+          local ok, why = startup("reload 2, switch on", true)
+          local r = qtState("after reload 2")
+          return ok and r.on and r.value == "4", why .. "; switch " .. r.status .. ", " .. tostring(r.value)
+      end },
+    -- Blizzard's side after the writes.
+    { text = "Gain some XP or reputation (kill a mob, turn in a quest), open Edit Mode and close it, change "
+          .. "another option in Blizzard's settings, then fight using your action bars. Press Next while still in "
+          .. "combat.", check = function()
+              local okC, c = pcall(InCombatLockdown)
+              local r = qtState("bars in combat")
+              return r.blocked == 0 and okC and plain(c) == true, r.blocked .. " blocked, combat "
+                  .. tostring(okC and plain(c))
+          end },
+    { text = "Did everything read right, with no 'Interface action failed' message or Lua error? The Note.",
+      ask = true },
+    { text = "Turns the switch off and puts your own Quest Text Contrast back.", auto = true,
+      run = function()
+          -- The switch off only if the run got ready (it can then have
+          -- written); the player's value back only from a valid snapshot.
+          local Q = qt()
+          if ready() and Q and Q.IsOn() then Q.Off() end
+          SkinProbeDB.qtFlagsOk = nil
+          return skinChecks.contrastRestore()
+      end },
+    taintOff(),
+    { text = "Type /reload to save the results. Then tell Claude: the taint log is read from Logs.", reload = true },
+})
+
+Probe:Command("questtext", function()
+    info()
+    startup("now")
+    qtState("now")
+end, "#203: light quest text: the CVar's flags, Glass UI's startup trace, the switch now")
+skinChecks.qtState, skinChecks.qtInfo, skinChecks.qtStartup = qtState, info, startup
+skinChecks.qtBoundaryOk = lastBoundaryOk
+end)() end
+
+--------------------------------------------------------------------------------
 -- Boot
 --------------------------------------------------------------------------------
 
@@ -6311,4 +6725,5 @@ NS._test = { ltState = skinChecks.ltState, ltOn = skinChecks.ltOn, ltClosed = sk
              rxState = rxState, rxOn = rxOn, raState = raState, raOn = raOn, rxpEnable = rxpEnable,
              gqState = skinChecks.gqState, gqOn = skinChecks.gqOn, gqMeasure = skinChecks.gqMeasure,
              gqHook = skinChecks.gqHook, contrastRestore = skinChecks.contrastRestore,
-             contrastSave = skinChecks.contrastSave }
+             contrastSave = skinChecks.contrastSave, qtState = skinChecks.qtState, qtInfo = skinChecks.qtInfo,
+             qtStartup = skinChecks.qtStartup, qtBoundaryOk = skinChecks.qtBoundaryOk }

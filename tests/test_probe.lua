@@ -2051,7 +2051,11 @@ eq(SkinProbeDB.gqContrastWas, "2", "keeps the player's value, not the probe's 0"
 SkinProbeDB.gqContrastWas = nil
 T.contrastSave()
 eq(SkinProbeDB.gqContrastWas, "0", "a fresh start saves the value now")
-rawset(_G, "GetCVar", function(name) return name == "GamePadEnable" and "0" or nil end)
+-- The restore reads back (Codex on #203, r4): GetCVar answers what was set.
+rawset(_G, "GetCVar", function(name)
+    if name == "questTextContrast" then return set.questTextContrast end
+    return name == "GamePadEnable" and "0" or nil
+end)
 SkinProbeDB.gqContrastWas = "2"
 SlashCmdList.FOREVERPROBE("skin gqrestore")
 eq(set.questTextContrast, "2", "/fp skin gqrestore puts it back")
@@ -2061,16 +2065,161 @@ SkinProbeDB.gqContrastWas = "2"
 check(T.contrastRestore(), "the setting restored")
 eq(set.questTextContrast, "2", "to the player's value")
 eq(SkinProbeDB.gqContrastWas, nil, "and the saved value dropped")
+-- A restore that doesn't read back keeps the snapshot, to try again.
+rawset(_G, "C_CVar", { SetCVar = function() return true end })
+set.questTextContrast = "0"
+SkinProbeDB.gqContrastWas = "2"
+check(not T.contrastRestore(), "the setting didn't come back: the restore fails")
+eq(SkinProbeDB.gqContrastWas, "2", "and keeps the snapshot")
+-- Nothing usable to save: the run mustn't write.
+set.questTextContrast = nil
+SkinProbeDB.gqContrastWas = nil
+check(not T.contrastSave(), "nothing readable: the snapshot step fails")
+eq(SkinProbeDB.gqContrastWas, nil, "nothing saved")
+rawset(_G, "GetCVar", function(name) return name == "GamePadEnable" and "0" or nil end)
 rawset(_G, "C_CVar", nil)
 WoW.contrast = 0
 for _, n in ipairs({ "GossipFrame", "QuestFrame", "QuestInfoTitleHeader" }) do rawset(_G, n, nil) end
 rawset(_G, "GlassUI", savedGQ)
 end)() end
 
+do (function() -- its own function: the main chunk is near Lua 5.1's 200 locals
+-- #203: light quest text, as the procedure reads it: the flags' stop
+-- condition, Glass UI's startup trace against the settled value, and the
+-- setter boundary (events inside the call or after it).
+local savedQT = rawget(_G, "GlassUI")
+local cv = { value = "0", flags = { false, false, false } }
+rawset(_G, "C_CVar", {
+    GetCVarInfo = function() return cv.value, "0", true, false, cv.flags[1], cv.flags[2], cv.flags[3] end,
+    AreCVarsLoaded = function() return true end,
+    SetCVar = function(_, v) cv.value = v; return true end,
+})
+rawset(_G, "GetCVar", function(name)
+    if name == "questTextContrast" then return cv.value end
+    return name == "GamePadEnable" and "0" or nil
+end)
+local ok, why = T.qtInfo()
+check(ok, "the flags allow the switch: " .. tostring(why))
+eq(SkinProbeDB.results["QT.info"].account, true, "the storage recorded")
+for i, flag in ipairs({ "locked", "secure", "read-only" }) do
+    cv.flags[i] = true
+    ok, why = T.qtInfo()
+    check(not ok and why:find("goes back for review", 1, true), flag .. ": stop")
+    cv.flags[i] = false
+end
+local trace = {}
+rawset(_G, "GlassUI", { QuestText = { trace = trace, IsOn = function() return false end,
+                                      Status = function() return "off" end } })
+trace[1] = { event = "ADDON_LOADED", loaded = false, value = "0" }
+trace[2] = { event = "VARIABLES_LOADED", loaded = true, value = "3" }
+cv.value = "3"
+ok, why = T.qtStartup("t", false)
+check(not ok and why:find("no decision recorded", 1, true), "no decision recorded: fails")
+trace[3] = { event = "decision", outcome = "off", value = "3" }
+ok = T.qtStartup("t", false)
+check(ok, "the switch off: the value at the decision is the settled one: pass")
+trace[3].outcome = "kept"
+check(not T.qtStartup("t", false), "the passive run, but the switch was on (kept): fails")
+trace[3].outcome = "off"
+cv.value = "4"
+ok, why = T.qtStartup("t", false)
+check(not ok and why:find("at the decision 3, decision off, settled 4", 1, true), "a later change after the decision: fails")
+eq(SkinProbeDB.results["QT.trace t"].atDecision, "3", "recorded")
+-- The switch on, the client dropped Dark: an early 0, the re-apply, 4
+-- settled. A pass, not a mismatch (Codex on #204).
+trace[2].value, trace[3].outcome = "0", "reapplied"
+ok, why = T.qtStartup("t", true)
+check(ok, "the switch on, re-applied, Dark settled: pass: " .. tostring(why))
+trace[3].outcome = "letgo"
+check(not T.qtStartup("t", true), "the switch on but it let go: fails")
+trace[3].outcome = "kept"
+cv.value = "2"
+check(not T.qtStartup("t", true), "kept, but not Dark now: fails")
+-- The setter boundary (Codex on #204): a changed value with an event inside
+-- the call, none after; no change or no event is no evidence.
+local function boundaryCase(r) SkinProbeDB.results["QT.boundary b"] = r; return T.qtBoundaryOk("b")() end
+check(boundaryCase({ before = "0", final = "4", inside = 1, matched = true, after = 0 }), "0 to 4, its event inside: pass")
+check(not boundaryCase({ before = "0", final = "4", inside = 1, matched = false, after = 0 }),
+      "an event inside, but not the transition's value: fails")
+check(not boundaryCase({ before = "0", final = "4", inside = 0, after = 0 }), "changed, no event at all: fails")
+check(not boundaryCase({ before = "0", final = "4", inside = 1, matched = true, after = 1 }), "an event after the call: fails")
+check(not boundaryCase({ before = "4", final = "4", inside = 0, after = 0 }), "no change: fails")
+check(not boundaryCase({ before = "4", final = "4", inside = 1, matched = true, after = 0 }), "an event but no change: fails")
+SkinProbeDB.results["QT.boundary b"] = nil
+check(not T.qtBoundaryOk("b")(), "not recorded: fails")
+rawset(_G, "C_CVar", nil)
+rawset(_G, "GetCVar", function(name) return name == "GamePadEnable" and "0" or nil end)
+rawset(_G, "GlassUI", savedQT)
+end)() end
+
+-- #204: the contrast procedures' gates. Nothing saved: no write, the step
+-- stays (a throw keeps a ForeverProbe step); the switch on at the start: the
+-- step stays until it's off; the flags read but locked: the step stays.
+do (function()
+local savedG = rawget(_G, "GlassUI")
+local writes = 0
+rawset(_G, "C_CVar", { SetCVar = function(name) if name == "questTextContrast" then writes = writes + 1 end; return true end,
+                       GetCVarInfo = function() return "0", "0", false, false, true, false, false end,
+                       AreCVarsLoaded = function() return true end })
+rawset(_G, "GetCVar", function(name) return name == "GamePadEnable" and "0" or nil end)
+SkinProbeDB.gqContrastWas, SkinProbeDB.qtFlagsOk = nil, nil
+local qtSteps = FP.procedures["SkinProbe/questtext"].steps
+local gqSteps = FP.procedures["SkinProbe/gossipglass"].steps
+local function throws(st) return not pcall(st.run) end
+check(throws(qtSteps[1]), "questtext: nothing readable to save: the first step stays")
+check(throws(gqSteps[1]), "gossipglass: the same")
+-- Reported on, so a cleanup that skipped the gate would call Off and write.
+local writer = { IsOn = function() return true end, trace = {}, Status = function() return "on" end,
+                 On = function() C_CVar.SetCVar("questTextContrast", "4"); return true, "on" end,
+                 Off = function() C_CVar.SetCVar("questTextContrast", "0"); return true, "off" end }
+rawset(_G, "GlassUI", { QuestText = writer })
+for _, st in ipairs(qtSteps) do
+    if st.run and (st.button or st.auto) and st ~= qtSteps[1] and st ~= qtSteps[2] then pcall(st.run) end
+end
+rawset(_G, "GlassUI", savedG)
+for _, st in ipairs(gqSteps) do
+    if st.run and st.button then pcall(st.run) end
+end
+eq(writes, 0, "not ready: no contrast write from any step")
+rawset(_G, "GetCVar", function(name) if name == "questTextContrast" then return "2" end end)
+local on = true
+rawset(_G, "GlassUI", { QuestText = { IsOn = function() return on end, Off = function() end, trace = {} } })
+check(throws(qtSteps[1]), "the switch on at the start: the step stays")
+eq(SkinProbeDB.gqContrastWas, nil, "and nothing saved (the switch's Dark isn't the player's)")
+on = false
+check(not throws(qtSteps[1]), "off: the snapshot taken")
+eq(SkinProbeDB.gqContrastWas, "2", "the player's own value")
+-- A passive startup that fails holds the gate (Codex on #204, r2).
+SkinProbeDB.qtFlagsOk = true
+GlassUI.QuestText.trace = { { event = "VARIABLES_LOADED", loaded = true, value = "0" } }
+check(throws(qtSteps[3]), "no decision recorded: the startup step stays")
+check(SkinProbeDB.qtFlagsOk ~= true, "and closes the gate")
+check(throws(qtSteps[2]), "locked: the flags step stays")
+check(SkinProbeDB.qtFlagsOk ~= true, "and the writes stay gated")
+SkinProbeDB.gqContrastWas, SkinProbeDB.qtFlagsOk = nil, nil
+rawset(_G, "C_CVar", nil)
+rawset(_G, "GetCVar", function(name) return name == "GamePadEnable" and "0" or nil end)
+rawset(_G, "GlassUI", savedG)
+end)() end
+
 -- The procedures are defined and every step's run, wait and check works here.
+-- The contrast procedures run with a saved setting and readable flags, as
+-- after their first steps in game.
+rawset(_G, "C_CVar", { SetCVar = function() return true end, AreCVarsLoaded = function() return true end,
+                       GetCVarInfo = function() return "0", "0", false, false, false, false, false end })
+rawset(_G, "GetCVar", function(name)
+    if name == "questTextContrast" then return "0" end
+    return name == "GamePadEnable" and "0" or nil
+end)
+SkinProbeDB.gqContrastWas, SkinProbeDB.qtFlagsOk = "0", true
+local savedLoop = rawget(_G, "GlassUI")
+rawset(_G, "GlassUI", { QuestText = {
+    trace = { { event = "VARIABLES_LOADED", loaded = true, value = "0" }, { event = "decision", outcome = "off", value = "0" } },
+    IsOn = function() return false end, Status = function() return "off" end,
+    On = function() return true, "on" end, Off = function() return true, "off" end } })
 for _, name in ipairs({ "wave1", "map", "gradient", "merchant", "card", "suite", "suitecombat", "meter",
                         "meterskin", "meterbars", "suitepanel", "pearl", "tracker", "questing", "accent",
-                        "rxpglass", "mirrorglass", "gossipglass" }) do
+                        "rxpglass", "mirrorglass", "gossipglass", "questtext" }) do
     local p = FP.procedures["SkinProbe/" .. name]
     check(p ~= nil, "procedure " .. name .. " is defined")
     if p then
@@ -2090,6 +2239,10 @@ for _, name in ipairs({ "wave1", "map", "gradient", "merchant", "card", "suite",
         end
     end
 end
+rawset(_G, "C_CVar", nil)
+rawset(_G, "GetCVar", function(name) return name == "GamePadEnable" and "0" or nil end)
+SkinProbeDB.gqContrastWas, SkinProbeDB.qtFlagsOk = nil, nil
+rawset(_G, "GlassUI", savedLoop)
 T.panelsOff(); T.borderRestore(); T.gradientOff(); T.barsOff()
 T.suiteRestore(); T.panelRestore()
 rawset(_G, "GlassUI", nil)

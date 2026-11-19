@@ -15,6 +15,9 @@ local say = API.Print
 --   suite    { theme = Suite.THEMES key, follow = { [addon] = false } (an opt-out, #82),
 --              look = { [key] = value } }, or nil when nothing differs
 --              (Suite keeps it sparse). The skins' tint is look.tint (#67).
+--   questText       { was = "<value>" } while Light quest text is on (#203,
+--                   QuestText.lua); questTextChars[GUID] instead when the
+--                   client stores the setting per character
 local DEFAULTS = { enabled = true }
 GUI.DEFAULTS = DEFAULTS
 
@@ -78,6 +81,7 @@ local function helpLines()
         "/glassui suite - the Glass addons and whether each follows the suite theme",
         "/glassui suite follow <addon> on|off - an addon follows Glass UI (after /reload)",
         "/glassui look - the suite look (tint and button feedback); look tint smoked, look preset soft",
+        "/glassui questtext on or off - light quest text on glass (Blizzard's Dark quest text)",
         "/glassui options - the settings page",
         "/glassui failures - what failed to build or register",
         "/glassui version - client build vs the measured one",
@@ -92,6 +96,7 @@ local function skins()
     for _, s in ipairs(Engine.list) do
         say(s.def.key .. " (" .. s.def.title .. "): " .. Engine.Status(s.def.key))
     end
+    say("questtext (Light quest text on glass): " .. GUI.QuestText.Status())
 end
 
 local function suite(a, b, c)
@@ -179,6 +184,12 @@ local function slash(msg)
         look("tint", a)
     elseif cmd == "theme" then
         say("/glassui theme " .. table.concat(GUI.Theme.NAMES, "|") .. " (now " .. GUI.Theme.Name() .. ")")
+    elseif cmd == "questtext" and (a == "on" or a == "off") then
+        local QT = GUI.QuestText
+        local _, line = (a == "on" and QT.On or QT.Off)()
+        say("light quest text: " .. line)
+    elseif cmd == "questtext" then
+        say("light quest text: " .. GUI.QuestText.Status() .. " (/glassui questtext on or off)")
     elseif cmd == "options" then
         if not GUI.Options.Open() then say("the settings page isn't available") end
     elseif cmd == "look" then
@@ -208,6 +219,8 @@ boot:SetScript("OnEvent", function(_, event, arg1)
             GUI.Suite.MarkReady()
             -- Our own glass on the suite theme, now that it can be read (#54).
             GUI.BuildGlass()
+            -- Light quest text's startup decision, if the setting is loaded (#203).
+            GUI.QuestText.Decide("ADDON_LOADED")
         end
     elseif event == "PLAYER_LOGIN" then
         -- SavedVariables are read here at the latest (porting guide: not at file scope).

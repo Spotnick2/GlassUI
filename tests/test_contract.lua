@@ -354,4 +354,34 @@ WoW.questTimers(1)
 kit:TextColor(QuestTimerFrame.activeElements[1].Name, 1, 0, 0)
 eq(#unaudited(), 1, "nor a timer's countdown")
 
+-- One Blizzard setting, one writer (#203, docs/PLAN.md's audited exception):
+-- over the shipped files, SetCVar only in QuestText.lua's writer, the CVar's
+-- name written once there, and every setter call in a session aimed at it.
+local function source(file)
+    local f = assert(io.open(file, "rb"))
+    local text = f:read("*a")
+    f:close()
+    return text
+end
+local writers, names = {}, 0
+for _, file in ipairs(tocFiles()) do
+    local text = source(file)
+    -- Code only: comments dropped (a comment may name the setting).
+    local code = text:gsub("%-%-%[%[.-%]%]", ""):gsub("%-%-[^\n]*", "")
+    for _ in code:gmatch("SetCVar") do writers[#writers + 1] = file end
+    for _ in code:gmatch('"questTextContrast"') do names = names + 1 end
+end
+eq(table.concat(writers, ","), "QuestText.lua", "SetCVar once in the shipped code, in QuestText.lua")
+eq(names, 1, "the CVar's name written once, as QuestText's constant")
+GUI = loadAddon()
+GUI._test.slash("questtext on")
+GUI._test.slash("questtext off")
+WoW.setCVar("questTextContrast", "2")
+GUI._test.slash("questtext on")
+WoW.setCVar("questTextContrast", "1")
+check(#WoW.cvar.sets >= 3, "the switch wrote (the record is exercised)")
+for _, set in ipairs(WoW.cvar.sets) do
+    eq(set[1], "questTextContrast", "every SetCVar aimed at questTextContrast")
+end
+
 done("test_contract")
