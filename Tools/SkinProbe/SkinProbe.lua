@@ -6438,7 +6438,7 @@ local gqOn = skinChecks.gqOn
 
 Probe:Steps("questtext", {
     title = "Glass UI: light quest text on glass (#203)",
-    rev = 1,
+    rev = 2,
     -- Measured first, the switch off.
     { text = "Turns on script errors, counts blocked actions from now, saves your Quest Text Contrast (put back "
           .. "at the end; if you stop early, /fp skin gqrestore puts it back) and turns the switch off. If this "
@@ -6457,7 +6457,7 @@ Probe:Steps("questtext", {
     { text = "Records Glass UI's startup trace for this load.", auto = true, run = function() return startup("load") end },
     -- Persistence: a value written by addon code.
     { text = "Writes 2 (Light 2) as an addon would.", auto = true, run = write("2") },
-    { text = "Exit the game fully (not /reload), relaunch and log in on this character.", reload = "exit" },
+    { text = "Type /reload (the value written by addon code, read back at login).", reload = true },
     { text = "Records the startup trace and the value after the exit.", auto = true,
       run = function()
           local ok, why = startup("exit, addon wrote 2")
@@ -6465,9 +6465,10 @@ Probe:Steps("questtext", {
           return ok, why .. "; persisted " .. tostring(liveValue() == "2")
       end },
     -- A value chosen in Blizzard's settings.
-    { text = "Open Settings > Accessibility > General, set Quest Text Contrast to the third Light option, close "
+    { text = "Open Settings > Accessibility > General, set Quest Text Contrast to Grey "
+          .. "(the options: Default, Brown, White, Grey, Black), close "
           .. "the settings. Press Next.", check = want("blizzard set 3", "3") },
-    { text = "Exit the game fully again, relaunch and log in.", reload = "exit" },
+    { text = "Type /reload (the value chosen in Blizzard's settings).", reload = true },
     { text = "Records the startup trace and the value after the exit.", auto = true,
       run = function()
           local ok, why = startup("exit, Blizzard set 3")
@@ -6521,11 +6522,11 @@ Probe:Steps("questtext", {
       screenshot = "questtext, map details" },
     { text = "Were the book (or popup) and the map's details readable, as Blizzard's Dark mode draws them?",
       ask = true },
-    { text = "Open Settings > Accessibility: does Quest Text Contrast show Dark? Then pick the second Light "
-          .. "option and close the settings.", ask = true },
+    { text = "Open Settings > Accessibility: does Quest Text Contrast show Black (Dark)? Then pick White "
+          .. "and close the settings.", ask = true },
     settle("The switch should have turned itself off, with one line in chat, and nothing written back.",
            want("let go", "2", false)),
-    { text = "Switch on, then again with /glassui questtext on, then off: the second Light option comes back.",
+    { text = "Switch on, then again with /glassui questtext on, then off: White comes back.",
       button = "On, on, off",
       run = function()
           local Q = qt()
@@ -6535,7 +6536,7 @@ Probe:Steps("questtext", {
           return Q.Off()
       end },
     settle("Goes on by itself.", want("on twice, off", "2", false)),
-    { text = "Sets Dark yourself in Settings (Accessibility > Quest Text Contrast: Dark), close it, then press "
+    { text = "Set Black yourself in Settings (Accessibility > Quest Text Contrast: Black), close it, then press "
           .. "the button: the switch on (Dark already), then off.", button = "On, off",
       run = function()
           local Q = qt()
@@ -6565,7 +6566,7 @@ Probe:Steps("questtext", {
           local r = qtState("after reload")
           return ok and r.on and r.value == "4", why .. "; switch " .. r.status .. ", " .. tostring(r.value)
       end },
-    { text = "Exit the game fully with the switch on, relaunch and log in.", reload = "exit" },
+    { text = "Type /reload once more with the switch on.", reload = true },
     { text = "Records the startup after the exit (a re-apply only if the value was dropped), and the taint log "
           .. "on again.", auto = true,
       run = function()

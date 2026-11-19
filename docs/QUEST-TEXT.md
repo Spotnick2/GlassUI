@@ -2,9 +2,10 @@
 
 **Status (2026-11-19):** built (`QuestText.lua`, the settings page's Quest text section,
 `/glassui questtext`), tested offline (`tests/test_questtext.lua`, mutation-tested; `test_contract`,
-`test_methods`). The in-game run, `/fp steps skin questtext`, waits for the owner
-(docs/FOREVER-PROBE.md, QT). Both scopes are built, chosen at runtime from `GetCVarInfo`: one record
-account-wide, or one per character if the client stores the setting per character.
+`test_methods`). Accepted in game on 70959 (`/fp steps skin questtext`, run #491-#496;
+docs/FOREVER-PROBE.md, QT). Measured there: the CVar is stored locally and isn't locked; the
+decision runs at `VARIABLES_LOADED` on the settled value; `CVAR_UPDATE` arrives inside the call. Both
+scopes are built, chosen at runtime from `GetCVarInfo`; this client uses the account-wide record.
 
 Stage 2 of docs/GOSSIP-QUEST.md. Stage 1 (#201, accepted on 70938) keeps the parchment page and
 Blizzard's dark text in the gossip window and the quest dialog. The skins fade the page only while

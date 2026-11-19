@@ -322,14 +322,41 @@ Measured first, with the switch off:
 Then the switch in use: gossip and quest dialog light on glass, books or the popup and the map's
 details, letting go when Blizzard's settings change it, On twice then Off, On while already Dark,
 refused in combat, a `/reload` and a full exit with it on, and Blizzard's side afterwards (an XP or
-reputation gain, Edit Mode, another setting, action bars in combat). Saved as `QT.<label>`. Not run
-yet.
+reputation gain, Edit Mode, another setting, action bars in combat). Saved as `QT.<label>`.
+
+**Run #491-#496 (rev 1, 70959, 2026-11-19): passed.** The owner did a `/reload` at each "full exit"
+step: since 70009 a reload reads the SavedVariables back. This CVar is Blizzard's own setting, which its
+settings dropdown writes with the same `SetCVar` the switch calls, so its persistence across a restart
+is Blizzard's. Measured:
+- **The flags:** stored locally (neither `isStoredServerAccount` nor `isStoredServerCharacter`); not
+  locked, secure or read-only. So the switch keeps one account-wide record.
+- **Startup:** at Glass UI's `ADDON_LOADED`, `AreCVarsLoaded()` is false (the value already reads); at
+  `VARIABLES_LOADED`, true. The decision ran there in every load (5), and its value was the settled
+  one every time.
+- **Delivery:** every `CVAR_UPDATE` for the switch's writes arrived inside the call (On 1, Off 1, Off
+  then On 3), none after. Synchronous: the letting-go rule holds.
+- **The switch:**
+  - the gossip window and the quest dialog in Blizzard's light text on glass (screenshots; the owner:
+    readable);
+  - the map's details and Blizzard's settings showing Dark (the owner: yes);
+  - letting go when the setting was changed in Blizzard's settings: the switch off, nothing written;
+  - On twice then Off gave the player's value back;
+  - On while Dark, then Off: Dark kept;
+  - refused in combat, on after it;
+  - on after a `/reload` (twice).
+- **Blizzard's side:** an XP or reputation gain, Edit Mode, another setting, action bars in combat: 0
+  blocked, and `Logs\taint.log` not written this session (at level 1 it's written only on a block).
+
+Two checks failed on the expected value, not the behaviour. The step text said "the second Light
+option", and the options are named Default, Brown, White, Grey, Black, so the owner picked Grey (3)
+where the check wanted White (2). The switch let go and restored 3, as it should. The step texts name
+the options now.
 
 | # | Question | Result |
 |---|---|---|
-| QT.1 | The CVar's flags; the startup trace; persistence across a full exit (addon-written and Blizzard-chosen); the setter boundary | Waits for the owner |
-| QT.2 | The switch: light text on glass, the other readers, letting go, On twice, On while Dark, combat, a reload and a full exit | Waits for the owner |
-| QT.3 | Blizzard's side after the writes: XP or reputation, Edit Mode, settings, action bars in combat; `taint.log` read | Waits for the owner |
+| QT.1 | The CVar's flags; the startup trace; persistence across a full exit (addon-written and Blizzard-chosen); the setter boundary | **Local storage, no locks; decided at `VARIABLES_LOADED` on the settled value; synchronous delivery** (#491-#496; reloads, not exits) |
+| QT.2 | The switch: light text on glass, the other readers, letting go, On twice, On while Dark, combat, a reload and a full exit | **Pass** (the book or popup step skipped); two value checks off by the step's wording, not the switch |
+| QT.3 | Blizzard's side after the writes: XP or reputation, Edit Mode, settings, action bars in combat; `taint.log` read | **Pass**: 0 blocked, `taint.log` not written |
 
 ### The gossip window and the quest dialog (#115, #114, docs/GOSSIP-QUEST.md)
 
