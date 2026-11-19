@@ -29,6 +29,11 @@ local API = GUI.API
 local Options = {}
 GUI.Options = Options
 
+-- The last click's line under the Quest text checkbox, cleared when the
+-- switch changes any other way (Blizzard's settings, the slash command,
+-- letting go), shown or not (Codex on #204).
+GUI.QuestText.OnChange(function() Options.questTextLine = nil end)
+
 local panel = CreateFrame("Frame")
 panel.name = "Glass UI"
 panel:Hide()

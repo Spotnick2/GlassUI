@@ -247,6 +247,14 @@ local function sample(event)
                           was = r and r.was, guid = state.guid, decided = state.decided }
 end
 
+-- The decision's outcome, after it ran: "off" (the switch off), "kept"
+-- (Dark), "letgo", "pending" (a re-apply after combat), "reapplied",
+-- "failed". The probe checks a switch-on load by it (Codex on #204).
+local function outcome(what)
+    if #trace >= TRACE_MAX then return end
+    trace[#trace + 1] = { event = "decision", outcome = what, value = live() }
+end
+
 local function decide(event)
     if state.decided then return end
     sample(event)
@@ -262,6 +270,7 @@ local function decide(event)
     local r = record()
     if not r then
         state.decided = true
+        outcome("off")
         changed()
         return
     end
@@ -269,19 +278,22 @@ local function decide(event)
     if not (now and def) then return end
     -- Armed from here on, before any write of ours (Codex on #203, r5).
     state.decided = true
-    if now == DARK then changed() return end
+    if now == DARK then outcome("kept") changed() return end
     if now ~= def then
         letGo("Quest Text Contrast was changed while Glass UI wasn't running")
+        outcome("letgo")
         return
     end
     -- The default: the client dropped it. Re-apply, after combat if need be.
     if InCombatLockdown() then
         state.pending = true
+        outcome("pending")
         changed()
         return
     end
     local ok = write(DARK)
-    if record() and not ok then failedReapply() return end
+    if record() and not ok then failedReapply() outcome("failed") return end
+    outcome(record() and "reapplied" or "letgo")
     changed()
 end
 QT.Decide = decide

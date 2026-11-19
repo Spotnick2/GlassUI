@@ -324,6 +324,15 @@ details, letting go when Blizzard's settings change it, On twice then Off, On wh
 refused in combat, a `/reload` and a full exit with it on, and Blizzard's side afterwards (an XP or
 reputation gain, Edit Mode, another setting, action bars in combat). Saved as `QT.<label>`.
 
+**Rev 3 (Codex on #204):**
+- **Nothing is written until the run is ready:** the player's value saved (the switch must be off
+  first, so the saved value is theirs, not the switch's Dark) and the flags allowing it. A failed
+  first step stays put, and every contrast write refuses otherwise, in `gossipglass` too.
+- **The timing check needs evidence:** a changed value and an event inside the call.
+- **The startup check follows the switch:** switch off, the value at the decision must be the
+  settled one, decision "off". Switch on, the decision must have kept or re-applied Dark. Glass UI's
+  trace now records each decision's outcome.
+
 **Run #491-#496 (rev 1, 70959, 2026-11-19): passed.** The owner did a `/reload` at each "full exit"
 step: since 70009 a reload reads the SavedVariables back. This CVar is Blizzard's own setting, which its
 settings dropdown writes with the same `SetCVar` the switch calls, so its persistence across a restart

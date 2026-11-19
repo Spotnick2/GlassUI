@@ -224,6 +224,18 @@ WoW.combat = false
 check(Q.note:GetText():find("books", 1, true) ~= nil, "the note names the other readers")
 Q.check._scripts.OnEnter(Q.check)
 check(table.concat(GameTooltip._lines, " "):find("before uninstalling", 1, true) ~= nil, "the tooltip: turn it off before uninstalling")
+-- The last click's line, cleared when the switch changes elsewhere (Codex on #204).
+Q.check:SetChecked(true)
+Q.check._scripts.OnClick(Q.check)
+eq(Q.line:GetText(), "on", "a click: its line")
+GUI._test.slash("questtext off")
+eq(Q.line:GetText(), "", "turned off by the slash command: the click's line gone")
+Q.check:SetChecked(true)
+Q.check._scripts.OnClick(Q.check)
+O.panel:Hide()
+WoW.setCVar(CVAR, "1")
+O.panel:Show()
+eq(Q.line:GetText(), "", "let go while the page was hidden: no stale line when it opens")
 O.panel:Hide()
 WoW.chat = {}
 GUI._test.slash("questtext on")
@@ -231,7 +243,7 @@ check(QT.IsOn(), "/glassui questtext on")
 GUI._test.slash("skins")
 eq(said("questtext (Light quest text on glass): on"), 1, "/glassui skins says it")
 GUI._test.slash("questtext off")
-eq(value(), "3", "/glassui questtext off: 3 back")
+eq(value(), "1", "/glassui questtext off: 1 back")
 
 --------------------------------------------------------------------------------
 -- The gossip window with the switch on: Blizzard's light text on the glass
@@ -261,12 +273,15 @@ eq(value(), "4", "dropped: Dark re-applied")
 eq(writes(), 1, "once")
 check(QT.IsOn(), "still on")
 eq(GlassUIDB.questText.was, "2", "the remembered value kept")
+local last = QT.trace[#QT.trace]
+check(last.event == "decision" and last.outcome == "reapplied", "the trace records the decision: reapplied")
 QT.Off()
 eq(value(), "2", "off: 2 back")
 
 -- Kept (4): nothing. Another value (a choice made while we weren't running): let go.
 GUI = load({ db = { questText = { was = "2" } }, cvar = function(c) c.values[CVAR] = "4" end })
 eq(writes(), 0, "kept: nothing written")
+eq(GUI.QuestText.trace[#GUI.QuestText.trace].outcome, "kept", "the trace: kept")
 check(GUI.QuestText.IsOn(), "on")
 GUI = load({ db = { questText = { was = "2" } }, cvar = function(c) c.values[CVAR] = "1" end })
 eq(writes(), 0, "1 at login: nothing written")
@@ -364,6 +379,7 @@ WoW.cvar.unreadable = nil
 -- Switch off at login: nothing at all.
 GUI = load({ cvar = function(c) c.values[CVAR] = "1" end })
 eq(writes(), 0, "off: nothing written at login")
+eq(GUI.QuestText.trace[#GUI.QuestText.trace].outcome, "off", "the trace: off")
 
 --------------------------------------------------------------------------------
 -- Per-character records (if the client stores the setting per character)
