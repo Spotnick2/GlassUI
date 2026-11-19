@@ -550,12 +550,23 @@ function Kit.PaintClose(h)
     for _, st in pairs(h.glyphs or {}) do paintGlyph(st) end
 end
 
+-- Our X while Blizzard's close button is disabled (#114: the quest dialog's
+-- auto-accept, QuestFrame.lua:452).
+Kit.CLOSE_OFF = 0.35
+
+local function enabled(b)
+    local ok, on = pcall(b.IsEnabled, b)
+    return not ok or API.Plain(on) ~= false
+end
+
 -- The close button's feedback, on our X only: full on hover, 1 px down while
--- pressed.
+-- pressed; dimmed, without the light, while Blizzard's button is disabled.
 function Kit.CloseFeedback(h, hover, pushed)
     if not h.closeFrame then return end
+    local on = enabled(h.close)
+    if not on then hover, pushed = false, false end
     h.hover, h.pushed = hover, pushed
-    h.closeAlpha = hover and 1 or Kit.CLOSE_REST
+    h.closeAlpha = (not on and Kit.CLOSE_OFF) or (hover and 1) or Kit.CLOSE_REST
     if h.closeLight then h.closeLight:SetShown(hover) end
     h.closeFrame:ClearAllPoints()
     h.closeFrame:SetPoint("CENTER", h.close, "CENTER", 0, pushed and -1 or 0)
@@ -620,6 +631,13 @@ function K:CloseButton(close, h)
     close:HookScript("OnLeave", function() feedback(false, false) end)
     close:HookScript("OnMouseDown", function() feedback(h.hover, true) end)
     close:HookScript("OnMouseUp", function() feedback(h.hover, false) end)
+    -- Disabled and enabled again by Blizzard, maybe inside a panel's show:
+    -- read again a frame later.
+    local function sync()
+        if GUI.Engine.Active(kit.key) then GUI.Engine.Defer(kit.skin, "close", function() Kit.CloseSync(h) end) end
+    end
+    close:HookScript("OnEnable", sync)
+    close:HookScript("OnDisable", sync)
     Kit.CloseFeedback(h, false, false)
     track(self, h)
     return h

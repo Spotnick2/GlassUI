@@ -89,9 +89,16 @@ WoW.templates.UIPanelScrollFrameTemplate = function(w) w.ScrollBar = newWidget("
 -- button's slot; the probe reads them, ContainerFrame.lua:1845).
 function Methods.SetID(w, id) w._id = id end
 function Methods.GetID(w) return w._id or 0 end
-function Methods.SetEnabled(w, v) w._enabled = v and true or false end
-function Methods.Enable(w) w._enabled = true end
-function Methods.Disable(w) w._enabled = false end
+-- OnEnable/OnDisable fire on a change of state, as the client's (the quest
+-- dialog's close button under auto-accept, #114).
+function Methods.SetEnabled(w, v)
+    local was = w._enabled ~= false
+    w._enabled = v and true or false
+    local handler = was ~= w._enabled and w._scripts and w._scripts[w._enabled and "OnEnable" or "OnDisable"]
+    if handler then handler(w) end
+end
+function Methods.Enable(w) Methods.SetEnabled(w, true) end
+function Methods.Disable(w) Methods.SetEnabled(w, false) end
 function Methods.IsEnabled(w) return w._enabled ~= false end
 -- The tests read a texture's sublevel as _sub (GetDrawLayer below); the
 -- core keeps it as _sublevel.
@@ -203,7 +210,7 @@ local SCRIPTED = { Frame = true, Button = true, CheckButton = true, StatusBar = 
                    EditBox = true }
 local HANDLERS = { OnClick = true, OnMouseUp = true, OnMouseDown = true, OnEnter = true, OnLeave = true,
                    OnShow = true, OnHide = true, OnUpdate = true, OnEvent = true, OnDragStart = true, OnDragStop = true,
-                   OnDoubleClick = true, OnMouseWheel = true }
+                   OnDoubleClick = true, OnMouseWheel = true, OnEnable = true, OnDisable = true }
 function Methods.HasScript(w, name) return SCRIPTED[w._type] == true and HANDLERS[name] == true end
 function Methods.Click(w, mouse)
     if w._scripts.OnClick then w._scripts.OnClick(w, mouse or "LeftButton", false) end
@@ -2145,6 +2152,231 @@ function WoW.trade()
     end)
 end
 function WoW.closeTrade() WoW.asBlizzard(function() TradeFrame:Hide() end) end
+
+-- GossipFrame and QuestFrame (#115, #114, docs/GOSSIP-QUEST.md; Mainline,
+-- forever 70938): ButtonFrameTemplate's shell, the pages, the buttons
+-- (UIPanelButtonTemplate's three pieces, re-textured on show), the text the
+-- contrast colours. WoW.contrast is questTextContrast (0-4); an NPC's texture
+-- kit with an atlas of its own in WoW.kitAtlases. Hidden.
+WoW.CONTRAST_ATLAS = { [0] = "QuestBG-Parchment", "QuestBG-Parchment-Accessibility1",
+                       "QuestBG-Parchment-Accessibility2", "QuestBG-Parchment-Accessibility3",
+                       "QuestBG-Parchment-Accessibility4" }
+WoW.PARCHMENT_TEXT, WoW.STONE_TEXT = { 0.18, 0.12, 0.06 }, { 1, 0.86, 0.7 }
+WoW.contrast = 0
+WoW.kitAtlases = { Kul = true }
+table.insert(WoW.onReset, function() WoW.contrast = 0 end)
+
+local function lightText() return WoW.contrast == 4 end
+-- QuestTextContrast.GetTextureKitBackgroundAtlas (QuestTextContrast.lua:37-46).
+local function pageAtlas(kit)
+    if kit and WoW.kitAtlases[kit] then return "QuestBG-" .. kit end
+    return WoW.CONTRAST_ATLAS[WoW.contrast] or WoW.CONTRAST_ATLAS[0]
+end
+local function textColor(fs)
+    local c = lightText() and WoW.STONE_TEXT or WoW.PARCHMENT_TEXT
+    fs:SetTextColor(c[1], c[2], c[3])
+end
+
+-- UIPanelButtonTemplate: Left, Middle, Right, the highlight, its text.
+local function uiPanelButton(parent, name)
+    local b = blizz("Button", parent, name)
+    b._level = parent._level + 1
+    for _, k in ipairs({ "Left", "Middle", "Right" }) do b[k] = blizz("Texture", b, nil, "BACKGROUND") end
+    b._highlight = blizz("Texture", b, nil, "HIGHLIGHT")
+    b.Text = blizz("FontString", b, nil, "OVERLAY")
+    return b
+end
+local function buttonArt(b)
+    for _, k in ipairs({ "Left", "Middle", "Right" }) do b[k]:SetTexture("Interface\\Buttons\\UI-Panel-Button-Up") end
+end
+
+-- ButtonFrameTemplate: the NineSlice, Bg, streaks, Inset, the portrait's
+-- container (400; .portrait = $parentPortrait, .CircleMask) and the close
+-- button (510).
+local function buttonFrame(name)
+    local f = blizz("Frame", UIParent, name)
+    f._shown, f._level, f._strata = false, 5, "MEDIUM"
+    f._width, f._height = 338, 496
+    f.NineSlice = nineSlice(f)
+    f.Bg = blizz("Texture", f, name .. "Bg", "BACKGROUND")
+    f.TopTileStreaks = blizz("Texture", f, nil, "BORDER")
+    f.Inset = inset(f, name .. "Inset")
+    f.PortraitContainer = blizz("Frame", f)
+    f.PortraitContainer._level = 400
+    f.PortraitContainer.portrait = blizz("Texture", f.PortraitContainer, name .. "Portrait", "OVERLAY")
+    f.PortraitContainer.portrait._width = 60
+    f.PortraitContainer.CircleMask = blizz("MaskTexture", f.PortraitContainer)
+    f.PortraitContainer.CircleMask._width = 58
+    f.CloseButton = blizzButton(f, "RedButton-Exit", "RedButton-exit-pressed", "RedButton-Highlight",
+                                "RedButton-Exit-Disabled")
+    f.CloseButton._level, f.CloseButton._width = 510, 24
+    rawset(_G, name .. "CloseButton", f.CloseButton)
+    table.insert(WoW.blizzGlobals, name .. "CloseButton")
+    f.TitleContainer = blizz("Frame", f)
+    f.TitleContainer.TitleText = blizz("FontString", f.TitleContainer, nil, "OVERLAY")
+    return f
+end
+
+-- GossipFrame: the page (Background, on the window), the greeting panel with
+-- Goodbye and the ScrollBox's rows (their colours the theme's), the
+-- friendship bar.
+function WoW.makeGossip()
+    WoW.asBlizzard(function()
+        local f = buttonFrame("GossipFrame")
+        f.Background = blizz("Texture", f, nil, "BACKGROUND")
+        local panel = blizz("Frame", f)
+        panel._level = f._level + 1
+        panel.GoodbyeButton = uiPanelButton(panel)
+        panel.ScrollBox = blizz("Frame", panel)
+        panel.ScrollBox._level = panel._level + 1
+        panel.ScrollBar = blizz("Frame", panel)
+        f.GreetingPanel = panel
+        f.FriendshipStatusBar = blizz("StatusBar", f)
+        local row = blizz("Button", panel.ScrollBox)
+        row.Text = blizz("FontString", row, nil, "OVERLAY")
+        f._rows = { row.Text }
+        WoW.snapshot()
+    end)
+end
+
+-- UIThemeContainerMixin:UpdateTheme (AccessibilityTemplates.lua:28-33): the
+-- rows' colours, then the page.
+local function gossipTheme()
+    local f = GossipFrame
+    for _, fs in ipairs(f._rows) do textColor(fs) end
+    f.Background:SetAtlas(pageAtlas(f._kit), true)
+end
+
+-- GOSSIP_SHOW (HandleShow): ShowUIPanel, then the background registered with
+-- the NPC's kit, the friendship bar, Update (the theme, Goodbye's art).
+function WoW.gossip(kit)
+    WoW.asBlizzard(function()
+        local f = GossipFrame
+        f:Show()
+        f._kit = kit
+        f.PortraitContainer.portrait:SetTexture(1)
+        gossipTheme()
+        buttonArt(f.GreetingPanel.GoodbyeButton)
+    end)
+end
+-- An Update while shown (QUEST_LOG_UPDATE, a new kit).
+function WoW.gossipUpdate(kit)
+    WoW.asBlizzard(function()
+        if kit ~= nil then GossipFrame._kit = kit end
+        gossipTheme()
+    end)
+end
+function WoW.closeGossip() WoW.asBlizzard(function() GossipFrame:Hide() end) end
+
+-- QuestFrame: QuestFrame's own ARTWORK QuestFramePortrait (made after the
+-- shell's, so it holds the global, QuestFrame.xml:44-53; shell = true: the
+-- shell's keeps it), four panels (the page .Bg, the material corners, the
+-- seal, a scroll child Blizzard fades), the six buttons, an item button.
+WoW.questPanels = { Greeting = "QuestFrameGreetingPanel", Detail = "QuestFrameDetailPanel",
+                    Progress = "QuestFrameProgressPanel", Reward = "QuestFrameRewardPanel" }
+local QUEST_SCROLL = { Greeting = "QuestGreetingScrollChildFrame", Detail = "QuestDetailScrollChildFrame",
+                       Progress = "QuestProgressScrollChildFrame", Reward = "QuestRewardScrollChildFrame" }
+local QUEST_PANEL_BUTTONS = { Greeting = { "QuestFrameGreetingGoodbyeButton" },
+                              Detail = { "QuestFrameDeclineButton", "QuestFrameAcceptButton" },
+                              Progress = { "QuestFrameGoodbyeButton", "QuestFrameCompleteButton" },
+                              Reward = { "QuestFrameCompleteQuestButton" } }
+WoW.questAutoAccept = false
+
+-- A panel's OnShow (QuestFrame.lua:126-147, 205-216, 319-335, 566-615): the
+-- others hidden, QuestFrame_SetMaterial (the page's atlas), the text colours.
+local function questPanelShow(kind)
+    local f = QuestFrame
+    for k, n in pairs(WoW.questPanels) do
+        if k ~= kind then _G[n]:Hide() end
+    end
+    local p = _G[WoW.questPanels[kind]]
+    for _, k in ipairs({ "MaterialTopLeft", "MaterialTopRight", "MaterialBotLeft", "MaterialBotRight" }) do
+        p[k]:SetShown(false)
+    end
+    p.Bg:SetAtlas(pageAtlas(nil))
+    textColor(p._text)
+    for _, n in ipairs(QUEST_PANEL_BUTTONS[kind]) do buttonArt(_G[n]) end
+    if kind == "Detail" and WoW.questAutoAccept then
+        QuestFrameDeclineButton:Hide()
+        f.CloseButton:Disable()
+    end
+end
+
+function WoW.makeQuest(shell)
+    WoW.asBlizzard(function()
+        local f = buttonFrame("QuestFrame")
+        if not shell then
+            local own = blizz("Texture", f, "QuestFramePortrait", "ARTWORK")
+            own._width = 60
+        end
+        f.FriendshipStatusBar = blizz("StatusBar", f)
+        f.AccountCompletedNotice = blizz("Frame", f)
+        f.AccountCompletedNotice._shown = false
+        for kind, name in pairs(WoW.questPanels) do
+            local p = blizz("Frame", f, name)
+            p._shown, p._level = false, f._level + 1
+            p.Bg = blizz("Texture", p, name .. "Bg", "BACKGROUND")
+            p.Bg._atlas = "QuestBG-Parchment"
+            for _, k in ipairs({ "MaterialTopLeft", "MaterialTopRight", "MaterialBotLeft", "MaterialBotRight" }) do
+                p[k] = blizz("Texture", p, name .. k, "BORDER")
+            end
+            p.SealMaterialBG = blizz("Texture", p, nil, "BORDER")
+            p.SealMaterialBG._shown = false
+            local scroll = blizz("Frame", p, QUEST_SCROLL[kind])
+            p._text = blizz("FontString", scroll, nil, "BACKGROUND")
+            for _, n in ipairs(QUEST_PANEL_BUTTONS[kind]) do uiPanelButton(p, n) end
+            p:SetScript("OnShow", function() questPanelShow(kind) end)
+        end
+        local item = blizz("Button", QuestProgressScrollChildFrame, "QuestProgressItem1")
+        item._level = QuestFrameProgressPanel._level + 2
+        WoW.snapshot()
+    end)
+end
+
+-- QUEST_GREETING / _DETAIL / _PROGRESS / _COMPLETE: the panel hidden and
+-- shown, then QuestFrame_SetPortrait and ShowUIPanel (QuestFrame.lua:35-104).
+function WoW.quest(kind)
+    WoW.asBlizzard(function()
+        local p = _G[WoW.questPanels[kind]]
+        p:Hide()
+        p:Show()
+        QuestFramePortrait:SetTexture(1)
+        if not QuestFrame:IsShown() then QuestFrame:Show() end
+    end)
+end
+-- QUEST_LOG_UPDATE on a shown greeting: its OnShow handler called directly,
+-- no Show (QuestFrame.lua:86-91).
+function WoW.questGreetingRefresh()
+    WoW.asBlizzard(function()
+        if QuestFrameGreetingPanel:IsShown() then questPanelShow("Greeting") end
+    end)
+end
+-- QuestFrame_OnHide: the panels hidden; the auto-accept's Decline and close
+-- button given back (QuestFrame.lua:439-452).
+function WoW.closeQuest()
+    WoW.asBlizzard(function()
+        QuestFrame:Hide()
+        for _, n in pairs(WoW.questPanels) do _G[n]:Hide() end
+        if WoW.questAutoAccept then
+            QuestFrameDeclineButton:Show()
+            QuestFrame.CloseButton:Enable()
+        end
+    end)
+end
+
+-- The setting changed (Settings, Accessibility): CVAR_UPDATE to every
+-- listener; the gossip window's theme listens while shown (OnPreShow).
+-- blizzFirst: Blizzard's handler before the addon's.
+function WoW.setContrast(v, blizzFirst)
+    WoW.contrast = v
+    local function theme()
+        local f = rawget(_G, "GossipFrame")
+        if f and f:IsShown() then WoW.asBlizzard(gossipTheme) end
+    end
+    if blizzFirst then theme() end
+    WoW.fire("CVAR_UPDATE", "questTextContrast", tostring(v))
+    if not blizzFirst then theme() end
+end
 
 -- RestedXP v4.11.36 (#56, docs/RESTEDXP.md): RXPFrame (GuideWindow.lua) and
 -- RXPG_ARROW (map.lua), its default window ("V1"). A third-party addon's

@@ -5710,6 +5710,552 @@ NS.mtHook = mtHook   -- tests/test_probe.lua: its stub's container comes after t
 end)()
 
 --------------------------------------------------------------------------------
+-- The gossip window and the quest dialog (#115, #114, docs/GOSSIP-QUEST.md).
+-- First what the skin follows: which QuestFramePortrait Blizzard fills
+-- (GQ.portrait), the texture kits gossip NPCs send (GQ.kits), the pages'
+-- atlases (GQ.atlases), the levels (GQ.levels), and a page's alpha right
+-- after Blizzard's SetAtlas, faded and not (GQ.pageAlpha). Then the
+-- acceptance: each check reads the shell, the shown page (its atlas, alpha,
+-- our pane), the text over it (a faded page must have Blizzard's light text
+-- over it: the rule the skin rests on), the buttons, the close button, the
+-- failures and blocked actions. Read only: getters, and instance hooks that
+-- record. Saved as GQ.<label>.
+--------------------------------------------------------------------------------
+
+-- Its own function: the main chunk is near Lua 5.1's 200 locals.
+do (function()
+local DARK = "QuestBG-Parchment-Accessibility4"
+-- (A later chunk-level "seen" is a table: this block's own.)
+local function isSeen(f)
+    local ok, v = call(f, "IsVisible")
+    return ok and plain(v) == true
+end
+local GQ_ORDER = { "Greeting", "Detail", "Progress", "Reward" }
+local GQ_PANELS = { Greeting = "QuestFrameGreetingPanel", Detail = "QuestFrameDetailPanel",
+                    Progress = "QuestFrameProgressPanel", Reward = "QuestFrameRewardPanel" }
+-- Each panel's main text, coloured in the pass that sets its page
+-- (QuestFrame.lua:330-335, 191-216; QuestInfo's title for detail and reward).
+local GQ_TEXT = { Greeting = "GreetingText", Detail = "QuestInfoTitleHeader", Progress = "QuestProgressText",
+                  Reward = "QuestInfoTitleHeader" }
+local GQ_BUTTONS = { "QuestFrameAcceptButton", "QuestFrameDeclineButton", "QuestFrameCompleteButton",
+                     "QuestFrameGoodbyeButton", "QuestFrameCompleteQuestButton", "QuestFrameGreetingGoodbyeButton" }
+
+local shows = { gossip = 0, quest = 0 }
+local lastShow, kits, atlases = 0, {}, {}
+local pageAlpha = { faded = 0, held = 0, lost = 0, kept = 0 }
+local gqEvents = CreateFrame("Frame")
+Probe:RegisterEvents(gqEvents, { "GOSSIP_SHOW", "QUEST_GREETING", "QUEST_DETAIL", "QUEST_PROGRESS", "QUEST_COMPLETE" })
+gqEvents:SetScript("OnEvent", function(_, event, kit)
+    lastShow = GetTime()
+    if event == "GOSSIP_SHOW" then
+        shows.gossip = shows.gossip + 1
+        local k = plain(kit)
+        k = (k == nil or k == "") and "none" or tostring(k)
+        kits[k] = (kits[k] or 0) + 1
+        record("GQ.kits", kits)
+    else
+        shows.quest = shows.quest + 1
+    end
+end)
+
+local function gqTest()
+    local G = glassUI()
+    return G and G.GossipQuest and G.GossipQuest._test, G
+end
+
+local function alphaOf(r)
+    local ok, a = call(r, "GetAlpha")
+    a = ok and plain(a) or nil
+    return type(a) == "number" and a or nil
+end
+
+local function atlasOf(t)
+    local ok, a = call(t, "GetAtlas")
+    a = ok and plain(a) or nil
+    return type(a) == "string" and a or nil
+end
+
+local function levelOf(f)
+    local ok, l = call(f, "GetFrameLevel")
+    l = ok and plain(l) or nil
+    return type(l) == "number" and l or nil
+end
+
+-- Right after Blizzard's SetAtlas, before the skin's decision a frame later:
+-- did a faded page stay faded? (Alpha holds across SetAtlas: docs/MAP.md.)
+local function onPageAtlas(page)
+    local atlas = atlasOf(page) or "?"
+    atlases[atlas] = (atlases[atlas] or 0) + 1
+    record("GQ.atlases", atlases)
+    local G = glassUI()
+    local faded = G and G.Kit and G.Kit._test and G.Kit._test.faded[page] ~= nil
+    local a = alphaOf(page)
+    if faded then
+        pageAlpha.faded = pageAlpha.faded + 1
+        if a == 0 then pageAlpha.held = pageAlpha.held + 1 else pageAlpha.lost = pageAlpha.lost + 1 end
+    else
+        pageAlpha.kept = pageAlpha.kept + 1
+    end
+    record("GQ.pageAlpha", pageAlpha)
+end
+
+local hooked = false
+local function gqHook()
+    if hooked then return true end
+    local gf = frameByName("GossipFrame")
+    if not gf then return false end
+    hooked = true
+    if type(gf.Background) == "table" then hooksecurefunc(gf.Background, "SetAtlas", onPageAtlas) end
+    for _, kind in ipairs(GQ_ORDER) do
+        local p = frameByName(GQ_PANELS[kind])
+        if p and type(p.Bg) == "table" then hooksecurefunc(p.Bg, "SetAtlas", onPageAtlas) end
+    end
+    return true
+end
+
+local function shownPanel()
+    for _, kind in ipairs(GQ_ORDER) do
+        local p = frameByName(GQ_PANELS[kind])
+        local ok, s = call(p, "IsShown")
+        if ok and plain(s) == true then return kind, p end
+    end
+    return nil
+end
+
+-- A colour reads light when its mean is over a half (Stone's, not Parchment's).
+local function lightText(fs)
+    local ok, r, g, b = call(fs, "GetTextColor")
+    r, g, b = plain(r), plain(g), plain(b)
+    if not (ok and type(r) == "number" and type(g) == "number" and type(b) == "number") then return nil end
+    return (r + g + b) / 3 > 0.5
+end
+
+local function failures(G)
+    local n = 0
+    for _ in pairs(G and G.failures or {}) do n = n + 1 end
+    return n
+end
+
+local function winState(T, f, key)
+    local w = { shown = f ~= nil and isSeen(f), buttons = 0, buttonsRight = 0 }
+    local h = T and f and T.wins[f]
+    w.installed = h ~= nil
+    if not f then return w end
+    local most = 0
+    local function see(r) local a = alphaOf(r); if a then most = math.max(most, a) end end
+    see(f.NineSlice); see(f.Bg); see(f.TopTileStreaks)
+    if type(f.Inset) == "table" then see(f.Inset.Bg); see(f.Inset.NineSlice) end
+    w.shell = most
+    local page
+    if key == "gossip" then
+        page = f.Background
+    else
+        local kind, p = shownPanel()
+        w.panel = kind
+        page = p and p.Bg
+        local fs = kind and frameByName(GQ_TEXT[kind])
+        w.light = fs and lightText(fs)
+    end
+    w.atlas = atlasOf(page)
+    w.dark = w.atlas == DARK
+    w.pageAlpha = alphaOf(page)
+    if h then
+        w.header = isSeen(h.header)
+        w.disc = h.disc ~= nil and isSeen(h.disc)
+        local okP, _, rel = call(h.pane.fill, "GetPoint", 1)
+        w.pane = isSeen(h.pane.fill)
+        w.paneOnPage = w.pane and okP and rel == page
+        w.closeAlpha = h.closeAlpha
+        local okE, en = call(f.CloseButton, "IsEnabled")
+        w.closeEnabled = not okE or plain(en) ~= false
+    end
+    local list = key == "gossip" and { type(f.GreetingPanel) == "table" and f.GreetingPanel.GoodbyeButton or nil }
+        or (function() local l = {} for _, n in ipairs(GQ_BUTTONS) do l[#l + 1] = frameByName(n) end return l end)()
+    for _, b in ipairs(list) do
+        if isSeen(b) then
+            w.buttons = w.buttons + 1
+            local st = T and T.buttons[b]
+            if st and isSeen(st.glass) and alphaOf(b.Left) == 0 and alphaOf(b.Middle) == 0 and alphaOf(b.Right) == 0 then
+                w.buttonsRight = w.buttonsRight + 1
+            end
+        end
+    end
+    return w
+end
+
+local function gqState(label)
+    local T, G = gqTest()
+    local rec = { gossip = winState(T, frameByName("GossipFrame"), "gossip"),
+                  quest = winState(T, frameByName("QuestFrame"), "quest"), failures = failures(G) }
+    local okC, c = pcall(InCombatLockdown)
+    rec.combat = okC and plain(c) == true
+    local okV, v = pcall(GetCVar, "questTextContrast")
+    rec.contrast = okV and plain(v) or "?"
+    rec.blocked = type(SkinProbeDB) == "table" and SkinProbeDB.suiteBlocked or 0
+    local function line(n, w)
+        return n .. " " .. (w.shown and "shown" or "hidden") .. (w.panel and (" " .. w.panel) or "") .. ", shell "
+            .. tostring(w.shell) .. ", page " .. tostring(w.atlas) .. " at " .. tostring(w.pageAlpha) .. ", pane "
+            .. tostring(w.pane) .. ", text light " .. tostring(w.light) .. ", buttons " .. w.buttonsRight .. "/"
+            .. w.buttons .. ", close " .. tostring(w.closeEnabled) .. " (" .. tostring(w.closeAlpha) .. ")"
+    end
+    say("GQ " .. label .. ": contrast " .. tostring(rec.contrast) .. "; " .. line("gossip", rec.gossip) .. "; "
+        .. line("quest", rec.quest) .. "; combat " .. tostring(rec.combat) .. ", failures " .. rec.failures
+        .. ", blocked " .. rec.blocked)
+    record("GQ." .. label, rec)
+    return rec
+end
+
+-- The measurements (the plan's probe, first): the two QuestFramePortrait
+-- textures, gossip's, and the levels.
+local function texInfo(t)
+    if type(t) ~= "table" then return nil end
+    local okT, tex = call(t, "GetTexture")
+    local okL, layer = call(t, "GetDrawLayer")
+    local okW, w = call(t, "GetWidth")
+    local okX, x = call(t, "GetLeft")
+    local okY, y = call(t, "GetTop")
+    local okP, parent = call(t, "GetParent")
+    local okN, pn = call(okP and parent or nil, "GetName")
+    return { set = okT and plain(tex) ~= nil, layer = okL and plain(layer) or "?", width = okW and plain(w) or nil,
+             left = okX and plain(x) or nil, top = okY and plain(y) or nil, parent = okN and plain(pn) or "?",
+             parentLevel = levelOf(okP and parent or nil) }
+end
+
+local function gqMeasure()
+    local T = gqTest()
+    local qf, gf = frameByName("QuestFrame"), frameByName("GossipFrame")
+    local m = {}
+    if qf then
+        local global = rawget(_G, "QuestFramePortrait")
+        local shell = type(qf.PortraitContainer) == "table" and qf.PortraitContainer.portrait or nil
+        local own = global ~= shell and global or nil
+        if not own then
+            -- The shell's holds the global: QuestFrame's own is the 60 px ARTWORK region.
+            local ok, regions = pcall(function() return { qf:GetRegions() } end)
+            for _, r in ipairs(ok and regions or {}) do
+                local okL, layer = call(r, "GetDrawLayer")
+                if r ~= shell and okL and plain(layer) == "ARTWORK" and alphaOf(r) then own = r break end
+            end
+        end
+        m.questGlobalIsShell = global == shell
+        m.questShell, m.questOwn = texInfo(shell), texInfo(own)
+        m.questLevels = { window = levelOf(qf), nineSlice = levelOf(qf.NineSlice), portraitContainer =
+                          levelOf(qf.PortraitContainer), close = levelOf(qf.CloseButton) }
+        local h = T and T.wins[qf]
+        if h then m.questLevels.glass, m.questLevels.disc = levelOf(h.win), levelOf(h.disc) end
+        for _, n in ipairs(GQ_BUTTONS) do m.questLevels[n] = levelOf(frameByName(n)) end
+        local _, p = shownPanel()
+        m.questLevels.panel = levelOf(p)
+    end
+    if gf then
+        local global = rawget(_G, "GossipFramePortrait")
+        local shell = type(gf.PortraitContainer) == "table" and gf.PortraitContainer.portrait or nil
+        m.gossipGlobalIsShell = global == shell
+        m.gossipShell = texInfo(shell)
+        m.gossipLevels = { window = levelOf(gf), portraitContainer = levelOf(gf.PortraitContainer) }
+        local h = T and T.wins[gf]
+        if h then m.gossipLevels.glass, m.gossipLevels.disc = levelOf(h.win), levelOf(h.disc) end
+    end
+    say("GQ measure: quest portrait global is the shell's " .. tostring(m.questGlobalIsShell) .. " (shell set "
+        .. tostring(m.questShell and m.questShell.set) .. ", own set " .. tostring(m.questOwn and m.questOwn.set)
+        .. "), gossip's " .. tostring(m.gossipGlobalIsShell))
+    record("GQ.portrait", m)
+    return m
+end
+
+-- want.window "gossip" or "quest"; want.dark: the page expected dark (true)
+-- or not (false); want.closeOff; want.combat.
+local function gqOn(label, want)
+    return function()
+        if want.measure then gqMeasure() end
+        local r = gqState(label)
+        local w = r[want.window]
+        local bad = {}
+        local function want_(cond, why) if not cond then bad[#bad + 1] = why end end
+        want_(w.shown, "the window not shown")
+        want_(w.installed, "not installed")
+        want_(w.shell == 0, "shell " .. tostring(w.shell))
+        want_(w.header, "the band not shown")
+        want_(w.disc, "the portrait's disc not shown")
+        want_(w.buttonsRight == w.buttons, "buttons " .. w.buttonsRight .. " of " .. w.buttons)
+        if w.dark then
+            want_(w.pageAlpha == 0, "the dark page at " .. tostring(w.pageAlpha))
+            want_(w.paneOnPage, "no pane on the dark page")
+        else
+            want_(w.pageAlpha ~= 0, "a page faded that isn't the dark one")
+            want_(not w.pane, "a pane over a kept page")
+        end
+        if want.window == "quest" and w.pageAlpha == 0 then want_(w.light ~= false, "dark text over a faded page") end
+        if want.dark ~= nil then want_(w.dark == want.dark, "the page " .. tostring(w.atlas)) end
+        if want.closeOff then want_(w.closeEnabled == false and w.closeAlpha == 0.35, "the close button not dimmed") end
+        if want.combat ~= nil then want_(r.combat == want.combat, "combat " .. tostring(r.combat)) end
+        want_(r.failures == 0, r.failures .. " failure(s): /glassui failures")
+        want_(r.blocked == 0, r.blocked .. " blocked")
+        return #bad == 0, #bad == 0 and ((w.panel or want.window) .. ": as planned") or table.concat(bad, "; ")
+    end
+end
+
+local function gqOff(label, which)
+    return function()
+        local r = gqState(label)
+        local w = r[which]
+        local ok = w.shown and w.shell > 0 and w.pageAlpha ~= 0 and not w.pane and w.buttonsRight == 0
+        return ok, ok and "Blizzard's look, nothing of ours" or "something of ours while off"
+    end
+end
+
+local function gqFine(label)
+    return function()
+        local r = gqState(label)
+        return r.failures == 0 and r.blocked == 0, r.failures .. " failure(s), " .. r.blocked .. " blocked"
+    end
+end
+
+local function gqClosed(label, which)
+    return function()
+        local r = gqState(label)
+        local ok = not r[which].shown and r.blocked == 0
+        return ok, (r[which].shown and "still open" or "closed") .. ", " .. r.blocked .. " blocked"
+    end
+end
+
+-- The window shown and styled, a moment after its last show.
+local function gqWait(which, opts)
+    opts = opts or {}
+    local from
+    return function()
+        gqHook()
+        if from == nil then from = shows[which] end
+        local T = gqTest()
+        local f = frameByName(which == "gossip" and "GossipFrame" or "QuestFrame")
+        local ready = (not opts.new or shows[which] > from) and f ~= nil and isSeen(f) and T ~= nil and T.wins[f] ~= nil
+            and GetTime() - lastShow > 0.3
+        if ready and opts.panel then ready = shownPanel() == opts.panel end
+        return ready, "waiting for the " .. (which == "gossip" and "gossip window" or "quest dialog")
+    end
+end
+
+local function gqSwitch(key, on)
+    local G = glassUI()
+    if not (G and G.Engine) then return false, "Glass UI not loaded" end
+    G.Engine.SetEnabled(key, on)
+    return true, key .. " " .. (on and "on" or "off")
+end
+
+local function gqMaster(on)
+    local G = glassUI()
+    if not (G and G.Engine) then return false, "Glass UI not loaded" end
+    G.Engine.SetMaster(on)
+    return true, "master " .. (on and "on" or "off")
+end
+
+local function contrast(v)
+    return function()
+        local ok = setCVar("questTextContrast", tostring(v))
+        return ok, "questTextContrast " .. tostring(v)
+    end
+end
+
+-- Your setting, kept across the run's reloads and put back at its end.
+local function contrastSave()
+    local okV, v = pcall(GetCVar, "questTextContrast")
+    v = okV and plain(v) or nil
+    if type(SkinProbeDB) == "table" and type(v) == "string" then SkinProbeDB.gqContrastWas = v end
+    record("GQ.contrastWas", v)
+    return true, "your Quest Text Contrast: " .. tostring(v)
+end
+
+local function contrastRestore()
+    local was = type(SkinProbeDB) == "table" and SkinProbeDB.gqContrastWas or nil
+    if type(was) ~= "string" then return true, "nothing saved" end
+    local ok = setCVar("questTextContrast", was)
+    if ok then SkinProbeDB.gqContrastWas = nil end
+    return ok, "questTextContrast back to " .. was
+end
+
+-- The popup and the map's details: Blizzard's, nothing of ours faded there.
+local function notInherited(label)
+    return function()
+        local G = glassUI()
+        local faded = G and G.Kit and G.Kit._test and G.Kit._test.faded or {}
+        local roots = { frameByName("QuestLogPopupDetailFrame"), frameByName("QuestMapFrame") }
+        local n = 0
+        for region in pairs(faded) do
+            local p = region
+            for _ = 1, 30 do
+                local ok, parent = call(p, "GetParent")
+                p = ok and parent or nil
+                if not p then break end
+                if p == roots[1] or p == roots[2] then
+                    local okS, vis = call(region, "IsVisible")
+                    if okS and plain(vis) == true then n = n + 1 end
+                    break
+                end
+            end
+        end
+        record("GQ." .. label, { fadedThere = n })
+        return n == 0, n == 0 and "Blizzard's" or (n .. " region(s) of ours faded there")
+    end
+end
+
+local CONTRAST_HOW = "Settings > Accessibility > General > Quest Text Contrast"
+
+-- A step that goes on by itself a moment after it shows, then checks: the
+-- skin decides a frame after a change (a switch, the setting).
+local function settled(text, check, screenshot)
+    local t0
+    return { text = text, timeout = 15, screenshot = screenshot, check = check,
+             wait = function()
+                 t0 = t0 or GetTime()
+                 return GetTime() - t0 >= 1, "a moment"
+             end,
+             leave = function() t0 = nil end }
+end
+
+local function setTo(v, text)
+    return { text = text, auto = true, run = contrast(v) }
+end
+
+Probe:Steps("gossipglass", {
+    title = "Glass UI: the gossip window and the quest dialog in glass (#115, #114)",
+    rev = 1,
+    { text = "Turns on script errors, counts blocked actions from now, and saves your Quest Text Contrast setting "
+          .. "(put back at the end).", auto = true,
+      run = function()
+          if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
+          gqHook()
+          contrastSave()
+          return setCVar("scriptErrors", "1")
+      end },
+    setTo(0, "Sets Quest Text Contrast to the default (the parchment) for the first part."),
+    { text = "Stand near an NPC with gossip options (an innkeeper, a guard, a flight master) and a quest giver. "
+          .. "Then type /reload.", reload = true },
+    { text = "Turns the taint log on (a reload turns it off). " .. TAINT_NOISE, auto = true,
+      run = function() gqHook(); return setCVar("taintLog", "1") end },
+    -- The gossip window.
+    { text = "Talk to the gossip NPC. This step goes on by itself; a screenshot is taken.", timeout = 600,
+      wait = gqWait("gossip", { new = true }), screenshot = "gossip, first",
+      check = gqOn("gossip first", { window = "gossip", dark = false, measure = true }) },
+    { text = "Does it read as the template: dark glass, the smoky band with the NPC's name, the portrait on a glass "
+          .. "disc, the parchment page with Blizzard's text and rows, Goodbye on glass, the close button on its "
+          .. "disc? Anything off: the Note.", ask = true },
+    { text = "Hover a few rows (Blizzard's highlight), scroll if the list is long, then choose an option or pick "
+          .. "a quest. Press Next.", check = gqFine("gossip used") },
+    -- The quest dialog through a quest's life.
+    { text = "Open a quest's details at the quest giver (not yet accepted). Wait for the text to finish typing. "
+          .. "This step goes on by itself; a screenshot is taken.", timeout = 600,
+      wait = gqWait("quest", { panel = "Detail" }), screenshot = "quest, details",
+      check = gqOn("details", { window = "quest", dark = false, measure = true }) },
+    { text = "Hover a reward's icon: its tooltip shows. Then press Next (keep the window open).",
+      check = gqOn("details hovered", { window = "quest" }) },
+    { text = "Accept the quest. Press Next.", check = gqFine("accepted") },
+    { text = "Open the progress of a quest you have at its turn-in NPC (incomplete is fine; one that needs money "
+          .. "if you have one). Press Next on it; a screenshot.", screenshot = "quest, progress",
+      check = gqOn("progress", { window = "quest" }) },
+    { text = "If it can be completed: press Continue for the reward panel, WITHOUT closing the window, and press "
+          .. "Next on it (Skip otherwise); a screenshot.", screenshot = "quest, reward",
+      check = gqOn("reward", { window = "quest" }) },
+    { text = "On each panel there was one dark pane at most and the band stayed in place? Complete the quest if "
+          .. "you can (choose a reward). Anything off: the Note.", ask = true },
+    { text = "Optional: talk to an NPC with several quests (a greeting list). Press Next on it, Skip otherwise.",
+      check = gqOn("greeting", { window = "quest" }) },
+    { text = "Open a quest dialog, close it with its X. Open it again, close it with Esc. Open it again, close it "
+          .. "with Decline or Goodbye. Press Next.", check = gqClosed("closed three ways", "quest") },
+    -- Blizzard's dark page.
+    { text = "Talk to the gossip NPC and keep the window open. This step goes on by itself.", timeout = 600,
+      wait = gqWait("gossip", { new = true }) },
+    { text = "With the gossip window open: sets Quest Text Contrast to Dark (what " .. CONTRAST_HOW .. " does).",
+      button = "Dark", run = contrast(4) },
+    settled("Its page should go at once, Blizzard's text light on the glass. Goes on by itself; a screenshot.",
+            gqOn("gossip dark", { window = "gossip", dark = true }), "gossip, dark"),
+    { text = "Is the gossip text readable on the glass? Anything off: the Note.", ask = true },
+    { text = "Sets it back to the default.", button = "Default", run = contrast(0) },
+    settled("The parchment back at once. Goes on by itself.",
+            gqOn("gossip default", { window = "gossip", dark = false })),
+    { text = "Contrast 1, 2 and 3 in turn (lighter parchments with dark text).", button = "1 to 3",
+      run = function()
+          for v = 1, 3 do setCVar("questTextContrast", tostring(v)) end
+          return true
+      end },
+    settled("Each keeps the page. Goes on by itself.",
+            gqOn("gossip contrast 3", { window = "gossip", dark = false })),
+    setTo(4, "Sets Dark again."),
+    { text = "Close the gossip window, then open a quest's details (Dark from the start). Goes on by itself; a "
+          .. "screenshot.", timeout = 600, wait = gqWait("quest", { new = true }), screenshot = "quest, dark",
+      check = gqOn("quest dark", { window = "quest", dark = true }) },
+    { text = "Is the quest text readable on the glass (title, description, objectives, rewards)? Anything off: the "
+          .. "Note.", ask = true },
+    { text = "With that panel still open: sets the default back.", button = "Default", run = contrast(0) },
+    settled("The panel keeps Blizzard's dark page and light text until Blizzard refreshes it. Goes on by itself.",
+            gqOn("quest open, set back", { window = "quest" })),
+    { text = "Move to another panel (accept, or close and open the quest again): the parchment and dark text "
+          .. "together. Press Next on it.", check = gqOn("quest refreshed", { window = "quest", dark = false }) },
+    setTo(4, "Sets Dark for the next step."),
+    { text = "Optional: the progress of a quest that needs money. Open it and press Next (a screenshot), Skip if "
+          .. "you have none.", screenshot = "quest, money", check = gqOn("money dark", { window = "quest" }) },
+    { text = "Were the required-money lines readable (Blizzard writes them black even in its Dark mode)? "
+          .. "Anything off: the Note.", ask = true },
+    { text = "Close every NPC window, then press the button: sets the default while they're closed.",
+      button = "Default", run = contrast(0), check = gqClosed("closed for the change", "quest") },
+    setTo(4, "Sets Dark while they're closed."),
+    { text = "Open the gossip window: it opens dark. Goes on by itself.", timeout = 600,
+      wait = gqWait("gossip", { new = true }), check = gqOn("dark while closed", { window = "gossip", dark = true }) },
+    -- Auto-accept.
+    { text = "Optional: an auto-accept quest (Skip if none): its details show Accept only, the close button "
+          .. "disabled. Press Next on it.", check = gqOn("auto-accept", { window = "quest", closeOff = true }) },
+    -- Off and on.
+    { text = "Open the gossip window. With it open: switches its skin off (Blizzard's look).", button = "Skin off",
+      run = function() return gqSwitch("gossip", false) end, screenshot = "gossip, skin off",
+      check = gqOff("gossip off", "gossip") },
+    { text = "A setting change while off: sets the default, then Dark again. Blizzard's look stays.",
+      button = "Change", run = function() setCVar("questTextContrast", "0"); return contrast(4)() end },
+    settled("Goes on by itself.", gqOff("gossip off, changed", "gossip")),
+    { text = "Switches it on again.", button = "Skin on", run = function() return gqSwitch("gossip", true) end },
+    settled("Goes on by itself.", gqOn("gossip on again", { window = "gossip", dark = true })),
+    { text = "Open a quest dialog. With it open: the quest skin off.", button = "Skin off",
+      run = function() return gqSwitch("quest", false) end, check = gqOff("quest off", "quest") },
+    { text = "And on again.", button = "Skin on", run = function() return gqSwitch("quest", true) end },
+    settled("Goes on by itself.", gqOn("quest on again", { window = "quest" })),
+    { text = "The master switch off, with the quest dialog open.", button = "All off",
+      run = function() return gqMaster(false) end, check = gqOff("master off", "quest") },
+    { text = "And on.", button = "All on", run = function() return gqMaster(true) end },
+    settled("Goes on by itself.", gqOn("master on", { window = "quest" })),
+    -- A reload, combat.
+    { text = "Close the windows and type /reload.", reload = true },
+    { text = "Turns the taint log on again.", auto = true,
+      run = function() gqHook(); return setCVar("taintLog", "1") end },
+    { text = "Talk to the gossip NPC again. Goes on by itself.", timeout = 600,
+      wait = gqWait("gossip", { new = true }), check = gqOn("after reload", { window = "gossip" }) },
+    { text = "Optional: in combat (a mob hitting you near the NPCs), open a gossip window and accept a quest. Press "
+          .. "Next with a window open in combat, Skip if you can't.",
+      check = function()
+          local r = gqState("in combat")
+          local w = r.gossip.shown and r.gossip or r.quest
+          local ok = r.combat and w.shown and w.installed and r.blocked == 0
+          return ok, "combat " .. tostring(r.combat) .. ", styled " .. tostring(w.installed) .. ", " .. r.blocked
+              .. " blocked"
+      end },
+    -- The other readers of QuestInfo.
+    { text = "Open a quest's details from the objective tracker (right-click a quest > details, the popup) and "
+          .. "press Next with it open (a screenshot).", screenshot = "quest popup",
+      check = notInherited("popup") },
+    { text = "Open the world map's quest log and a quest's details there. Press Next with them open (a screenshot).",
+      screenshot = "map details", check = notInherited("map details") },
+    { text = "Did the popup and the map's details look as before (Blizzard's or the map skin's, nothing new)? "
+          .. "Did everything read right, with no 'Interface action failed' message or Lua error? The Note.",
+      ask = true },
+    { text = "Puts your Quest Text Contrast setting back.", auto = true, run = contrastRestore },
+    taintOff(),
+    { text = "Type /reload to save the results.", reload = true },
+})
+
+Probe:Command("gossipquest", function() gqMeasure(); gqState("now") end,
+              "#115/#114: the gossip window and the quest dialog: portraits, levels, pages, buttons now")
+skinChecks.gqState, skinChecks.gqOn, skinChecks.gqMeasure, skinChecks.gqHook = gqState, gqOn, gqMeasure, gqHook
+skinChecks.contrastRestore = contrastRestore
+end)() end
+
+--------------------------------------------------------------------------------
 -- Boot
 --------------------------------------------------------------------------------
 
@@ -5745,4 +6291,6 @@ NS._test = { ltState = skinChecks.ltState, ltOn = skinChecks.ltOn, ltClosed = sk
              coexist = coexist, arrowState = arrowState, seen = seen, lookFor = lookFor, accentState = accentState,
              timerState = timerState, timerOn = timerOn, fakeOn = fakeOn, fakeOff = fakeOff, fakeTimers = fakeTimers,
              merchantRows = merchantRows, rowsOn = rowsOn, floorTry = floorTry, floorRestore = floorRestore,
-             rxState = rxState, rxOn = rxOn, raState = raState, raOn = raOn, rxpEnable = rxpEnable }
+             rxState = rxState, rxOn = rxOn, raState = raState, raOn = raOn, rxpEnable = rxpEnable,
+             gqState = skinChecks.gqState, gqOn = skinChecks.gqOn, gqMeasure = skinChecks.gqMeasure,
+             gqHook = skinChecks.gqHook, contrastRestore = skinChecks.contrastRestore }

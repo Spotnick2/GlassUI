@@ -80,7 +80,8 @@ end
 -- PLAYER_LOGIN and PLAYER_ENTERING_WORLD.
 -- Blizzard's always-loaded windows exist before any addon, as FrameXML loads
 -- first: the merchant (opts.noMerchant: a client without it) and the damage
--- meter (opts.noMeter) and the objective tracker (opts.noTracker).
+-- meter (opts.noMeter) and the objective tracker (opts.noTracker); the quest
+-- dialog's portrait the shell's with opts.questShell.
 -- opts.db: saved variables. opts.before(): runs after the files load and
 -- before ADDON_LOADED.
 function loadAddon(opts)
@@ -96,6 +97,8 @@ function loadAddon(opts)
     if not opts.noMap then WoW.makeWorldMap() end
     if not opts.noLoot then WoW.makeLoot() end
     if not opts.noTrade then WoW.makeTrade() end
+    if not opts.noGossip then WoW.makeGossip() end
+    if not opts.noQuest then WoW.makeQuest(opts.questShell) end
     if not opts.noMirror then WoW.makeMirrorTimers() end
     if not opts.noTracker then WoW.makeTracker() end
     if not (opts.noTracker or opts.noTimer) then WoW.makeQuestTimer() end
