@@ -2138,11 +2138,13 @@ check(not T.qtStartup("t", true), "kept, but not Dark now: fails")
 -- The setter boundary (Codex on #204): a changed value with an event inside
 -- the call, none after; no change or no event is no evidence.
 local function boundaryCase(r) SkinProbeDB.results["QT.boundary b"] = r; return T.qtBoundaryOk("b")() end
-check(boundaryCase({ before = "0", final = "4", inside = 1, after = 0 }), "0 to 4, one event inside: pass")
+check(boundaryCase({ before = "0", final = "4", inside = 1, matched = true, after = 0 }), "0 to 4, its event inside: pass")
+check(not boundaryCase({ before = "0", final = "4", inside = 1, matched = false, after = 0 }),
+      "an event inside, but not the transition's value: fails")
 check(not boundaryCase({ before = "0", final = "4", inside = 0, after = 0 }), "changed, no event at all: fails")
-check(not boundaryCase({ before = "0", final = "4", inside = 1, after = 1 }), "an event after the call: fails")
+check(not boundaryCase({ before = "0", final = "4", inside = 1, matched = true, after = 1 }), "an event after the call: fails")
 check(not boundaryCase({ before = "4", final = "4", inside = 0, after = 0 }), "no change: fails")
-check(not boundaryCase({ before = "4", final = "4", inside = 1, after = 0 }), "an event but no change: fails")
+check(not boundaryCase({ before = "4", final = "4", inside = 1, matched = true, after = 0 }), "an event but no change: fails")
 SkinProbeDB.results["QT.boundary b"] = nil
 check(not T.qtBoundaryOk("b")(), "not recorded: fails")
 rawset(_G, "C_CVar", nil)
@@ -2166,9 +2168,15 @@ local gqSteps = FP.procedures["SkinProbe/gossipglass"].steps
 local function throws(st) return not pcall(st.run) end
 check(throws(qtSteps[1]), "questtext: nothing readable to save: the first step stays")
 check(throws(gqSteps[1]), "gossipglass: the same")
+-- Reported on, so a cleanup that skipped the gate would call Off and write.
+local writer = { IsOn = function() return true end, trace = {}, Status = function() return "on" end,
+                 On = function() C_CVar.SetCVar("questTextContrast", "4"); return true, "on" end,
+                 Off = function() C_CVar.SetCVar("questTextContrast", "0"); return true, "off" end }
+rawset(_G, "GlassUI", { QuestText = writer })
 for _, st in ipairs(qtSteps) do
     if st.run and (st.button or st.auto) and st ~= qtSteps[1] and st ~= qtSteps[2] then pcall(st.run) end
 end
+rawset(_G, "GlassUI", savedG)
 for _, st in ipairs(gqSteps) do
     if st.run and st.button then pcall(st.run) end
 end
@@ -2181,6 +2189,11 @@ eq(SkinProbeDB.gqContrastWas, nil, "and nothing saved (the switch's Dark isn't t
 on = false
 check(not throws(qtSteps[1]), "off: the snapshot taken")
 eq(SkinProbeDB.gqContrastWas, "2", "the player's own value")
+-- A passive startup that fails holds the gate (Codex on #204, r2).
+SkinProbeDB.qtFlagsOk = true
+GlassUI.QuestText.trace = { { event = "VARIABLES_LOADED", loaded = true, value = "0" } }
+check(throws(qtSteps[3]), "no decision recorded: the startup step stays")
+check(SkinProbeDB.qtFlagsOk ~= true, "and closes the gate")
 check(throws(qtSteps[2]), "locked: the flags step stays")
 check(SkinProbeDB.qtFlagsOk ~= true, "and the writes stay gated")
 SkinProbeDB.gqContrastWas, SkinProbeDB.qtFlagsOk = nil, nil
@@ -2199,6 +2212,11 @@ rawset(_G, "GetCVar", function(name)
     return name == "GamePadEnable" and "0" or nil
 end)
 SkinProbeDB.gqContrastWas, SkinProbeDB.qtFlagsOk = "0", true
+local savedLoop = rawget(_G, "GlassUI")
+rawset(_G, "GlassUI", { QuestText = {
+    trace = { { event = "VARIABLES_LOADED", loaded = true, value = "0" }, { event = "decision", outcome = "off", value = "0" } },
+    IsOn = function() return false end, Status = function() return "off" end,
+    On = function() return true, "on" end, Off = function() return true, "off" end } })
 for _, name in ipairs({ "wave1", "map", "gradient", "merchant", "card", "suite", "suitecombat", "meter",
                         "meterskin", "meterbars", "suitepanel", "pearl", "tracker", "questing", "accent",
                         "rxpglass", "mirrorglass", "gossipglass", "questtext" }) do
@@ -2224,6 +2242,7 @@ end
 rawset(_G, "C_CVar", nil)
 rawset(_G, "GetCVar", function(name) return name == "GamePadEnable" and "0" or nil end)
 SkinProbeDB.gqContrastWas, SkinProbeDB.qtFlagsOk = nil, nil
+rawset(_G, "GlassUI", savedLoop)
 T.panelsOff(); T.borderRestore(); T.gradientOff(); T.barsOff()
 T.suiteRestore(); T.panelRestore()
 rawset(_G, "GlassUI", nil)

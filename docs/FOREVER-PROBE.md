@@ -333,6 +333,18 @@ reputation gain, Edit Mode, another setting, action bars in combat). Saved as `Q
   settled one, decision "off". Switch on, the decision must have kept or re-applied Dark. Glass UI's
   trace now records each decision's outcome.
 
+**Rev 4 (Codex on #204, round 2):**
+- **Every write through the gate:** the switch's own calls (On twice then Off, On then Off, the quick
+  On, Off, On) too. Cleanup turns the switch off only if the run got ready, and restores only a valid
+  snapshot.
+- **A passive startup check that fails closes the gate**, and the step stays.
+- **The quick sequence is three calls, each timed on its own:** an event inside each call carrying
+  the value it ended on, none after.
+- **Full exits:** the steps ask for `/reload`, the owner's call (2026-11-19, "we don't have to fully
+  exit the client anymore for addons"), and the labels say so. A full exit would also show what a
+  fresh client presents at login, and whether the switch's re-apply runs. Codex asks for one; it
+  stays the owner's decision.
+
 **Run #491-#496 (rev 1, 70959, 2026-11-19): passed.** The owner did a `/reload` at each "full exit"
 step: since 70009 a reload reads the SavedVariables back. This CVar is Blizzard's own setting, which its
 settings dropdown writes with the same `SetCVar` the switch calls, so its persistence across a restart
