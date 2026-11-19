@@ -2158,7 +2158,8 @@ function WoW.closeTrade() WoW.asBlizzard(function() TradeFrame:Hide() end) end
 -- (UIPanelButtonTemplate's three pieces, re-textured on show), the text the
 -- contrast colours. WoW.contrast is questTextContrast (0-4); an NPC's texture
 -- kit with an atlas of its own in WoW.kitAtlases. Hidden.
-WoW.CONTRAST_ATLAS = { [0] = "QuestBG-Parchment", "QuestBG-Parchment-Accessibility1",
+-- QuestTextContrast.lua:16-22: contrast 1's atlas has no number.
+WoW.CONTRAST_ATLAS = { [0] = "QuestBG-Parchment", "QuestBG-Parchment-Accessibility",
                        "QuestBG-Parchment-Accessibility2", "QuestBG-Parchment-Accessibility3",
                        "QuestBG-Parchment-Accessibility4" }
 WoW.PARCHMENT_TEXT, WoW.STONE_TEXT = { 0.18, 0.12, 0.06 }, { 1, 0.86, 0.7 }

@@ -6125,7 +6125,7 @@ end
 
 Probe:Steps("gossipglass", {
     title = "Glass UI: the gossip window and the quest dialog in glass (#115, #114)",
-    rev = 2,
+    rev = 3,
     { text = "Turns on script errors, counts blocked actions from now, and saves your Quest Text Contrast setting "
           .. "(put back at the end; if you stop early, /fp skin gqrestore puts it back).", auto = true,
       run = function()
@@ -6180,10 +6180,11 @@ Probe:Steps("gossipglass", {
     settled("The parchment back at once. Goes on by itself.",
             gqOn("gossip default", { window = "gossip", dark = false })),
     -- Contrast 1-3 (lighter parchments with dark text), each set and checked
-    -- on its own atlas (Codex on #201).
+    -- on its own atlas (Codex on #201; 1's has no number,
+    -- QuestTextContrast.lua:18).
     { text = "Contrast 1.", button = "1", run = contrast(1) },
     settled("Its lighter parchment, kept. Goes on by itself.",
-            gqOn("gossip contrast 1", { window = "gossip", atlas = "QuestBG-Parchment-Accessibility1" })),
+            gqOn("gossip contrast 1", { window = "gossip", atlas = "QuestBG-Parchment-Accessibility" })),
     { text = "Contrast 2.", button = "2", run = contrast(2) },
     settled("Kept. Goes on by itself.",
             gqOn("gossip contrast 2", { window = "gossip", atlas = "QuestBG-Parchment-Accessibility2" })),

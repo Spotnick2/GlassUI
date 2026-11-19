@@ -109,6 +109,16 @@ local function installButton(kit, b)
     b:HookScript("OnMouseUp", function() now(false) end)
     b:HookScript("OnEnable", later)
     b:HookScript("OnDisable", later)
+    -- Hidden before its mouse-up (a panel changed while it was held): no
+    -- press left over, as UIPanelButton_OnShow resets Blizzard's art
+    -- (SecureUIPanelTemplates.lua:60-66; Codex on #201).
+    local function released()
+        if GUI.Engine.Active(kit.key) then
+            GUI.Engine.Defer(kit.skin, "button", function() feedback(st, false) end)
+        end
+    end
+    b:HookScript("OnHide", released)
+    b:HookScript("OnShow", released)
 end
 
 local function styleButton(kit, b)

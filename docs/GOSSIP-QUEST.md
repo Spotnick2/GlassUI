@@ -44,7 +44,7 @@ Mainline, `[Game]` = Camelot.
   BACKGROUND -5, its `NineSlice`).
 - **The page** is `GossipFrame.Background` (BACKGROUND 0, TOPLEFT 7,-62). On every `Update` the theme
   sets its atlas, `SetAtlas(QuestTextContrast.GetTextureKitBackgroundAtlas(kit), UseAtlasSize)`
-  (`AccessibilityTemplates.lua:77-81`): `QuestBG-Parchment`, `-Accessibility1..4` by the contrast, or
+  (`AccessibilityTemplates.lua:77-81`): `QuestBG-Parchment`, `-Accessibility`, `-Accessibility2..4` by the contrast, or
   `QuestBG-<textureKit>` when the NPC sends a kit with such an atlas. That is the only per-NPC theme.
 - `GreetingPanel` (384x512): four `Material*` BORDER textures that nothing on Forever sets, the
   `GoodbyeButton` (`UIPanelButtonTemplate`, `Left`/`Middle`/`Right`, re-textured per state), the

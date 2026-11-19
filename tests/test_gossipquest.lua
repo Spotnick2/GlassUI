@@ -226,6 +226,17 @@ check(acc.press:IsShown(), "quest: held down: the press light")
 eq(acc.press._color[4], T.PRESS_LIGHT, "quest: at its strength")
 QuestFrameAcceptButton._scripts.OnMouseUp(QuestFrameAcceptButton)
 check(not acc.press:IsShown(), "quest: released: gone")
+-- Hidden while held, its mouse-up never comes, shown again under the same
+-- window (the client fires the button's OnHide and OnShow with its panel's).
+QuestFrameAcceptButton._scripts.OnMouseDown(QuestFrameAcceptButton)
+WoW.asBlizzard(function() QuestFrameAcceptButton._scripts.OnHide(QuestFrameAcceptButton) end)
+WoW.flushTimers(0)
+check(not acc.press:IsShown(), "quest: hidden while held: the press cleared")
+QuestFrameAcceptButton._scripts.OnMouseDown(QuestFrameAcceptButton)
+WoW.asBlizzard(function() QuestFrameAcceptButton._scripts.OnShow(QuestFrameAcceptButton) end)
+check(acc.press:IsShown(), "quest: nothing inside Blizzard's OnShow")
+WoW.flushTimers(0)
+check(not acc.press:IsShown(), "quest: shown again: no press left over")
 -- Disabled while the skin is off: read again when on; nothing scheduled while off.
 GUI._test.slash("skin quest off")
 WoW.asBlizzard(function() QuestFrameCompleteButton:Disable() end)

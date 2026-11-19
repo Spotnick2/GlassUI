@@ -325,7 +325,8 @@ Saved as `SkinProbeDB.results["GQ.<label>"]`.
 **Rev 2 (Codex on #201):** a stopped run keeps the first snapshot of the player's setting (a restart
 no longer saves the probe's own value over it), and `/fp skin gqrestore` puts it back by hand;
 contrast 1, 2 and 3 are set and checked one at a time, each on its own atlas; with a quest panel
-open, the set-back check requires the page still dark.
+open, the set-back check requires the page still dark. **Rev 3:** contrast 1's atlas is
+`QuestBG-Parchment-Accessibility`, with no number (`QuestTextContrast.lua:18`).
 
 **Run #482-#483 (rev 1, 70938, 2026-11-19): passed.** 26 checks PASS, none failed; 0 failures and
 0 blocked actions all through, in combat included; the owner: "yes" to every look question. Skipped:
