@@ -187,12 +187,12 @@ eq(QF.Bg:GetAlpha(), 0, "quest: the rock faded")
 eq(QF.Inset.NineSlice:GetAlpha(), 0, "quest: the inset faded")
 hp = bottomOf(q.header)
 check(hp and hp[2] == q.win and hp[5] == T.PAGE_TOP, "quest: the band down to the pages' top")
--- QuestFramePortrait is QuestFrame's own ARTWORK texture here (made last):
--- the disc under it, the window glass lower still.
-check(QuestFramePortrait ~= QF.PortraitContainer.portrait, "(the stub: the global is QuestFrame's own texture)")
-eq(q.disc._points[1][2], QuestFramePortrait, "quest: the disc round the portrait Blizzard fills")
-eq(q.disc:GetFrameLevel(), QF:GetFrameLevel() - 1, "quest: the disc under the window's regions")
-check(q.win:GetFrameLevel() < q.disc:GetFrameLevel(), "quest: the window glass under the disc")
+-- QuestFramePortrait is the shell's portrait (measured, GQ.1 on 70938): its
+-- container's disc, the window glass at the usual level.
+eq(QuestFramePortrait, QF.PortraitContainer.portrait, "(the stub: the shell's portrait holds the global)")
+eq(q.disc._points[1][2], QF.PortraitContainer.CircleMask, "quest: the disc round the portrait's mask")
+eq(q.disc:GetFrameLevel(), 399, "quest: under the portrait's container")
+eq(q.win:GetFrameLevel(), QF:GetFrameLevel() - 1, "quest: the window glass at the usual level")
 eq(GREET.Bg:GetAlpha(), 1, "quest: the greeting's page kept")
 check(not q.pane.fill:IsShown(), "quest: no pane")
 for _, name in ipairs(T.QUEST_BUTTONS) do
@@ -357,17 +357,17 @@ eq(next(GUI.failures), nil, "no failures")
 for k, val in pairs(GUI.failures) do io.write("    " .. k .. ": " .. val .. "\n") end
 eq(table.concat(WoW.fieldChanges(), ","), "", "no field written on a Blizzard object")
 
--- The shell's portrait holding the global: its container's disc, the window
--- glass where every window's is.
-GUI = loadAddon({ questShell = true })
+-- QuestFrame's own ARTWORK texture holding the global (not this build's): the
+-- disc under it, the window glass lower still.
+GUI = loadAddon({ questOwn = true })
 T = GUI.GossipQuest._test
 WoW.quest("Detail")
 WoW.flushTimers(0)
 q = T.wins[QuestFrame]
-eq(QuestFramePortrait, QuestFrame.PortraitContainer.portrait, "(the stub: the shell's portrait)")
-eq(q.disc._points[1][2], QuestFrame.PortraitContainer.CircleMask, "shell portrait: round its mask")
-eq(q.disc:GetFrameLevel(), 399, "shell portrait: under its container")
-eq(q.win:GetFrameLevel(), QuestFrame:GetFrameLevel() - 1, "shell portrait: the window glass at the usual level")
+check(QuestFramePortrait ~= QuestFrame.PortraitContainer.portrait, "(the stub: QuestFrame's own texture)")
+eq(q.disc._points[1][2], QuestFramePortrait, "own portrait: the disc round the texture Blizzard fills")
+eq(q.disc:GetFrameLevel(), QuestFrame:GetFrameLevel() - 1, "own portrait: the disc under the window's regions")
+check(q.win:GetFrameLevel() < q.disc:GetFrameLevel(), "own portrait: the window glass under the disc")
 
 -- Neither window on this build: nothing, no error.
 GUI = loadAddon({ noGossip = true, noQuest = true })

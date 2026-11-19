@@ -2018,7 +2018,7 @@ qf.CloseButton:Enable()
 
 -- The measurements: which QuestFramePortrait is the global.
 local m = T.gqMeasure()
-eq(m.questGlobalIsShell, false, "the stub's QuestFramePortrait is QuestFrame's own")
+eq(m.questGlobalIsShell, true, "the stub's QuestFramePortrait is the shell's (as measured, GQ.1)")
 eq(m.gossipGlobalIsShell, true, "gossip's is the shell's")
 check(SkinProbeDB.results["GQ.portrait"] ~= nil, "saved as GQ.portrait")
 

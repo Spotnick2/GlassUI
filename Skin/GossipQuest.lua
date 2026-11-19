@@ -131,9 +131,10 @@ local function installWindow(kit, frame, portrait)
     else
         -- QuestFramePortrait names two textures (QuestFrame.xml:44-53 and the
         -- shell's $parentPortrait); QuestFrame_SetPortrait fills the global.
-        -- The shell's: its container's disc. QuestFrame's own ARTWORK
-        -- texture: a disc under the window's regions, the window glass one
-        -- lower still (the probe measures which, docs/GOSSIP-QUEST.md).
+        -- The shell's on 70938 (GQ.1: QuestFrame's own ARTWORK texture stays
+        -- empty): its container's disc. Should the global move to QuestFrame's
+        -- own texture: a disc under the window's regions, the window glass one
+        -- lower still.
         local pc = tbl(frame.PortraitContainer)
         if pc and portrait == pc.portrait then
             h.disc = kit:PortraitDisc(frame, { ring = DISC_RING, width = MASK_WIDTH })

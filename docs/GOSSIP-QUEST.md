@@ -6,9 +6,10 @@ template (merchant #86 ... trade #113).
 
 **Status (2026-11-19):** stage 1 built (`Skin\GossipQuest.lua`, the kit's disabled close button) and
 tested offline (`tests/test_gossipquest.lua`, mutation-tested; `test_contract`, `test_methods`).
-The in-game acceptance, `/fp steps skin gossipglass`, waits for the owner (docs/FOREVER-PROBE.md,
-GQ). Its first check measures the portrait; the skin follows the global `QuestFramePortrait`
-either way (below).
+Accepted in game on 70938 (`/fp steps skin gossipglass`, run #482-#483: 26 checks, none failed;
+docs/FOREVER-PROBE.md, GQ). Measured there: `QuestFramePortrait` is the shell's portrait, so the
+quest dialog's disc is the kit's `PortraitDisc`. Not seen in game: the reward panel, a greeting
+list, the required-money lines, auto-accept.
 
 ## Owner decisions (2026-11-16)
 

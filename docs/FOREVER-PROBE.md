@@ -320,16 +320,30 @@ is about:
 - the close button: enabled, and our X's strength (dimmed while Blizzard's is disabled);
 - Glass UI's failures and the blocked actions.
 
-Saved as `SkinProbeDB.results["GQ.<label>"]`. Not run yet.
+Saved as `SkinProbeDB.results["GQ.<label>"]`.
+
+**Run #482-#483 (rev 1, 70938, 2026-11-19): passed.** 26 checks PASS, none failed; 0 failures and
+0 blocked actions all through, in combat included; the owner: "yes" to every look question. Skipped:
+the reward panel, a greeting list, a quest needing money, auto-accept (none at hand). Measured:
+- **`QuestFramePortrait` is the shell's** (`PortraitContainer.portrait`, OVERLAY, at 400): it
+  holds the global and the NPC's face. QuestFrame's own ARTWORK texture (60 px at 7,-6) stays empty.
+  So the quest dialog's disc is the kit's `PortraitDisc` (399), the window glass at 0. Gossip's too.
+- Levels: both windows at 1, NineSlice 500, close button 510, a quest panel 2, its buttons 3.
+- Gossip texture kits: none sent (3 shows).
+- A faded page across Blizzard's `SetAtlas`: held at 0 every time (4 of 4), before the skin's
+  decision a frame later.
+- The rule held: a faded page always had Blizzard's light text over it; the quest dialog kept its
+  dark page and light text when the setting went back with a panel open, and both changed together
+  at the next panel.
 
 | # | Question | Result |
 |---|---|---|
-| GQ.1 | Which `QuestFramePortrait` Blizzard fills, the levels, the texture kits gossip NPCs send, a page's alpha across Blizzard's `SetAtlas` | Waits for the owner |
-| GQ.2 | Gossip and the quest dialog through a quest's life (details, accept, progress, reward, greeting), one pane at most, closed three ways | Waits for the owner |
-| GQ.3 | Quest Text Contrast: Dark with each window open (gossip at once, the quest dialog at its next refresh), back, 1 to 3, changed while closed, the required-money lines | Waits for the owner |
-| GQ.4 | Auto-accept (optional): the close button disabled, our X dimmed | Waits for the owner |
-| GQ.5 | Each skin off and on with its window open, a change while off, the master switch; a `/reload`; combat (optional) | Waits for the owner |
-| GQ.6 | The quest details popup and the world map's details: nothing of ours faded there | Waits for the owner |
+| GQ.1 | Which `QuestFramePortrait` Blizzard fills, the levels, the texture kits gossip NPCs send, a page's alpha across Blizzard's `SetAtlas` | **The shell's**; levels above; no kits; the fade held 4/4 (#482) |
+| GQ.2 | Gossip and the quest dialog through a quest's life (details, accept, progress, reward, greeting), one pane at most, closed three ways | **Pass**: gossip, details (a reward tooltip), accept, progress, closed three ways; reward and greeting skipped (#482) |
+| GQ.3 | Quest Text Contrast: Dark with each window open (gossip at once, the quest dialog at its next refresh), back, 1 to 3, changed while closed, the required-money lines | **Pass**; the owner: readable on glass; the money lines not seen (skipped) (#482) |
+| GQ.4 | Auto-accept (optional): the close button disabled, our X dimmed | Not run (no auto-accept quest at hand); offline tests only |
+| GQ.5 | Each skin off and on with its window open, a change while off, the master switch; a `/reload`; combat (optional) | **Pass**, combat included: 0 blocked (#482-#483) |
+| GQ.6 | The quest details popup and the world map's details: nothing of ours faded there | **Pass**: 0 regions of ours there; the owner: as before (#483) |
 
 ### The trade window (#113, docs/TRADE.md)
 

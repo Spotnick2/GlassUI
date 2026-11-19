@@ -2268,9 +2268,9 @@ function WoW.gossipUpdate(kit)
 end
 function WoW.closeGossip() WoW.asBlizzard(function() GossipFrame:Hide() end) end
 
--- QuestFrame: QuestFrame's own ARTWORK QuestFramePortrait (made after the
--- shell's, so it holds the global, QuestFrame.xml:44-53; shell = true: the
--- shell's keeps it), four panels (the page .Bg, the material corners, the
+-- QuestFrame: QuestFramePortrait names two textures (QuestFrame.xml:44-53);
+-- the shell's holds the global, measured on 70938 (GQ.1); own = true: the
+-- other build, QuestFrame's own ARTWORK texture holding it. Four panels (the page .Bg, the material corners, the
 -- seal, a scroll child Blizzard fades), the six buttons, an item button.
 WoW.questPanels = { Greeting = "QuestFrameGreetingPanel", Detail = "QuestFrameDetailPanel",
                     Progress = "QuestFrameProgressPanel", Reward = "QuestFrameRewardPanel" }
@@ -2302,10 +2302,10 @@ local function questPanelShow(kind)
     end
 end
 
-function WoW.makeQuest(shell)
+function WoW.makeQuest(own)
     WoW.asBlizzard(function()
         local f = buttonFrame("QuestFrame")
-        if not shell then
+        if own then
             local own = blizz("Texture", f, "QuestFramePortrait", "ARTWORK")
             own._width = 60
         end
