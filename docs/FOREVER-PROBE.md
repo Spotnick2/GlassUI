@@ -376,11 +376,23 @@ the options now.
 **By hand (70959, 2026-11-19, sessions #498-#501): reloads, not full exits.** The sessions start 11 s
 apart, too fast for a client restart. With the switch on (#500), the value at the startup decision was
 Dark and the switch kept it; after Grey chosen in Blizzard's settings (#501), it read 3. Within one
-client process, as the rev 1 run. A full exit is still not recorded.
+client process, as the rev 1 run.
+
+**Full exits (70959, 2026-11-19, sessions #504-#505, the rev 4 build):** the owner quit and
+relaunched twice, reading `/fp skin questtext` after each. The starting setting was Grey (3), left
+from the reloads above.
+- **The switch on (#504):** the fresh client read Dark (4) at the startup decision
+  (`VARIABLES_LOADED`; at `ADDON_LOADED` the CVars weren't loaded yet). The decision was "kept": no
+  write, the switch still on.
+- **The switch off (#505):** Off had restored Grey, the value it replaced, and the fresh client read 3
+  at the decision (outcome "off", 3 settled).
+
+So the CVar persists across a client restart, and the switch's re-apply branch (a dropped value)
+never runs on this client. It stays covered offline only.
 
 | # | Question | Result |
 |---|---|---|
-| QT.1 | The CVar's flags; the startup trace; persistence across a full exit (addon-written and Blizzard-chosen); the setter boundary | **Local storage, no locks; decided at `VARIABLES_LOADED` on the settled value; synchronous delivery** (#491-#496, #498-#501: reloads) |
+| QT.1 | The CVar's flags; the startup trace; persistence across a full exit (addon-written and Blizzard-chosen); the setter boundary | **Local storage, no locks; decided at `VARIABLES_LOADED` on the settled value; synchronous delivery** (#491-#496, #498-#501: reloads); **persists across a full exit, the decision "kept" with the switch on** (#504-#505) |
 | QT.2 | The switch: light text on glass, the other readers, letting go, On twice, On while Dark, combat, a reload and a full exit | **Pass** (the book or popup step skipped); two value checks off by the step's wording, not the switch |
 | QT.3 | Blizzard's side after the writes: XP or reputation, Edit Mode, settings, action bars in combat; `taint.log` read | **Pass**: 0 blocked, `taint.log` not written |
 
