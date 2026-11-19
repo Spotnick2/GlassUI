@@ -1911,10 +1911,166 @@ arrowFails("the pill too small", function() pill:SetWidth(10) end, function() pi
 arrowFails("ours hidden", function() ourArrow:Hide() end, function() ourArrow:Show() end)
 rawset(_G, "GlassUI", nil)
 
+do (function() -- its own function: the main chunk is near Lua 5.1's 200 locals
+-- #115/#114: the gossip window and the quest dialog as the procedure reads
+-- them, on the stub's windows with a skin's result faked: the shell faded,
+-- the band, the disc, the buttons' glass, the pane.
+local savedGQ = rawget(_G, "GlassUI")
+WoW.makeGossip()
+WoW.makeQuest()
+local gf, qf = GossipFrame, QuestFrame
+local faded = {}
+local function fake(f, buttons)
+    local win = CreateFrame("Frame", nil, f)
+    local h = { win = win, header = win:CreateTexture(), disc = CreateFrame("Frame", nil, f),
+                pane = { fill = win:CreateTexture() }, closeAlpha = 0.85 }
+    h.pane.fill:Hide()
+    for _, k in ipairs({ "NineSlice", "Bg", "TopTileStreaks" }) do f[k]:SetAlpha(0) end
+    f.Inset.Bg:SetAlpha(0)
+    f.Inset.NineSlice:SetAlpha(0)
+    for _, b in ipairs(buttons) do
+        for _, k in ipairs({ "Left", "Middle", "Right" }) do b[k]:SetAlpha(0) end
+    end
+    return h
+end
+local gh = fake(gf, { gf.GreetingPanel.GoodbyeButton })
+local qbuttons = {}
+for _, n in ipairs({ "QuestFrameAcceptButton", "QuestFrameDeclineButton", "QuestFrameCompleteButton",
+                     "QuestFrameGoodbyeButton", "QuestFrameCompleteQuestButton", "QuestFrameGreetingGoodbyeButton" }) do
+    qbuttons[#qbuttons + 1] = _G[n]
+end
+local qh = fake(qf, qbuttons)
+local gqButtons = {}
+for _, b in ipairs(qbuttons) do gqButtons[b] = { glass = CreateFrame("Frame", nil, b) } end
+gqButtons[gf.GreetingPanel.GoodbyeButton] = { glass = CreateFrame("Frame", nil, gf.GreetingPanel.GoodbyeButton) }
+rawset(_G, "GlassUI", { failures = {}, Kit = { _test = { faded = faded } },
+    GossipQuest = { _test = { wins = { [gf] = gh, [qf] = qh }, buttons = gqButtons } } })
+SkinProbeDB.suiteBlocked = 0
+WoW.contrast = 0
+WoW.gossip()
+local ok, why = T.gqOn("g", { window = "gossip", dark = false })()
+check(ok, "gossip in glass, its page kept: pass: " .. tostring(why))
+WoW.contrast = 4
+WoW.gossipUpdate()
+ok, why = T.gqOn("g", { window = "gossip" })()
+check(not ok and why:find("the dark page at 1", 1, true), "Blizzard's dark page not faded: fails")
+gf.Background:SetAlpha(0)
+ok, why = T.gqOn("g", { window = "gossip" })()
+check(not ok and why:find("no pane on the dark page", 1, true), "faded without our pane: fails")
+gh.pane.fill:SetPoint("TOPLEFT", gf.Background)
+gh.pane.fill:Show()
+ok, why = T.gqOn("g", { window = "gossip", dark = true })()
+check(ok, "faded, the pane on it: pass: " .. tostring(why))
+ok, why = T.gqOn("g", { window = "gossip", atlas = "QuestBG-Parchment-Accessibility3" })()
+check(not ok and why:find("the page QuestBG-Parchment-Accessibility4", 1, true), "another atlas than the one wanted: fails")
+ok, why = T.gqOn("g", { window = "gossip", dark = false })()
+check(not ok and why:find("the page " .. "QuestBG-Parchment-Accessibility4", 1, true), "dark when the default was wanted: fails")
+WoW.contrast = 0
+WoW.gossipUpdate()
+ok, why = T.gqOn("g", { window = "gossip" })()
+check(not ok and why:find("a page faded that isn't the dark one", 1, true), "the parchment faded: fails")
+gf.Background:SetAlpha(1)
+ok, why = T.gqOn("g", { window = "gossip" })()
+check(not ok and why:find("a pane over a kept page", 1, true), "a pane left over the parchment: fails")
+gh.pane.fill:Hide()
+gf.GreetingPanel.GoodbyeButton.Left:SetAlpha(1)
+ok, why = T.gqOn("g", { window = "gossip" })()
+check(not ok and why:find("buttons 0 of 1", 1, true), "Goodbye's art back: fails")
+gf.GreetingPanel.GoodbyeButton.Left:SetAlpha(0)
+gh.disc:Hide()
+ok, why = T.gqOn("g", { window = "gossip" })()
+check(not ok and why:find("disc", 1, true), "the disc hidden: fails")
+gh.disc:Show()
+GlassUI.failures.x = "y"
+ok, why = T.gqOn("g", { window = "gossip" })()
+check(not ok and why:find("1 failure", 1, true), "a Glass UI failure: fails")
+GlassUI.failures.x = nil
+WoW.closeGossip()
+
+-- The quest dialog: the shown panel's page, the text over it.
+local title = WoW.blizzObject("FontString", QuestDetailScrollChildFrame, "QuestInfoTitleHeader", "ARTWORK")
+WoW.contrast = 4
+WoW.quest("Detail")
+title:SetTextColor(1, 0.86, 0.7)
+QuestFrameDetailPanel.Bg:SetAlpha(0)
+qh.pane.fill:SetPoint("TOPLEFT", QuestFrameDetailPanel.Bg)
+qh.pane.fill:Show()
+ok, why = T.gqOn("q", { window = "quest", dark = true })()
+check(ok, "the detail panel dark, faded, light text: pass: " .. tostring(why))
+eq(SkinProbeDB.results["GQ.q"].quest.panel, "Detail", "the shown panel recorded")
+title:SetTextColor(0.18, 0.12, 0.06)
+ok, why = T.gqOn("q", { window = "quest" })()
+check(not ok and why:find("dark text over a faded page", 1, true), "Blizzard's dark text over a faded page: fails")
+title:SetTextColor(1, 0.86, 0.7)
+WoW.quest("Progress")
+ok, why = T.gqOn("q", { window = "quest" })()
+check(not ok and why:find("no pane on the dark page", 1, true), "the pane left on the last panel: fails")
+QuestFrameProgressPanel.Bg:SetAlpha(0)
+qh.pane.fill:ClearAllPoints()
+qh.pane.fill:SetPoint("TOPLEFT", QuestFrameProgressPanel.Bg)
+ok = T.gqOn("q", { window = "quest" })()
+check(ok, "the pane follows the shown panel: pass")
+ok, why = T.gqOn("q", { window = "quest", closeOff = true })()
+check(not ok and why:find("not dimmed", 1, true), "closeOff wanted, the button enabled: fails")
+qh.closeAlpha = 0.35
+check(not T.gqOn("q", { window = "quest", closeOff = true })(), "our X dimmed, Blizzard's button enabled: fails")
+qf.CloseButton:Disable()
+check(T.gqOn("q", { window = "quest", closeOff = true })(), "disabled and dimmed: pass")
+qf.CloseButton:Enable()
+
+-- The measurements: which QuestFramePortrait is the global.
+local m = T.gqMeasure()
+eq(m.questGlobalIsShell, true, "the stub's QuestFramePortrait is the shell's (as measured, GQ.1)")
+eq(m.gossipGlobalIsShell, true, "gossip's is the shell's")
+check(SkinProbeDB.results["GQ.portrait"] ~= nil, "saved as GQ.portrait")
+
+-- The popup: nothing of ours faded there.
+local popup = CreateFrame("Frame", "QuestLogPopupDetailFrame", UIParent)
+local region = popup:CreateTexture()
+local proc = FP.procedures["SkinProbe/gossipglass"]
+local notInherited
+for _, st in ipairs(proc.steps) do
+    if st.text:find("objective tracker", 1, true) then notInherited = st.check end
+end
+check(notInherited ~= nil and notInherited(), "nothing faded under the popup: pass")
+faded[region] = { kit = {} }
+ok, why = notInherited()
+check(not ok and why:find("1 region", 1, true), "a region of the popup faded: fails")
+faded[region] = nil
+rawset(_G, "QuestLogPopupDetailFrame", nil)
+
+-- The player's setting, saved at the start and put back at the end.
+local set = {}
+rawset(_G, "C_CVar", { SetCVar = function(name, value) set[name] = value; return true end })
+-- A stopped run (Codex on #201): the snapshot from the first start is kept
+-- over the probe's own value, and the command puts it back.
+rawset(_G, "GetCVar", function(name) return name == "questTextContrast" and "0" or nil end)
+SkinProbeDB.gqContrastWas = "2"
+check(T.contrastSave(), "a second start")
+eq(SkinProbeDB.gqContrastWas, "2", "keeps the player's value, not the probe's 0")
+SkinProbeDB.gqContrastWas = nil
+T.contrastSave()
+eq(SkinProbeDB.gqContrastWas, "0", "a fresh start saves the value now")
+rawset(_G, "GetCVar", function(name) return name == "GamePadEnable" and "0" or nil end)
+SkinProbeDB.gqContrastWas = "2"
+SlashCmdList.FOREVERPROBE("skin gqrestore")
+eq(set.questTextContrast, "2", "/fp skin gqrestore puts it back")
+eq(SkinProbeDB.gqContrastWas, nil, "and drops the snapshot")
+set.questTextContrast = nil
+SkinProbeDB.gqContrastWas = "2"
+check(T.contrastRestore(), "the setting restored")
+eq(set.questTextContrast, "2", "to the player's value")
+eq(SkinProbeDB.gqContrastWas, nil, "and the saved value dropped")
+rawset(_G, "C_CVar", nil)
+WoW.contrast = 0
+for _, n in ipairs({ "GossipFrame", "QuestFrame", "QuestInfoTitleHeader" }) do rawset(_G, n, nil) end
+rawset(_G, "GlassUI", savedGQ)
+end)() end
+
 -- The procedures are defined and every step's run, wait and check works here.
 for _, name in ipairs({ "wave1", "map", "gradient", "merchant", "card", "suite", "suitecombat", "meter",
                         "meterskin", "meterbars", "suitepanel", "pearl", "tracker", "questing", "accent",
-                        "rxpglass", "mirrorglass" }) do
+                        "rxpglass", "mirrorglass", "gossipglass" }) do
     local p = FP.procedures["SkinProbe/" .. name]
     check(p ~= nil, "procedure " .. name .. " is defined")
     if p then

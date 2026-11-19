@@ -35,6 +35,14 @@ WoW.trade()
 WoW.flushTimers(0)
 WoW.mapMaximize(true)
 WoW.flushTimers(0)
+WoW.gossip()
+WoW.setContrast(4)
+WoW.questAutoAccept = true
+WoW.quest("Detail")
+WoW.flushTimers(0)
+WoW.closeQuest()
+WoW.questAutoAccept = false
+WoW.flushTimers(0)
 WoW.rxpTheme()
 WoW.rxpLoadGuide()
 WoW.rxpSetStep()
@@ -61,6 +69,7 @@ for _, cmd in ipairs({ "failures", "version", "help", "", "skins", "skin merchan
                        "skin guild off", "skin guild on", "skin character off", "skin character on", "skin map off", "skin map on", "skin loot off", "skin loot on", "skin loothistory off",
                        "skin loothistory on", "skin trade off", "skin trade on", "skin rxp off", "skin rxp on",
                        "skin rxparrow off", "skin rxparrow on", "skin mirror off", "skin mirror on",
+                       "skin gossip off", "skin gossip on", "skin quest off", "skin quest on",
                        "off", "on", "theme smoked", "theme class", "theme clear",
                        "suite", "suite follow glassunitframes on", "options",
                        "look", "look tint class", "look preset soft" }) do

@@ -23,6 +23,7 @@ Skin\Character.lua
 Skin\Map.lua
 Skin\Loot.lua
 Skin\Trade.lua
+Skin\GossipQuest.lua
 Skin\DamageMeter.lua
 Skin\QuestTracker.lua
 Skin\MirrorTimers.lua

@@ -163,6 +163,34 @@ GUI._test.slash("skin trade off")
 GUI._test.slash("skin trade on")
 WoW.flushTimers(0)
 WoW.closeTrade()
+-- The gossip window and the quest dialog (#115, #114): opened in combat, the
+-- setting to Dark and back, panels in turn, a greeting refresh, auto-accept,
+-- off and on.
+WoW.combat = true
+WoW.gossip()
+WoW.quest("Greeting")
+WoW.flushTimers(0)
+WoW.combat = false
+WoW.setContrast(4)
+WoW.questGreetingRefresh()
+WoW.flushTimers(0)
+WoW.questAutoAccept = true
+WoW.quest("Detail")
+WoW.quest("Progress")
+WoW.quest("Reward")
+WoW.flushTimers(0)
+WoW.setContrast(0)
+WoW.gossipUpdate("Kul")
+WoW.flushTimers(0)
+GUI._test.slash("skin gossip off")
+GUI._test.slash("skin quest off")
+GUI._test.slash("skin gossip on")
+GUI._test.slash("skin quest on")
+WoW.flushTimers(0)
+WoW.closeQuest()
+WoW.questAutoAccept = false
+WoW.closeGossip()
+WoW.flushTimers(0)
 -- The world map (#99): opened in combat, maximised, a map change, a quest
 -- log update, scrolled, off and on.
 WoW.combat = true
