@@ -298,6 +298,39 @@ are saved as `SkinProbeDB.results["MS.<label>"]`.
 | MS.3 | The portrait's disc: a ring round the face, centred on the mask, on the NPC's portrait and the buyback tab's | **Run 1:** PASS: seen on both tabs, 70 px (58 + 2 x 6), off-centre 0.00001 px; centred and the right width (the owner). "The ring should probably be pearl/clear": it was dark, with a backing at the window's floor. Now Pearl, clear and without a backing. |
 | MS.4 | Off live: Blizzard's plates, slots and portrait ring back, no glass of ours; on again | **Run 1:** PASS: the border back, 0 rows on glass, no disc; the owner: exactly Blizzard's; on again, faded; after a /reload, still on. The "too many errors" warnings in the screenshots were the taint log's micro menu noise (BugGrabber: `MainMenuBarMicroButtons.lua:2008`, x301), not Glass UI. |
 
+### Light quest text on glass (#203, docs/QUEST-TEXT.md)
+
+`/fp steps skin questtext`; `/fp skin questtext` reads the flags, the startup trace and the switch
+now. It saves the player's Quest Text Contrast first (stage 1's snapshot, which now refuses to go on
+without a usable value), turns the switch off, and at its end turns it off again and restores the
+setting. The snapshot is dropped only once the setting reads it back; `/fp skin gqrestore` tries
+again by hand.
+
+Measured first, with the switch off:
+- `QT.info`: `GetCVarInfo` (storage, locked, secure, read-only). Locked, secure or read-only stops
+  the run: the design goes back for review.
+- `QT.trace <label>`: Glass UI's own startup samples (`QuestText.trace`, kept in memory by Glass UI,
+  since the probe loads after it). Each has the event, `AreCVarsLoaded`, the value and whether the
+  decision ran. Saved with the probe's own `CVAR_UPDATE`s and the settled value. A value at the
+  decision point that differs from the settled one fails: the startup gate goes back for review.
+- `QT.persist addon` and `QT.persist blizzard`: the value after a full exit, for 2 written by addon
+  code and 3 chosen in Blizzard's settings; a `/reload` as the control.
+- `QT.boundary <label>`: for On, Off and a quick Off then On, the `CVAR_UPDATE`s that arrive inside
+  the call and after it. Any after it fails: the design rests on synchronous delivery and goes back
+  for review.
+
+Then the switch in use: gossip and quest dialog light on glass, books or the popup and the map's
+details, letting go when Blizzard's settings change it, On twice then Off, On while already Dark,
+refused in combat, a `/reload` and a full exit with it on, and Blizzard's side afterwards (an XP or
+reputation gain, Edit Mode, another setting, action bars in combat). Saved as `QT.<label>`. Not run
+yet.
+
+| # | Question | Result |
+|---|---|---|
+| QT.1 | The CVar's flags; the startup trace; persistence across a full exit (addon-written and Blizzard-chosen); the setter boundary | Waits for the owner |
+| QT.2 | The switch: light text on glass, the other readers, letting go, On twice, On while Dark, combat, a reload and a full exit | Waits for the owner |
+| QT.3 | Blizzard's side after the writes: XP or reputation, Edit Mode, settings, action bars in combat; `taint.log` read | Waits for the owner |
+
 ### The gossip window and the quest dialog (#115, #114, docs/GOSSIP-QUEST.md)
 
 `/fp steps skin gossipglass`; `/fp skin gossipquest` measures and reads them now. It saves the

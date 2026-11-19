@@ -70,6 +70,7 @@ for _, cmd in ipairs({ "failures", "version", "help", "", "skins", "skin merchan
                        "skin loothistory on", "skin trade off", "skin trade on", "skin rxp off", "skin rxp on",
                        "skin rxparrow off", "skin rxparrow on", "skin mirror off", "skin mirror on",
                        "skin gossip off", "skin gossip on", "skin quest off", "skin quest on",
+                       "questtext on", "questtext off", "questtext",
                        "off", "on", "theme smoked", "theme class", "theme clear",
                        "suite", "suite follow glassunitframes on", "options",
                        "look", "look tint class", "look preset soft" }) do

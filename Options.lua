@@ -338,6 +338,39 @@ local function build()
     ccOpen:SetPoint("TOP", cc, "TOP", 0, -6)
     Options._test.clickCast, Options._test.clickCastOpen = ccLine, ccOpen
 
+    -- Quest text (#203, docs/QUEST-TEXT.md): Light quest text on glass, the
+    -- one Blizzard setting Glass UI changes, live (no reload).
+    local QT = GUI.QuestText
+    local sep4 = rule()
+    local qtTitle = label(page, "Quest text", "GameFontHighlightLarge")
+    qtTitle:SetPoint("TOPLEFT", sep4, "BOTTOMLEFT", 4, -12)
+    local qtCheck = CreateFrame("CheckButton", nil, page, "UICheckButtonTemplate")
+    qtCheck:SetSize(26, 26)
+    qtCheck:SetPoint("TOPLEFT", qtTitle, "BOTTOMLEFT", -4, -4)
+    local qtText = label(page, "Light quest text on glass")
+    qtText:SetPoint("LEFT", qtCheck, "RIGHT", 6, 0)
+    local qtNote = label(page, "", "GameFontDisable")
+    qtNote:SetPoint("TOPLEFT", qtCheck, "BOTTOMLEFT", 4, -2)
+    qtNote:SetPoint("RIGHT", page, "RIGHT", -PAD, 0)
+    qtNote:SetJustifyV("TOP")
+    local qtLine = label(page, "", "GameFontHighlightSmall")
+    qtLine:SetPoint("TOPLEFT", qtNote, "BOTTOMLEFT", 0, -4)
+    qtLine:SetPoint("RIGHT", page, "RIGHT", -PAD, 0)
+    qtCheck:SetScript("OnClick", function()
+        local _, line = (qtCheck:GetChecked() and QT.On or QT.Off)()
+        Options.questTextLine = line
+        refreshAll()
+    end)
+    qtCheck:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine("Light quest text on glass", 1, 1, 1)
+        GameTooltip:AddLine("Turn this off before uninstalling to restore your previous setting.", 1, 0.82, 0)
+        GameTooltip:Show()
+    end)
+    qtCheck:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    QT.OnChange(function() if Options.built and panel:IsShown() then refreshAll() end end)
+    Options._test.questText = { check = qtCheck, note = qtNote, line = qtLine }
+
     -- The footer, on the panel under the scrolled page: the note, and the
     -- spot the Reload UI button sits over.
     local sep3 = rule(panel)
@@ -393,6 +426,13 @@ local function build()
         end
         ccOpen:SetShown(c ~= nil and c.open ~= nil)
 
+        span(sep4, ccLine, 14)
+        qtCheck:SetChecked(QT.IsOn())
+        local base = "Turns on Blizzard's Dark quest text (Settings > Accessibility) and keeps it on until you "
+            .. "turn this off. It also changes books, the quest details popup and the map's quest details."
+        qtNote:SetText(QT.IsPending() and ("On, waiting for combat to end. " .. base) or base)
+        qtLine:SetText(Options.questTextLine or "")
+
         if anyPending then
             note:SetText(combat() and "Changes are waiting: type /reload when combat ends."
                 or "Changes are waiting: reload to apply them.")
@@ -403,8 +443,8 @@ local function build()
         credit:SetText((GUI.IsDev() and "Development build" or ("Version " .. GUI.VersionText())) .. " - Spotnick")
         showReload(spot)
         page:SetWidth(scroll:GetWidth())
-        fit(ccLine)
-        C_Timer.After(0, function() fit(ccLine) end)
+        fit(qtLine)
+        C_Timer.After(0, function() fit(qtLine) end)
     end
 end
 
