@@ -131,11 +131,11 @@ QuestInfo's regions; the scroll child.
    stops the run, and the plan goes back for review. A global pointing at the rock is harmless: the
    skin uses the key and the structure.
 2. The book icon: found as a direct OVERLAY -1 texture, 64 px. The levels of the **shown** popup:
-   window, `NineSlice`, `PortraitContainer`, the buttons, our glass and disc. #201's own-texture
-   recipe puts the glass at the window's level - 2 and the disc at - 1, and both clamp to 0 at window
-   level 1, which the dialog measured (Codex r1). The acceptance condition is the disc visible
-   under the book. If both land at 0 and the disc doesn't show, the plan comes back with a disc whose
-   draw order is set on our own glass.
+   window, `NineSlice`, `PortraitContainer`, the buttons, our glass and our book. #201's own-texture
+   recipe puts the glass at the window's level - 2. Since #208 the acceptance condition is our glass
+   book shown over Blizzard's faded one, with **no ring** round it and the window's top-left corner
+   hidden behind it, as Glass Mail's envelope (the disc of the first plan let the corner show through
+   its translucent band).
 
 **Acceptance** (script errors on, blocked actions counted, `/reload`s only):
 1. A quest's details from the objective tracker's menu: the window in glass, the page kept (default

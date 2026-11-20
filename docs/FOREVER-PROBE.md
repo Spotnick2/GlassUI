@@ -311,7 +311,7 @@ Dark through Light quest text, and turns it off and restores the setting at its 
   - the shell (`NineSlice`, streaks, inset, the rock);
   - the page's atlas and alpha, and our pane;
   - the skin's recorded last paint, and the title's colour: a faded page under dark text fails;
-  - the band, our book over Blizzard's faded one (#206, #207; there was a disc before), the buttons' glass;
+  - the band, our book over Blizzard's faded one with no ring round it (#206-#208), the buttons' glass;
   - failures and blocked actions.
 - **The repaint step** waits for a new paint with the same popup open and its page still dark. A
   reopening doesn't count.
@@ -343,7 +343,7 @@ Saved as `QP.<label>`.
 
 | # | Question | Result |
 |---|---|---|
-| QP.1 | The structure: `.Bg` the page, the rock and the book found by structure; the levels; the disc visible under the book | Waits for the owner |
+| QP.1 | The structure: `.Bg` the page, the rock and the book found by structure; the levels; our glass book over Blizzard's faded one, no ring round it, the window's top-left corner hidden behind it (#208, rev 4) | Waits for the owner |
 | QP.2 | Default and Dark; Dark off with it open, then a quest-log update (the page back a frame later); Dark on again without a redraw (kept); reopened (faded) | Waits for the owner |
 | QP.3 | The buttons, Show Map, Abandon, closing; off and on (kept until the next paint), the master switch; combat | Waits for the owner |
 

@@ -2264,6 +2264,13 @@ h.art:Hide()
 ok, why = T.qpOn("p")()
 check(not ok and why:find("our book not shown", 1, true), "our book hidden: fails")
 h.art:Show()
+-- #208: a glass ring round the book (the window's corner showed through).
+h.disc = CreateFrame("Frame", nil, PF)
+ok, why = T.qpOn("p")()
+check(not ok and why:find("a glass ring round the book", 1, true), "a ring round the book: fails")
+h.disc:Hide()
+check(T.qpOn("p", { faded = false })(), "a ring hidden: passes")
+h.disc = nil
 -- The structure step stays when a piece is missing.
 local steps = FP.procedures["SkinProbe/questpopup"].steps
 local structureStep
