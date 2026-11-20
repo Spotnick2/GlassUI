@@ -54,7 +54,7 @@ function Deploy-Addon {
     # The TOC is the list of what ships (subfolders included, e.g. Core\).
     $lua = @(Get-Content -LiteralPath (Join-Path $RepoRoot "GlassUI.toc") | ForEach-Object { $_.Trim() } |
         Where-Object { $_ -notmatch "^#" -and $_ -match "[.]lua$" })
-    # The glass is LibGlass's; our own textures are Tools\make_media.py's (Media\*.tga, #56).
+    # The glass is LibGlass's; our own textures are Media\*.tga: Tools\make_media.py's (#56) and the owner's art (QuestBook).
     $media = @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot "Media") -File -ErrorAction SilentlyContinue |
         Where-Object { $_.Extension -eq ".tga" } | ForEach-Object { "Media\" + $_.Name })
     $files = @("GlassUI.toc", "LICENSE") + $lua + $media

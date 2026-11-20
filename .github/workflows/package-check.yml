@@ -84,7 +84,8 @@ jobs:
       # The zip is what players install, so assert its SHAPE: the TOC, every
       # Lua file it loads, LICENSE, and under Libs/LibGlass-1.0 exactly what
       # the library ships (its XML, every file the XML loads, LICENSE,
-      # Media/*.tga), and our own Media/*.tga (Tools/make_media.py's, #56).
+      # Media/*.tga), and our own Media/*.tga (Tools/make_media.py's, #56, and
+      # the owner's art: QuestBook).
       # NOTHING else.
       - name: The package is exactly the addon and its library
         run: |
