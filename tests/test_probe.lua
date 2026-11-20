@@ -2266,6 +2266,63 @@ structure.rock = false
 check(not pcall(structureStep.run), "no rock by structure: the step stays")
 structure.rock = true
 eq(SkinProbeDB.results["QP.structure"].globalIsKey, true, "the stub's global is .Bg (recorded)")
+
+-- Codex on #205: the run starts from Default; a Light quest text change that
+-- doesn't hold keeps its step; the cleanup keeps its step until the switch
+-- is off and the setting restored; the repaint settles before its check.
+local cv, refuse, switchOn = "4", false, false
+rawset(_G, "C_CVar", { SetCVar = function(name, v) if name == "questTextContrast" then cv = tostring(v) end; return true end })
+rawset(_G, "GetCVar", function(name) if name == "questTextContrast" then return cv end end)
+GlassUI.QuestText = {
+    IsOn = function() return switchOn end,
+    On = function() if refuse then return false, "not in combat" end; switchOn, cv = true, "4"; return true, "on" end,
+    Off = function() if refuse then return false, "not in combat" end; switchOn, cv = false, "0"; return true, "off" end,
+}
+local function step(pattern)
+    for _, st in ipairs(steps) do if st.text:find(pattern, 1, true) then return st end end
+end
+SkinProbeDB.gqContrastWas = nil
+check(pcall(steps[1].run), "the first step: the snapshot taken")
+eq(SkinProbeDB.gqContrastWas, "4", "the player's own Dark saved")
+eq(cv, "0", "and the run set to Default")
+local lightOn = step("Turns Light quest text on")
+refuse = true
+check(not pcall(lightOn.run), "Light on refused (combat): the step stays")
+refuse = false
+check(pcall(lightOn.run), "Light on: the switch on, Dark read back")
+local lightOff = step("With the popup open: turns Light quest text off")
+refuse = true
+check(not pcall(lightOff.run), "Light off refused: the step stays")
+local cleanup = step("Turns Light quest text off and puts your own")
+check(not pcall(cleanup.run), "the cleanup with the switch stuck on: the step stays")
+eq(SkinProbeDB.gqContrastWas, "4", "the snapshot kept for the retry")
+refuse = false
+check(pcall(cleanup.run), "out of combat: the cleanup goes on")
+check(not switchOn, "the switch off")
+eq(cv, "4", "the player's own Dark back")
+eq(SkinProbeDB.gqContrastWas, nil, "the snapshot dropped once restored")
+-- A restore that doesn't take: the step stays, the snapshot kept.
+SkinProbeDB.gqContrastWas, cv = "3", "0"
+local realSet = C_CVar.SetCVar
+C_CVar.SetCVar = function() return true end
+check(not pcall(cleanup.run), "the restore didn't take: the cleanup stays")
+eq(SkinProbeDB.gqContrastWas, "3", "the snapshot kept")
+C_CVar.SetCVar = realSet
+check(pcall(cleanup.run), "then it takes: the cleanup goes on")
+-- The repaint: seen, then a moment before the check reads the page.
+local repaint = step("loot a quest item")
+local now = 100
+rawset(_G, "GetTime", function() return now end)
+PF.Bg:SetAtlas("QuestBG-Parchment-Accessibility4")
+popupT.popup.paintLight = true
+check(not repaint.wait(), "no repaint yet: waits")
+popupT.popup.paintLight = false
+check(not repaint.wait(), "the repaint seen: still a moment before the check")
+now = 101.5
+check(repaint.wait(), "a moment later: goes on")
+rawset(_G, "GetTime", function() return 12.5 end)
+rawset(_G, "C_CVar", nil)
+rawset(_G, "GetCVar", function(name) return name == "GamePadEnable" and "0" or nil end)
 WoW.asBlizzard(function() PF:Hide() end)
 for _, n in ipairs({ "QuestLogPopupDetailFrame", "QuestInfoTitleHeader" }) do rawset(_G, n, nil) end
 rawset(_G, "GlassUI", savedQP)
@@ -2274,18 +2331,24 @@ end)() end
 -- The procedures are defined and every step's run, wait and check works here.
 -- The contrast procedures run with a saved setting and readable flags, as
 -- after their first steps in game.
-rawset(_G, "C_CVar", { SetCVar = function() return true end, AreCVarsLoaded = function() return true end,
-                       GetCVarInfo = function() return "0", "0", false, false, false, false, false end })
+-- A setting the writes move, and a switch that moves it, as in game.
+local loopCV, loopOn = "0", false
+rawset(_G, "C_CVar", { SetCVar = function(name, v) if name == "questTextContrast" then loopCV = tostring(v) end; return true end,
+                       AreCVarsLoaded = function() return true end,
+                       GetCVarInfo = function() return loopCV, "0", false, false, false, false, false end })
 rawset(_G, "GetCVar", function(name)
-    if name == "questTextContrast" then return "0" end
+    if name == "questTextContrast" then return loopCV end
     return name == "GamePadEnable" and "0" or nil
 end)
 SkinProbeDB.gqContrastWas, SkinProbeDB.qtFlagsOk = "0", true
 local savedLoop = rawget(_G, "GlassUI")
 rawset(_G, "GlassUI", { QuestText = {
-    trace = { { event = "VARIABLES_LOADED", loaded = true, value = "0" }, { event = "decision", outcome = "off", value = "0" } },
-    IsOn = function() return false end, Status = function() return "off" end,
-    On = function() return true, "on" end, Off = function() return true, "off" end },
+    -- The startup trace reads the setting as it is (a load after each write).
+    trace = { setmetatable({ event = "VARIABLES_LOADED", loaded = true }, { __index = function(_, k) if k == "value" then return loopCV end end }),
+              setmetatable({ event = "decision", outcome = "off" }, { __index = function(_, k) if k == "value" then return loopCV end end }) },
+    IsOn = function() return loopOn end, Status = function() return loopOn and "on" or "off" end,
+    On = function() loopOn, loopCV = true, "4"; return true, "on" end,
+    Off = function() loopOn, loopCV = false, "0"; return true, "off" end },
     GossipQuest = { _test = { wins = {}, buttons = {}, popup = {}, pageOf = function() return {} end,
                               rockOf = function() return {} end, bookOf = function() return {} end } } })
 WoW.makeQuestPopup()   -- the questpopup steps read a popup

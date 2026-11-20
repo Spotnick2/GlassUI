@@ -6874,6 +6874,15 @@ local function qpSettle(text, check, screenshot)
 end
 
 -- Light quest text on or off, only with the player's setting saved.
+local function liveContrast()
+    local ok, v = pcall(GetCVar, "questTextContrast")
+    v = ok and plain(v) or nil
+    return type(v) == "string" and v or nil
+end
+
+-- Light quest text on or off, only with the player's setting saved, and the
+-- step stays until the switch and the setting both read the change: a
+-- refusal (combat) or a write that didn't hold throws (Codex on #205).
 local function lightSwitch(on)
     return function()
         if not (type(SkinProbeDB) == "table" and type(SkinProbeDB.gqContrastWas) == "string") then
@@ -6882,7 +6891,13 @@ local function lightSwitch(on)
         local G = glassUI()
         local Q = G and G.QuestText
         if not Q then error("Glass UI not loaded", 0) end
-        return (on and Q.On or Q.Off)()
+        local _, line = (on and Q.On or Q.Off)()
+        local value = liveContrast()
+        if Q.IsOn() ~= on or (on and value ~= "4") or (not on and value == "4") then
+            error("Light quest text didn't turn " .. (on and "on" or "off") .. " (" .. tostring(line) .. ", the setting reads "
+                .. tostring(value) .. "): out of combat, press Retry", 0)
+        end
+        return true, tostring(line) .. ", the setting reads " .. tostring(value)
     end
 end
 
@@ -6898,7 +6913,7 @@ end
 -- The same popup open, its page still dark, and a new paint recorded dark:
 -- a quest-log update, not a reopening (Codex on #202, r2).
 local function repaintWait()
-    local first
+    local first, seenAt
     return function()
         local T = qpTest()
         local f = frameByName("QuestLogPopupDetailFrame")
@@ -6908,13 +6923,17 @@ local function repaintWait()
         if not (okA and plain(atlas) == DARK) then return false, "its page isn't the dark one: reopen it in Dark" end
         first = first or f
         if first ~= f then return false, "reopened" end
-        return T.popup.paintLight == false, "loot a quest item with the popup open"
+        if T.popup.paintLight ~= false then seenAt = nil return false, "loot a quest item with the popup open" end
+        -- The page comes back a frame after the paint: settle before the
+        -- check reads it (Codex on #205).
+        seenAt = seenAt or GetTime()
+        return GetTime() - seenAt >= 1, "the text repainted: a moment"
     end
 end
 
 Probe:Steps("questpopup", {
     title = "Glass UI: the quest details popup in glass (#202)",
-    rev = 1,
+    rev = 2,
     { text = "Turns on script errors, counts blocked actions, turns the taint log on and saves your Quest Text "
           .. "Contrast (put back at the end; /fp skin gqrestore if you stop early). If Light quest text is on, "
           .. "this step stays: /glassui questtext off, then Retry. " .. TAINT_NOISE, auto = true,
@@ -6927,8 +6946,13 @@ Probe:Steps("questpopup", {
           end
           local ok, why = skinChecks.contrastSave()
           if not ok then error(why, 0) end
+          -- The run starts from Default (Codex on #205): a player's own Dark
+          -- would fade the first popup and become Light quest text's
+          -- remembered value, so its Off could never bring dark text back.
+          setCVar("questTextContrast", "0")
+          if liveContrast() ~= "0" then error("Quest Text Contrast didn't go to Default: press Retry", 0) end
           setCVar("taintLog", "1")
-          return true, why
+          return true, why .. "; Default for the run"
       end },
     { text = "Open a quest's details from the objective tracker (right-click a quest > the details). Goes on by "
           .. "itself; a screenshot.", timeout = 600, wait = qpWait(), screenshot = "popup, first",
@@ -6984,14 +7008,21 @@ Probe:Steps("questpopup", {
     { text = "Optional: in combat, open the popup and press Next with it open (Skip if you can't).",
       check = qpOn("in combat", { combat = true }) },
     { text = "Did it read right, with no 'Interface action failed' message or Lua error? The Note.", ask = true },
-    { text = "Turns Light quest text off and puts your own Quest Text Contrast back.", auto = true,
+    { text = "Turns Light quest text off and puts your own Quest Text Contrast back. Out of combat; if this step "
+          .. "stays, leave combat and press Retry.", auto = true,
       run = function()
+          -- The switch must really be off before the restore, or its next
+          -- login re-applies Dark over the restored value (run #513: an Off
+          -- refused, then Dark back at the reload; Codex on #205).
           local G = glassUI()
-          if type(SkinProbeDB) == "table" and type(SkinProbeDB.gqContrastWas) == "string" and G and G.QuestText
-              and G.QuestText.IsOn() then
-              G.QuestText.Off()
+          local Q = G and G.QuestText
+          if type(SkinProbeDB) == "table" and type(SkinProbeDB.gqContrastWas) == "string" and Q and Q.IsOn() then
+              Q.Off()
+              if Q.IsOn() then error("Light quest text didn't turn off: out of combat, press Retry", 0) end
           end
-          return skinChecks.contrastRestore()
+          local ok, why = skinChecks.contrastRestore()
+          if not ok then error(why .. ": press Retry", 0) end
+          return true, why
       end },
     taintOff(),
     { text = "Type /reload to save the results.", reload = true },

@@ -318,7 +318,24 @@ Dark through Light quest text, and turns it off and restores the setting at its 
 - `gossipglass`'s popup check now counts only the dialog skins' fades (`gossip`, `quest`). The
   popup's own skin fades its rock.
 
-Saved as `QP.<label>`. Not run yet.
+**Run #513 (rev 1, 70959, 2026-11-19):** 0 failures, 0 blocked (in combat too).
+- **The structure as planned:** `.Bg` the page (QuestBG-Parchment at 7,-62); the rock and the book
+  found by structure. The global `QuestLogPopupDetailFrameBg` is **not** `.Bg`: it names the rock. The
+  skin never uses it.
+- **The page:** kept in Default, faded in Dark with light text and our pane; kept after the skin was
+  turned on over an open popup (history unknown).
+- **No quest-log repaint seen:** the repaint step was finished by hand. Its check and the next one
+  failed on their expectation (the text never went dark); a faded page never had dark text over it.
+- **The cleanup** left Light quest text on: its Off was refused (combat, most likely, right after the
+  combat step), and the reload that followed re-applied Dark over the restored Default.
+- **The owner's note:** "buttons are really close, the background of the book doesn't hide the old
+  frame it looks like".
+
+**Rev 2 (Codex on #205):** the run sets Default after the snapshot; the Light on/off steps and the
+cleanup stay until the switch and the setting read the change (the cleanup also until the restore
+reads back); the repaint step settles a moment after the new paint before its check.
+
+Saved as `QP.<label>`.
 
 | # | Question | Result |
 |---|---|---|
