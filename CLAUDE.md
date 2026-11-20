@@ -152,7 +152,7 @@ skin's in-game acceptance. **`test_probe` runs locally only:** ForeverProbe is p
 - **Sibling repos are never edited from this session.** The hub pilot's changes to GlassUnitFrames
   and GlassActionBars are issues and PRs in those repos.
 - Releases: `..\References\Docs\RELEASING.md`, its templates since #210.
-  - **CurseForge** project `1745875` (https://www.curseforge.com/projects/1745875): its
+  - **CurseForge** project `1745875` (https://www.curseforge.com/wow/addons/glass-ui): its
     webhook builds a file from every tag pushed. No CurseForge key lives in the repo, and the
     packager never uploads from CI.
   - **Wago Addons** project `mNwwPlNo` (https://addons.wago.io/addons/mNwwPlNo): the tag's `wago`

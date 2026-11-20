@@ -21,7 +21,7 @@ The first release. Its alphas preview it.
   pages read well on glass, and gives your own setting back when you turn it off
   (`/glassui questtext on|off`).
 - **Commands:** `/glassui skins` lists every skin and whether it's on; `/glassui skin <name> on|off`
-  and `/glassui on|off` switch them, most of them without a /reload. `/glassui help` lists the rest.
+  and `/glassui on|off` switch them at once, without a /reload. `/glassui help` lists the rest.
 - **Steps aside** for the gamepad interface; for ElvUI, EllesmereUI and Tukui, which skin these
   windows too; for bag addons (Bagnon, Baganator, AdiBags, ArkInventory, BetterBags, EllesmereUI's
   bags); for Leatrix Maps' simple map; and for Glass Maps and Glass Quest Tracker, which own their
