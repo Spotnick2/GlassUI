@@ -6100,9 +6100,12 @@ local function notInherited(label)
         local faded = G and G.Kit and G.Kit._test and G.Kit._test.faded or {}
         local roots = { frameByName("QuestLogPopupDetailFrame"), frameByName("QuestMapFrame") }
         local n = 0
-        for region in pairs(faded) do
-            local p = region
-            for _ = 1, 30 do
+        -- The dialog skins' fades only: the popup's own skin (#202) fades its
+        -- rock there, legitimately (Codex on #202).
+        local DIALOG = { gossip = true, quest = true }
+        for region, st in pairs(faded) do
+            local p = (type(st) == "table" and type(st.kit) == "table" and DIALOG[st.kit.key]) and region or nil
+            for _ = 1, p and 30 or 0 do
                 local ok, parent = call(p, "GetParent")
                 p = ok and parent or nil
                 if not p then break end
@@ -6687,6 +6690,359 @@ skinChecks.qtBoundaryOk = lastBoundaryOk
 end)() end
 
 --------------------------------------------------------------------------------
+-- The quest details popup (#202, docs/QUEST-POPUP.md). First the structure
+-- the skin rests on (QP.structure): .Bg and QuestLogPopupDetailFrameBg each,
+-- the rock and the book found by structure, the shown popup's levels. A
+-- missing or ambiguous piece stops the run. Then the acceptance: each check
+-- reads the shell, the rock, the page (its atlas and alpha), our pane, the
+-- last paint the skin recorded, the text over the page (a faded page must
+-- have light text over it), the disc, the buttons, failures and blocked
+-- actions. Light quest text (#204) sets the contrast; the player's own
+-- setting is saved first and put back at the end. Saved as QP.<label>.
+--------------------------------------------------------------------------------
+
+do (function()
+local DARK = "QuestBG-Parchment-Accessibility4"
+
+local function qpTest()
+    local G = glassUI()
+    return G and G.GossipQuest and G.GossipQuest._test, G
+end
+
+local function isSeen(f)
+    local ok, v = call(f, "IsVisible")
+    return ok and plain(v) == true
+end
+
+local function alphaOf(r)
+    local ok, a = call(r, "GetAlpha")
+    a = ok and plain(a) or nil
+    return type(a) == "number" and a or nil
+end
+
+local function levelOf(f)
+    local ok, l = call(f, "GetFrameLevel")
+    l = ok and plain(l) or nil
+    return type(l) == "number" and l or nil
+end
+
+local function texShape(t)
+    if type(t) ~= "table" then return nil end
+    local okL, layer, sub = call(t, "GetDrawLayer")
+    local okA, atlas = call(t, "GetAtlas")
+    local okN, n = call(t, "GetNumPoints")
+    local pts = {}
+    for i = 1, (okN and plain(n)) or 0 do
+        local ok, p, _, _, x, y = call(t, "GetPoint", i)
+        if ok then pts[#pts + 1] = tostring(plain(p)) .. " " .. tostring(plain(x)) .. "," .. tostring(plain(y)) end
+    end
+    return { layer = okL and plain(layer) or nil, sub = okL and plain(sub) or nil,
+             atlas = okA and plain(atlas) or nil, points = table.concat(pts, "; ") }
+end
+
+local function lightText()
+    local fs = frameByName("QuestInfoTitleHeader")
+    local ok, r, g, b = call(fs, "GetTextColor")
+    r, g, b = plain(r), plain(g), plain(b)
+    if not (ok and type(r) == "number" and type(g) == "number" and type(b) == "number") then return nil end
+    return (r + g + b) / 3 > 0.5
+end
+
+local function qpMeasure()
+    local T = qpTest()
+    local f = frameByName("QuestLogPopupDetailFrame")
+    local m = { shown = f ~= nil and isSeen(f) }
+    if f then
+        m.key = texShape(f.Bg)
+        local global = rawget(_G, "QuestLogPopupDetailFrameBg")
+        m.globalIsKey = global == f.Bg
+        m.global = texShape(global)
+        m.page = T and T.pageOf(f) ~= nil
+        m.rock = T and T.rockOf(f, T.pageOf(f)) ~= nil
+        m.book = T and T.bookOf(f) ~= nil
+        m.levels = { window = levelOf(f), nineSlice = levelOf(f.NineSlice), portraitContainer = levelOf(f.PortraitContainer),
+                     abandon = levelOf(f.AbandonButton) }
+        local h = T and T.wins[f]
+        if h then m.levels.glass, m.levels.disc = levelOf(h.win), levelOf(h.disc) end
+    end
+    say("QP structure: .Bg " .. tostring(m.key and m.key.atlas) .. " " .. tostring(m.key and m.key.points)
+        .. ", the global is .Bg " .. tostring(m.globalIsKey) .. ", page " .. tostring(m.page) .. ", rock "
+        .. tostring(m.rock) .. ", book " .. tostring(m.book))
+    record("QP.structure", m)
+    return m
+end
+
+local function qpState(label)
+    local T, G = qpTest()
+    local f = frameByName("QuestLogPopupDetailFrame")
+    local h = T and f and T.wins[f]
+    local r = { shown = f ~= nil and isSeen(f), installed = h ~= nil, paintLight = T and T.popup.paintLight,
+                light = lightText(), buttons = 0, buttonsRight = 0 }
+    if f then
+        local most = 0
+        for _, x in ipairs({ f.NineSlice, f.TopTileStreaks, f.Inset and f.Inset.Bg, h and h.rock }) do
+            local a = alphaOf(x)
+            if a then most = math.max(most, a) end
+        end
+        r.shell = most
+        local page = h and h.page
+        local okA, atlas = call(page, "GetAtlas")
+        r.atlas = okA and plain(atlas) or nil
+        r.pageAlpha = alphaOf(page)
+        if h then
+            r.header = isSeen(h.header)
+            r.disc = h.disc ~= nil and isSeen(h.disc)
+            local okP, _, rel = call(h.pane.fill, "GetPoint", 1)
+            r.pane = isSeen(h.pane.fill)
+            r.paneOnPage = r.pane and okP and rel == page
+        end
+        for _, key in ipairs({ "AbandonButton", "TrackButton", "ShareButton" }) do
+            local b = f[key]
+            if isSeen(b) then
+                r.buttons = r.buttons + 1
+                local st = T and T.buttons[b]
+                if st and isSeen(st.glass) and alphaOf(b.Left) == 0 then r.buttonsRight = r.buttonsRight + 1 end
+            end
+        end
+    end
+    local okC, c = pcall(InCombatLockdown)
+    r.combat = okC and plain(c) == true
+    local n = 0
+    for _ in pairs(G and G.failures or {}) do n = n + 1 end
+    r.failures = n
+    r.blocked = type(SkinProbeDB) == "table" and SkinProbeDB.suiteBlocked or 0
+    say("QP " .. label .. ": shown " .. tostring(r.shown) .. ", shell " .. tostring(r.shell) .. ", page "
+        .. tostring(r.atlas) .. " at " .. tostring(r.pageAlpha) .. ", pane " .. tostring(r.pane) .. ", last paint light "
+        .. tostring(r.paintLight) .. ", text light " .. tostring(r.light) .. ", buttons " .. r.buttonsRight .. "/"
+        .. r.buttons .. ", combat " .. tostring(r.combat) .. ", failures " .. r.failures .. ", blocked " .. r.blocked)
+    record("QP." .. label, r)
+    return r
+end
+
+-- want.faded: the page expected faded (true) or kept (false); want.combat.
+local function qpOn(label, want)
+    want = want or {}
+    return function()
+        local r = qpState(label)
+        local bad = {}
+        local function want_(cond, why) if not cond then bad[#bad + 1] = why end end
+        want_(r.shown, "the popup not shown")
+        want_(r.installed, "not installed")
+        want_(r.shell == 0, "shell " .. tostring(r.shell))
+        want_(r.header, "the band not shown")
+        want_(r.disc, "the book's disc not shown")
+        want_(r.buttonsRight == r.buttons, "buttons " .. r.buttonsRight .. " of " .. r.buttons)
+        if r.pageAlpha == 0 then
+            want_(r.atlas == DARK, "a page faded that isn't the dark one")
+            want_(r.light ~= false, "dark text over a faded page")
+            want_(r.paneOnPage, "no pane on the faded page")
+        else
+            want_(not r.pane, "a pane over a kept page")
+        end
+        if want.faded ~= nil then want_((r.pageAlpha == 0) == want.faded, "the page at " .. tostring(r.pageAlpha)) end
+        if want.combat ~= nil then want_(r.combat == want.combat, "combat " .. tostring(r.combat)) end
+        want_(r.failures == 0, r.failures .. " failure(s): /glassui failures")
+        want_(r.blocked == 0, r.blocked .. " blocked")
+        return #bad == 0, #bad == 0 and "as planned" or table.concat(bad, "; ")
+    end
+end
+
+local function qpOff(label)
+    return function()
+        local r = qpState(label)
+        local ok = r.shown and r.shell > 0 and r.pageAlpha ~= 0 and not r.pane and r.buttonsRight == 0
+        return ok, ok and "Blizzard's look, nothing of ours" or "something of ours while off"
+    end
+end
+
+local function qpWait()
+    return function()
+        local T = qpTest()
+        local f = frameByName("QuestLogPopupDetailFrame")
+        return f ~= nil and isSeen(f) and T ~= nil and T.wins[f] ~= nil, "waiting for the quest details popup"
+    end
+end
+
+local function qpSettle(text, check, screenshot)
+    local t0
+    return { text = text, timeout = 15, screenshot = screenshot, check = check,
+             wait = function()
+                 t0 = t0 or GetTime()
+                 return GetTime() - t0 >= 1, "a moment"
+             end,
+             leave = function() t0 = nil end }
+end
+
+local function liveContrast()
+    local ok, v = pcall(GetCVar, "questTextContrast")
+    v = ok and plain(v) or nil
+    return type(v) == "string" and v or nil
+end
+
+-- Light quest text on or off, only with the player's setting saved, and the
+-- step stays until the switch and the setting both read the change: a
+-- refusal (combat) or a write that didn't hold throws (Codex on #205).
+local function lightSwitch(on)
+    return function()
+        if not (type(SkinProbeDB) == "table" and type(SkinProbeDB.gqContrastWas) == "string") then
+            error("your setting wasn't saved: press Stop", 0)
+        end
+        local G = glassUI()
+        local Q = G and G.QuestText
+        if not Q then error("Glass UI not loaded", 0) end
+        local _, line = (on and Q.On or Q.Off)()
+        local value = liveContrast()
+        -- Off releases the switch before its write, so a write that didn't
+        -- hold leaves the switch off over Dark and every later Off says
+        -- "already off". The run's baseline is Default (its first step):
+        -- the probe puts it back itself, out of combat (Codex on #205, r2).
+        if not on and not Q.IsOn() and value ~= "0" and not InCombatLockdown() then
+            setCVar("questTextContrast", "0")
+            value = liveContrast()
+            line = tostring(line) .. "; Default put back"
+        end
+        local want = on and "4" or "0"
+        if Q.IsOn() ~= on or value ~= want then
+            error("Light quest text didn't turn " .. (on and "on" or "off") .. " (" .. tostring(line) .. ", the setting reads "
+                .. tostring(value) .. "): out of combat, press Retry", 0)
+        end
+        return true, tostring(line) .. ", the setting reads " .. tostring(value)
+    end
+end
+
+local function skinSwitch(key, on)
+    return function()
+        local G = glassUI()
+        if not (G and G.Engine) then return false, "Glass UI not loaded" end
+        if key then G.Engine.SetEnabled(key, on) else G.Engine.SetMaster(on) end
+        return true, tostring(key or "master") .. " " .. (on and "on" or "off")
+    end
+end
+
+-- The same popup open, its page still dark, and a new paint recorded dark:
+-- a quest-log update, not a reopening (Codex on #202, r2).
+local function repaintWait()
+    local first, seenAt
+    return function()
+        local T = qpTest()
+        local f = frameByName("QuestLogPopupDetailFrame")
+        local h = T and f and T.wins[f]
+        if not (h and isSeen(f)) then first = nil return false, "the popup must stay open" end
+        local okA, atlas = call(h.page, "GetAtlas")
+        if not (okA and plain(atlas) == DARK) then return false, "its page isn't the dark one: reopen it in Dark" end
+        first = first or f
+        if first ~= f then return false, "reopened" end
+        if T.popup.paintLight ~= false then seenAt = nil return false, "loot a quest item with the popup open" end
+        -- The page comes back a frame after the paint: settle before the
+        -- check reads it (Codex on #205).
+        seenAt = seenAt or GetTime()
+        return GetTime() - seenAt >= 1, "the text repainted: a moment"
+    end
+end
+
+Probe:Steps("questpopup", {
+    title = "Glass UI: the quest details popup in glass (#202)",
+    rev = 3,
+    { text = "Turns on script errors, counts blocked actions, turns the taint log on and saves your Quest Text "
+          .. "Contrast (put back at the end; /fp skin gqrestore if you stop early). If Light quest text is on, "
+          .. "this step stays: /glassui questtext off, then Retry. " .. TAINT_NOISE, auto = true,
+      run = function()
+          if type(SkinProbeDB) == "table" then SkinProbeDB.suiteBlocked = 0 end
+          setCVar("scriptErrors", "1")
+          local G = glassUI()
+          if G and G.QuestText and G.QuestText.IsOn() then
+              error("Light quest text is on: /glassui questtext off, then Retry", 0)
+          end
+          local ok, why = skinChecks.contrastSave()
+          if not ok then error(why, 0) end
+          -- The run starts from Default (Codex on #205): a player's own Dark
+          -- would fade the first popup and become Light quest text's
+          -- remembered value, so its Off could never bring dark text back.
+          setCVar("questTextContrast", "0")
+          if liveContrast() ~= "0" then error("Quest Text Contrast didn't go to Default: press Retry", 0) end
+          setCVar("taintLog", "1")
+          return true, why .. "; Default for the run"
+      end },
+    { text = "Open a quest's details from the objective tracker (right-click a quest > the details). Goes on by "
+          .. "itself; a screenshot.", timeout = 600, wait = qpWait(), screenshot = "popup, first",
+      check = qpOn("first", { faded = false }) },
+    { text = "Reads the structure: the page, the rock, the book icon, the levels. If this step stays, press Stop and "
+          .. "tell Claude.", auto = true,
+      run = function()
+          local m = qpMeasure()
+          if not (m.page and m.rock and m.book) then
+              error("the structure isn't as planned (page " .. tostring(m.page) .. ", rock " .. tostring(m.rock)
+                  .. ", book " .. tostring(m.book) .. ")", 0)
+          end
+          return true, "the page, the rock and the book found"
+      end },
+    { text = "Is the book icon on a glass disc, the window in glass, the parchment page with Blizzard's text, "
+          .. "Abandon, Track and Share on glass (Share dimmed outside a group)? Anything off: the Note.", ask = true },
+    { text = "Press Track twice (untrack, track), then press Next.", check = qpOn("tracked") },
+    -- Dark.
+    { text = "Turns Light quest text on (Blizzard's Dark quest text).", button = "Light on", run = lightSwitch(true) },
+    { text = "Close the popup and open it again from the tracker. Press Next with it open; a screenshot.",
+      screenshot = "popup, dark", check = qpOn("dark", { faded = true }) },
+    { text = "Is the light text readable on the glass?", ask = true },
+    -- The text repainted without its page.
+    { text = "With the popup open: turns Light quest text off.", button = "Light off", run = lightSwitch(false) },
+    qpSettle("The page stays faded: the text Blizzard painted is still light. Goes on by itself.",
+             qpOn("off, no redraw", { faded = true })),
+    { text = "Keep the popup open and loot a quest item (or kill a mob a quest counts) so the quest log updates. "
+          .. "This step goes on by itself once Blizzard repaints the text; a screenshot.", timeout = 900,
+      wait = repaintWait(), screenshot = "popup, repainted", check = qpOn("repainted", { faded = false }) },
+    { text = "Was the dark text on bare glass noticeable for a moment before the page came back?", ask = true },
+    { text = "Still open: turns Light quest text on again, no reopening.", button = "Light on",
+      run = lightSwitch(true) },
+    qpSettle("The page stays: the text is still dark. Goes on by itself.", qpOn("dark again, no redraw", { faded = false })),
+    { text = "Close the popup and open it again. Press Next with it open.", check = qpOn("reopened", { faded = true }) },
+    { text = "Optional: a quest whose details list required money, in Dark. Open it and press Next (a "
+          .. "screenshot), Skip if none.", screenshot = "popup, money", check = qpOn("money") },
+    -- Off and on.
+    { text = "With it open: the popup skin off.", button = "Skin off",
+      run = skinSwitch("questpopup", false), check = qpOff("off") },
+    { text = "And on again.", button = "Skin on", run = skinSwitch("questpopup", true) },
+    qpSettle("The page stays until Blizzard's next paint (the history is unknown). Goes on by itself.",
+             qpOn("on again")),
+    { text = "The master switch off.", button = "All off", run = skinSwitch(nil, false), check = qpOff("master off") },
+    { text = "And on.", button = "All on", run = skinSwitch(nil, true) },
+    qpSettle("Goes on by itself.", qpOn("master on")),
+    -- Closing, combat.
+    { text = "Press Show Map (the map opens on the quest), close it; open the popup again, press Abandon and "
+          .. "cancel the dialog; close the popup with its X, open it again and close it with Esc. Press Next.",
+      check = function()
+          local r = qpState("closed")
+          return not r.shown and r.blocked == 0, (r.shown and "still open" or "closed") .. ", " .. r.blocked .. " blocked"
+      end },
+    { text = "Optional: in combat, open the popup and press Next with it open (Skip if you can't).",
+      check = qpOn("in combat", { combat = true }) },
+    { text = "Did it read right, with no 'Interface action failed' message or Lua error? The Note.", ask = true },
+    { text = "Turns Light quest text off and puts your own Quest Text Contrast back. Out of combat; if this step "
+          .. "stays, leave combat and press Retry.", auto = true,
+      run = function()
+          -- The switch must really be off before the restore, or its next
+          -- login re-applies Dark over the restored value (run #513: an Off
+          -- refused, then Dark back at the reload; Codex on #205).
+          local G = glassUI()
+          local Q = G and G.QuestText
+          if type(SkinProbeDB) == "table" and type(SkinProbeDB.gqContrastWas) == "string" and Q and Q.IsOn() then
+              Q.Off()
+              if Q.IsOn() then error("Light quest text didn't turn off: out of combat, press Retry", 0) end
+          end
+          local ok, why = skinChecks.contrastRestore()
+          if not ok then error(why .. ": press Retry", 0) end
+          return true, why
+      end },
+    taintOff(),
+    { text = "Type /reload to save the results.", reload = true },
+})
+
+Probe:Command("questpopup", function() qpMeasure(); qpState("now") end,
+              "#202: the quest details popup: its structure, levels and state now")
+skinChecks.qpState, skinChecks.qpOn, skinChecks.qpMeasure = qpState, qpOn, qpMeasure
+end)() end
+
+--------------------------------------------------------------------------------
 -- Boot
 --------------------------------------------------------------------------------
 
@@ -6726,4 +7082,5 @@ NS._test = { ltState = skinChecks.ltState, ltOn = skinChecks.ltOn, ltClosed = sk
              gqState = skinChecks.gqState, gqOn = skinChecks.gqOn, gqMeasure = skinChecks.gqMeasure,
              gqHook = skinChecks.gqHook, contrastRestore = skinChecks.contrastRestore,
              contrastSave = skinChecks.contrastSave, qtState = skinChecks.qtState, qtInfo = skinChecks.qtInfo,
-             qtStartup = skinChecks.qtStartup, qtBoundaryOk = skinChecks.qtBoundaryOk }
+             qtStartup = skinChecks.qtStartup, qtBoundaryOk = skinChecks.qtBoundaryOk,
+             qpState = skinChecks.qpState, qpOn = skinChecks.qpOn, qpMeasure = skinChecks.qpMeasure }

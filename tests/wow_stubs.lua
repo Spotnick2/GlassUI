@@ -2431,6 +2431,91 @@ function WoW.closeQuest()
     end)
 end
 
+-- QuestLogPopupDetailFrame (#202, docs/QUEST-POPUP.md; QuestMapFrame.xml:311,
+-- 70959): ButtonFrameTemplate then QuestFramePanelTemplate, both naming a
+-- texture "Bg": the page wins the key and the global; the rock (BACKGROUND
+-- -6, 2,-21 and -2,2) is a bare region. The book icon (OVERLAY -1, 64 px),
+-- the scroll child with QuestInfo's text, Show Map, Abandon, Track and Share.
+-- WoW.popupRock = "missing" or "two", WoW.popupPage = "rock" (the key on the
+-- rock) for the structure checks. Hidden.
+function WoW.makeQuestPopup()
+    WoW.asBlizzard(function()
+        local name = "QuestLogPopupDetailFrame"
+        local f = buttonFrame(name)
+        local rock = f.Bg
+        rock._sub = -6
+        rock:SetPoint("TOPLEFT", f, "TOPLEFT", 2, -21)
+        rock:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -2, 2)
+        local page = blizz("Texture", f, name .. "Bg", "BACKGROUND")
+        page:SetPoint("TOPLEFT", f, "TOPLEFT", 7, -62)
+        page._atlas = "QuestBG-Parchment"
+        if WoW.popupRock ~= "missing" then WoW.addRegion(f, rock) end
+        if WoW.popupRock == "two" then
+            local twin = blizz("Texture", f, nil, "BACKGROUND")
+            twin._sub = -6
+            twin:SetPoint("TOPLEFT", f, "TOPLEFT", 2, -21)
+            twin:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -2, 2)
+            WoW.addRegion(f, twin)
+        end
+        WoW.addRegion(f, page)
+        f.Bg = WoW.popupPage == "rock" and rock or page
+        f._rock = rock
+        for _, k in ipairs({ "MaterialTopLeft", "MaterialTopRight", "MaterialBotLeft", "MaterialBotRight" }) do
+            f[k] = blizz("Texture", f, name .. k, "BORDER")
+        end
+        f.SealMaterialBG = blizz("Texture", f, nil, "BORDER")
+        f.SealMaterialBG._shown = false
+        -- Another OVERLAY texture first: the book is found by its sublevel and size.
+        local decoy = blizz("Texture", f, nil, "OVERLAY")
+        decoy._width = 30
+        WoW.addRegion(f, decoy)
+        local book = blizz("Texture", f, nil, "OVERLAY")
+        book._sub, book._width = -1, 64
+        WoW.addRegion(f, book)
+        f._book = book
+        f.ScrollFrame = blizz("ScrollFrame", f, name .. "ScrollFrame")
+        f.ScrollFrame.ScrollChild = blizz("Frame", f.ScrollFrame)
+        f._text = blizz("FontString", f.ScrollFrame.ScrollChild, nil, "ARTWORK")
+        f.ShowMapButton = blizz("Button", f)
+        f.ShowMapButton.Texture = blizz("Texture", f.ShowMapButton, nil, "ARTWORK")
+        for _, key in ipairs({ "AbandonButton", "TrackButton", "ShareButton" }) do
+            f[key] = uiPanelButton(f, name .. key)
+        end
+        -- QuestLogPopupDetailMixin:Update: QuestInfo_Display, painting by the
+        -- setting as it is now (QuestInfo.lua:68-95).
+        luaMethod(f, "Update", function(self)
+            WoW.popupPaints = (WoW.popupPaints or 0) + 1
+            textColor(self._text)
+        end)
+        WoW.snapshot()
+    end)
+end
+
+-- ShowQuest (QuestMapFrame.lua:2605-2630): the same quest shown hides it;
+-- else Update, ShowUIPanel (duringShow runs there: an OnShow callback),
+-- then the page set by the setting as it is then.
+function WoW.popupShow(questID, duringShow)
+    WoW.asBlizzard(function()
+        local f = QuestLogPopupDetailFrame
+        if f:IsShown() and f._questID == questID then f:Hide() return end
+        f._questID = questID
+        f:Update(true)
+        f:Show()
+        if duringShow then duringShow() end
+        f.Bg:SetAtlas(pageAtlas(nil))
+        for _, key in ipairs({ "AbandonButton", "TrackButton", "ShareButton" }) do buttonArt(f[key]) end
+    end)
+end
+-- QuestMapFrame_DoFullUpdate (QuestMapFrame.lua:507-521): the text repainted
+-- while shown, the page left as it is.
+function WoW.popupFullUpdate()
+    WoW.asBlizzard(function()
+        local f = QuestLogPopupDetailFrame
+        if f:IsShown() then f:Update() end
+    end)
+end
+function WoW.closePopup() WoW.asBlizzard(function() QuestLogPopupDetailFrame:Hide() end) end
+
 -- The setting changed (Settings, Accessibility): CVAR_UPDATE to every
 -- listener; the gossip window's theme listens while shown (OnPreShow).
 -- blizzFirst: Blizzard's handler before the addon's.

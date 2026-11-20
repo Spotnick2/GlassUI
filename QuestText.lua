@@ -116,6 +116,10 @@ end
 -- A refresh when the switch's state changes (the settings page's checkbox).
 function QT.OnChange(fn) listeners[#listeners + 1] = fn end
 
+-- Read only: does the setting say Blizzard's light text right now? (#202:
+-- the quest popup records what QuestInfo just painted by it.)
+function QT.LightText() return live() == DARK end
+
 function QT.IsOn() return record() ~= nil end
 function QT.IsPending() return state.pending and record() ~= nil end
 
