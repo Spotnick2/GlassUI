@@ -23,7 +23,7 @@ file doesn't cover something, check how those handle it before you invent a new 
 - **`## Category: |cff7fd4ffGlass|r`** in every Glass addon's TOC (the AddOn list header), never a
   `Group` under Glass UI: GlassPanel's plugins already group under GlassPanel.
 - `/glassui` and `/gui` (`/glass` is GlassUnitFrames'). v0.1.0 = wave 1 + hub v1; 1.0.0 at Forever's
-  launch. Private repo for now; CurseForge project 1745875.
+  launch. Public repo; CurseForge project 1745875, Wago `mNwwPlNo` ("Workflow and releasing").
 
 **Status (2026-10-19):** Glass UI is first the **suite orchestrator**. Done on 70450:
 - **suite theme v1** (#24): Pearl, with GlassUnitFrames and GlassRaidFrames following it,
@@ -151,7 +151,13 @@ skin's in-game acceptance. **`test_probe` runs locally only:** ForeverProbe is p
   `-m gpt-6.2-astra` at high effort, looping until consensus, without overengineering.
 - **Sibling repos are never edited from this session.** The hub pilot's changes to GlassUnitFrames
   and GlassActionBars are issues and PRs in those repos.
-- Releases: `..\References\Docs\RELEASING.md`.
+- Releases: `..\References\Docs\RELEASING.md`, its templates since #210.
+  - **CurseForge** project `1745875` (https://www.curseforge.com/projects/1745875): its
+    webhook builds a file from every tag pushed. No CurseForge key lives in the repo, and the
+    packager never uploads from CI.
+  - **Wago Addons** project `mNwwPlNo` (https://addons.wago.io/addons/mNwwPlNo): the tag's `wago`
+    job uploads CI's zip, with the `WAGO_API_TOKEN` secret.
+  - **GitHub:** the tag's `release` job publishes the same zip with `release.json` (WowUp).
 
 ## Conventions
 

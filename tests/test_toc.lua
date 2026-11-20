@@ -14,6 +14,10 @@ check(toc:find("## X-License: MIT", 1, true), "MIT, like its siblings")
 local tocLF = "\n" .. toc:gsub("\r", "")
 check(tocLF:find("\n## Category: |cff7fd4ffGlass|r\n", 1, true), "the Glass category header")
 check(not tocLF:find("\n## Group:", 1, true), "no Group line")
+-- The CurseForge project, and the Wago one: the `wago` job uploads to the project the packaged
+-- TOC names, and the Wago app matches an installed addon by it (RELEASING.md §1).
+check(tocLF:find("\n## X-Curse-Project-ID: 1745875\n", 1, true), "the CurseForge project ID")
+check(tocLF:find("\n## X-Wago-ID: mNwwPlNo\n", 1, true), "the Wago project ID")
 check(not tocLF:find("\n## Dependencies:", 1, true) and not tocLF:find("\n## RequiredDeps:", 1, true),
       "no hard dependency: every Glass addon stands alone")
 check(io.open("LICENSE"):read("*a"):find("MIT License", 1, true), "LICENSE is MIT")
