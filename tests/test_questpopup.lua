@@ -4,7 +4,7 @@
 -- one AND Blizzard's last paint of the text was light (Update's instance
 -- hook, on from login); Codex r1's four steps, a contrast change during the
 -- show, unknown history after the skin was off, the first-ever opening in
--- Dark; the structure checks; the book's disc; the buttons; nothing of ours
+-- Dark; the structure checks; our book; the buttons; nothing of ours
 -- on QuestInfo's scroll child, no text colour, field or Lua method.
 dofile("tests/wow_stubs.lua")
 dofile("tests/harness.lua")
@@ -44,7 +44,7 @@ eq(rock:GetAlpha(), 0, "the rock faded")
 eq(page:GetAlpha(), 1, "the page kept (default contrast: dark text)")
 check(not h.pane.fill:IsShown(), "no pane")
 check(h.header:IsShown(), "the band")
-eq(h.disc._points[1][2], PF._book, "the disc round the book icon")
+eq(h.disc, nil, "no glass ring round the book: Glass Mail's envelope has none (after #207)")
 -- Glass Mail's recipe (the owner, after #205): our glass book over
 -- Blizzard's, theirs faded.
 eq(h.book, PF._book, "the book recorded")
@@ -54,8 +54,7 @@ eq(h.art._points[1][2], PF._book, "on the book icon's place")
 check(h.art:GetFrameLevel() > PF:GetFrameLevel(), "over the popup's regions")
 eq(h.artTex:GetTexture(), T.BOOK_ART, "the owner's glass book")
 eq(T.BOOK_ART, "Interface\\AddOns\\GlassUI\\Media\\QuestBook", "the art's path: Media\\QuestBook.tga, as deployed")
-eq(h.disc:GetFrameLevel(), PF:GetFrameLevel() - 1, "under the window's regions")
-check(h.win:GetFrameLevel() < h.disc:GetFrameLevel(), "the window glass under the disc")
+check(h.win:GetFrameLevel() < PF:GetFrameLevel(), "the window glass under the window's regions")
 check(h.closeX ~= nil, "the close button on its disc")
 for _, key in ipairs({ "AbandonButton", "TrackButton", "ShareButton" }) do
     local st = T.buttons[PF[key]]

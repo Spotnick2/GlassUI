@@ -311,7 +311,7 @@ Dark through Light quest text, and turns it off and restores the setting at its 
   - the shell (`NineSlice`, streaks, inset, the rock);
   - the page's atlas and alpha, and our pane;
   - the skin's recorded last paint, and the title's colour: a faded page under dark text fails;
-  - the band, the book's disc, the buttons' glass;
+  - the band, our book over Blizzard's faded one (#206, #207; there was a disc before), the buttons' glass;
   - failures and blocked actions.
 - **The repaint step** waits for a new paint with the same popup open and its page still dark. A
   reopening doesn't count.
