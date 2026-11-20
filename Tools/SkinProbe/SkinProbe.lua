@@ -6873,7 +6873,6 @@ local function qpSettle(text, check, screenshot)
              leave = function() t0 = nil end }
 end
 
--- Light quest text on or off, only with the player's setting saved.
 local function liveContrast()
     local ok, v = pcall(GetCVar, "questTextContrast")
     v = ok and plain(v) or nil
@@ -6893,7 +6892,17 @@ local function lightSwitch(on)
         if not Q then error("Glass UI not loaded", 0) end
         local _, line = (on and Q.On or Q.Off)()
         local value = liveContrast()
-        if Q.IsOn() ~= on or (on and value ~= "4") or (not on and value == "4") then
+        -- Off releases the switch before its write, so a write that didn't
+        -- hold leaves the switch off over Dark and every later Off says
+        -- "already off". The run's baseline is Default (its first step):
+        -- the probe puts it back itself, out of combat (Codex on #205, r2).
+        if not on and not Q.IsOn() and value ~= "0" and not InCombatLockdown() then
+            setCVar("questTextContrast", "0")
+            value = liveContrast()
+            line = tostring(line) .. "; Default put back"
+        end
+        local want = on and "4" or "0"
+        if Q.IsOn() ~= on or value ~= want then
             error("Light quest text didn't turn " .. (on and "on" or "off") .. " (" .. tostring(line) .. ", the setting reads "
                 .. tostring(value) .. "): out of combat, press Retry", 0)
         end
@@ -6933,7 +6942,7 @@ end
 
 Probe:Steps("questpopup", {
     title = "Glass UI: the quest details popup in glass (#202)",
-    rev = 2,
+    rev = 3,
     { text = "Turns on script errors, counts blocked actions, turns the taint log on and saves your Quest Text "
           .. "Contrast (put back at the end; /fp skin gqrestore if you stop early). If Light quest text is on, "
           .. "this step stays: /glassui questtext off, then Retry. " .. TAINT_NOISE, auto = true,

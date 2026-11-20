@@ -2270,13 +2270,25 @@ eq(SkinProbeDB.results["QP.structure"].globalIsKey, true, "the stub's global is 
 -- Codex on #205: the run starts from Default; a Light quest text change that
 -- doesn't hold keeps its step; the cleanup keeps its step until the switch
 -- is off and the setting restored; the repaint settles before its check.
-local cv, refuse, switchOn = "4", false, false
-rawset(_G, "C_CVar", { SetCVar = function(name, v) if name == "questTextContrast" then cv = tostring(v) end; return true end })
+local cv, refuse, switchOn, writeFails = "4", false, false, false
+rawset(_G, "C_CVar", { SetCVar = function(name, v)
+    if writeFails then return false end
+    if name == "questTextContrast" then cv = tostring(v) end
+    return true
+end })
 rawset(_G, "GetCVar", function(name) if name == "questTextContrast" then return cv end end)
+-- As QuestText's: Off releases the switch before its write, and says
+-- "already off" with the switch released.
 GlassUI.QuestText = {
     IsOn = function() return switchOn end,
     On = function() if refuse then return false, "not in combat" end; switchOn, cv = true, "4"; return true, "on" end,
-    Off = function() if refuse then return false, "not in combat" end; switchOn, cv = false, "0"; return true, "off" end,
+    Off = function()
+        if not switchOn then return true, "already off" end
+        if refuse then return false, "not in combat" end
+        switchOn = false
+        if not writeFails then cv = "0" end
+        return true, "off"
+    end,
 }
 local function step(pattern)
     for _, st in ipairs(steps) do if st.text:find(pattern, 1, true) then return st end end
@@ -2293,6 +2305,23 @@ check(pcall(lightOn.run), "Light on: the switch on, Dark read back")
 local lightOff = step("With the popup open: turns Light quest text off")
 refuse = true
 check(not pcall(lightOff.run), "Light off refused: the step stays")
+-- Codex on #205, r2: Off released the switch but its write didn't hold.
+-- Retry finds it "already off"; the probe puts the run's Default back.
+refuse, writeFails = false, true
+check(not pcall(lightOff.run), "Off released, Dark left: the step stays")
+check(not switchOn and cv == "4", "the switch released, the setting still Dark")
+WoW.combat = true
+writeFails = false
+check(not pcall(lightOff.run), "Retry in combat: no write, the step stays")
+eq(cv, "4", "nothing written in combat")
+WoW.combat = false
+check(pcall(lightOff.run), "Retry out of combat: Default back, the step goes on")
+eq(cv, "0", "the run's Default read back")
+cv, writeFails = nil, true
+check(not pcall(lightOff.run), "an unreadable setting doesn't pass as off")
+cv, writeFails = "4", false
+switchOn = true
+refuse = true
 local cleanup = step("Turns Light quest text off and puts your own")
 check(not pcall(cleanup.run), "the cleanup with the switch stuck on: the step stays")
 eq(SkinProbeDB.gqContrastWas, "4", "the snapshot kept for the retry")

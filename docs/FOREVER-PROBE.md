@@ -334,6 +334,10 @@ Dark through Light quest text, and turns it off and restores the setting at its 
 **Rev 2 (Codex on #205):** the run sets Default after the snapshot; the Light on/off steps and the
 cleanup stay until the switch and the setting read the change (the cleanup also until the restore
 reads back); the repaint step settles a moment after the new paint before its check.
+**Rev 3 (Codex on #205, r2):** Light quest text's Off releases the switch before its write, so a
+write that didn't hold leaves it off over Dark and every Retry says "already off". The mid-run
+Light off step then puts the run's Default back itself, out of combat, and goes on only on a `0`
+read back (an unreadable setting no longer passes).
 
 Saved as `QP.<label>`.
 
