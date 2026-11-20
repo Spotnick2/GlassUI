@@ -43,9 +43,10 @@ with no `/reload`, and `/glassui off` does the same for every skin.
 
 **One look for the family.** On the "Suite look" settings page, choose clear, smoked or
 class-colour glass, a gold or ice accent for the titles, and how buttons answer the mouse (glass,
-soft or minimal). Changes apply at once to Glass UI's skins and to every Glass addon that follows
-Glass UI's appearance. The main page lists the family, and you choose there which addons follow
-Glass UI and which keep their own settings.
+soft or minimal). Glass UI's skins, and the Glass addons that follow it and can change live,
+repaint at once; the page marks any follower that needs a `/reload` to catch up. The main page
+lists the family, and you choose there which addons follow Glass UI and which keep their own
+settings.
 
 **Light quest text on glass.** An option on the settings page turns on Blizzard's Dark quest text,
 so quest pages read well on glass. It's off until you turn it on, and turning it off gives back
