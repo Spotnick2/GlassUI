@@ -67,6 +67,7 @@ local bg = T.buttons[bye]
 check(bg ~= nil, "gossip: Goodbye on glass")
 eq(bg.glass._parent, bye, "gossip: its glass is its child")
 eq(bg.glass:GetFrameLevel(), bye:GetFrameLevel() - 1, "gossip: under the button")
+check(bg.glass._points[1][4] == 0 and bg.glass._points[2][4] == 0, "gossip: its glass the button's width (only the popup's are inset)")
 eq(bg.g.top:GetFrameLevel(), bye:GetFrameLevel() - 1, "gossip: its rim too")
 check(not bg.glass._mouse, "gossip: mouse off")
 for _, k in ipairs({ "Left", "Middle", "Right" }) do eq(bye[k]:GetAlpha(), 0, "gossip: Goodbye's " .. k .. " faded") end

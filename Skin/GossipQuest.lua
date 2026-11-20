@@ -54,8 +54,8 @@ end
 
 -- Our glass under a Blizzard frame at `level`, its rim there too (the trade
 -- window's). Mouse off: a plain frame.
-local function glassAt(kit, frame, level)
-    local glass, g = kit:Panel(frame, "small", NO_INSETS, nil, { backing = false })
+local function glassAt(kit, frame, level, insets)
+    local glass, g = kit:Panel(frame, "small", insets or NO_INSETS, nil, { backing = false })
     glass:SetFrameLevel(math.max(0, level))
     if g and g.top then g.top:SetFrameLevel(glass:GetFrameLevel()) end
     return glass, g
@@ -86,9 +86,9 @@ end
 
 -- A button's glass is its child, so it hides with the button (Decline under
 -- auto-accept, the gamepad's hidden buttons).
-local function installButton(kit, b)
+local function installButton(kit, b, insets)
     if buttons[b] then return end
-    local glass, g = glassAt(kit, b, b:GetFrameLevel() - 1)
+    local glass, g = glassAt(kit, b, b:GetFrameLevel() - 1, insets)
     local press = glass:CreateTexture(nil, "ARTWORK")
     press:SetAllPoints(glass)
     press:SetColorTexture(1, 1, 1, PRESS_LIGHT)
@@ -303,6 +303,11 @@ GUI.Engine.Register({
 --------------------------------------------------------------------------------
 
 local POPUP_BUTTONS = { "AbandonButton", "TrackButton", "ShareButton" }
+-- Share is anchored edge to edge between Abandon and Track
+-- (QuestMapFrame.xml:407-411), and Blizzard's art keeps a gap inside each
+-- button that our glass, filling the button, closed: 2 px in on each side
+-- gives neighbours 4 px (the owner, after #205).
+local POPUP_BUTTON_INSETS = { 2, 0, 2, 0 }
 local popup = { paintLight = nil, hooked = false }   -- what Blizzard last painted
 
 local function near(a, b) return type(a) == "number" and math.abs(a - b) < 0.5 end
@@ -373,6 +378,24 @@ local function bookOf(frame)
     return nil
 end
 
+-- Glass Mail's recipe for a portrait (its envelope and scroll): our own
+-- round art over Blizzard's, theirs faded and back when the skin is off (the
+-- owner, after #205). The owner's glass book (Media\QuestBook.tga, round on
+-- its own dark disc) on the book icon's 64 px, a level over the popup's
+-- regions; our LibGlass disc stays its ring. Blizzard never sets the book's
+-- texture or alpha (QuestMapFrame.xml:314, no key), so the fade holds.
+local BOOK_ART = "Interface\\AddOns\\GlassUI\\Media\\QuestBook"
+
+local function bookArt(kit, frame, book)
+    local f = kit:Adopt(CreateFrame("Frame", nil, frame))
+    f:SetFrameLevel(frame:GetFrameLevel() + 1)
+    f:SetAllPoints(book)
+    local t = f:CreateTexture(nil, "ARTWORK")
+    t:SetTexture(BOOK_ART)
+    t:SetAllPoints(f)
+    return f, t
+end
+
 local function decidePopup(kit, h)
     if not decide(kit, h, h.page, popup.paintLight == true) then
         Kit.ShowSection(h.pane, false)
@@ -426,13 +449,14 @@ popupSkin = GUI.Engine.Register({
         -- The book is the popup's own texture: #201's own-texture path, the
         -- disc under the window's regions, the window glass one lower.
         local h = installWindow(kit, frame, book)
+        if book then h.book, h.art, h.artTex = book, bookArt(kit, frame, book) end
         h.page = pageOf(frame)
         if not h.page then API.Fail("missing:questpopup:page", ".Bg isn't the page on this build") end
         h.rock = rockOf(frame, h.page)
         if not h.rock then API.Fail("missing:questpopup:rock", "the rock: none or two by structure") end
         for _, key in ipairs(POPUP_BUTTONS) do
             local b = kit:Child(frame, key)
-            if tbl(b) then installButton(kit, b) end
+            if tbl(b) then installButton(kit, b, POPUP_BUTTON_INSETS) end
         end
     end,
     style = function(kit, frame)
@@ -443,6 +467,7 @@ popupSkin = GUI.Engine.Register({
         kit:Fade(kit:Child(frame, "TopTileStreaks"))
         kit:Inset(kit:Child(frame, "Inset"))
         kit:Fade(h.rock)
+        kit:Fade(h.book)
         kit:CloseFades(tbl(frame.CloseButton))
         for b, st in pairs(buttons) do
             if st.kit == kit then styleButton(kit, b) end
@@ -458,4 +483,4 @@ popupSkin = GUI.Engine.Register({
 GUI.GossipQuest = { _test = { wins = wins, buttons = buttons, DARK = DARK, HOVER = HOVER, PAGE_TOP = PAGE_TOP,
                               BUTTON_OFF = BUTTON_OFF, PRESS_LIGHT = PRESS_LIGHT,
                               PANELS = PANELS, QUEST_BUTTONS = QUEST_BUTTONS, popup = popup,
-                              pageOf = pageOf, rockOf = rockOf, bookOf = bookOf } }
+                              pageOf = pageOf, rockOf = rockOf, bookOf = bookOf, BOOK_ART = BOOK_ART } }

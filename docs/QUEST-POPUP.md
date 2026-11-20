@@ -77,12 +77,12 @@ page decision).
 | The shell: `NineSlice`, `TopTileStreaks`, `Inset`, **the rock** (found by structure, not `.Bg`) | faded. Not `kit:Shell`, which fades `.Bg`: here that's the page |
 | The window glass (`kit:Panel`) | on the floor |
 | The title band (`kit:Header`) | down to the window's top - 62 (the page's top) |
-| The portrait | a disc under the book icon. QuestFrame's own-texture path from #201: the disc at the window's level - 1, the window glass one lower |
+| The portrait | a disc under the book icon. QuestFrame's own-texture path from #201: the disc at the window's level - 1, the window glass one lower. Glass Mail's recipe on it (the owner, after #205): our glass book (`Media\QuestBook.tga`, the owner's art) on our frame a level over the popup, on the book's 64 px; Blizzard's book faded, back when off |
 | The close button | on its disc (`kit:CloseButton`), dimmed while disabled |
 | **The page** (`.Bg`, positively identified) | kept; faded only while its atlas is `QuestBG-Parchment-Accessibility4` **and** Blizzard's last paint of the text was light (below) |
 | A recessed pane (`kit:Section`) | on our glass, anchored to the page, shown only while the page is faded |
 | The material corners, `SealMaterialBG` | kept (hidden under Dark anyway) |
-| Abandon, Track, Share | on glass at their level - 1, their state mirrored (#201: disabled dims, pressed lights) |
+| Abandon, Track, Share | on glass at their level - 1, their state mirrored (#201: disabled dims, pressed lights); the glass 2 px in from each side, so neighbours sit 4 px apart (Share is anchored edge to edge between the other two; the owner, after #205) |
 | Show Map, the scroll bar, QuestInfo, the side portrait | Blizzard's |
 
 **What Blizzard last painted.** Two instance hooks on the popup record it, in our own state. Both check

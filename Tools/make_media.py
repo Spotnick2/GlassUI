@@ -13,6 +13,9 @@
 
 Plain Python, no dependencies: 32-bit uncompressed TGA (BGRA, 8-bit alpha),
 top-left origin, power-of-two sides.
+
+Not from here: Media/QuestBook.tga, the quest popup's portrait, is the
+owner's art (128 x 128, RLE like Glass Mail's envelope), committed as given.
 """
 
 import math
