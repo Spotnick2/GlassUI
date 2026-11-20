@@ -77,7 +77,7 @@ page decision).
 | The shell: `NineSlice`, `TopTileStreaks`, `Inset`, **the rock** (found by structure, not `.Bg`) | faded. Not `kit:Shell`, which fades `.Bg`: here that's the page |
 | The window glass (`kit:Panel`) | on the floor |
 | The title band (`kit:Header`) | down to the window's top - 62 (the page's top) |
-| The portrait | a disc under the book icon. QuestFrame's own-texture path from #201: the disc at the window's level - 1, the window glass one lower. Glass Mail's recipe on it (the owner, after #205): our glass book (`Media\QuestBook.tga`, the owner's art) on our frame a level over the popup, on the book's 64 px; Blizzard's book faded, back when off |
+| The portrait | Glass Mail's recipe (the owner, after #205): our glass book (`Media\QuestBook.tga`, the owner's art) on our frame a level over the popup, on the book's 64 px; Blizzard's book faded, back when off. No glass ring round it since #207: Glass Mail's envelope has none, and our disc read as an extra bright ring next to it. The window glass stays at the window's level - 2 (#201's own-texture path) |
 | The close button | on its disc (`kit:CloseButton`), dimmed while disabled |
 | **The page** (`.Bg`, positively identified) | kept; faded only while its atlas is `QuestBG-Parchment-Accessibility4` **and** Blizzard's last paint of the text was light (below) |
 | A recessed pane (`kit:Section`) | on our glass, anchored to the page, shown only while the page is faded |
@@ -131,11 +131,11 @@ QuestInfo's regions; the scroll child.
    stops the run, and the plan goes back for review. A global pointing at the rock is harmless: the
    skin uses the key and the structure.
 2. The book icon: found as a direct OVERLAY -1 texture, 64 px. The levels of the **shown** popup:
-   window, `NineSlice`, `PortraitContainer`, the buttons, our glass and disc. #201's own-texture
-   recipe puts the glass at the window's level - 2 and the disc at - 1, and both clamp to 0 at window
-   level 1, which the dialog measured (Codex r1). The acceptance condition is the disc visible
-   under the book. If both land at 0 and the disc doesn't show, the plan comes back with a disc whose
-   draw order is set on our own glass.
+   window, `NineSlice`, `PortraitContainer`, the buttons, our glass and our book. #201's own-texture
+   recipe puts the glass at the window's level - 2. Since #208 the acceptance condition is our glass
+   book shown over Blizzard's faded one, with **no ring** round it and the window's top-left corner
+   hidden behind it, as Glass Mail's envelope (the disc of the first plan let the corner show through
+   its translucent band).
 
 **Acceptance** (script errors on, blocked actions counted, `/reload`s only):
 1. A quest's details from the objective tracker's menu: the window in glass, the page kept (default

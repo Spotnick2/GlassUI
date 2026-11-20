@@ -6763,7 +6763,7 @@ local function qpMeasure()
         m.levels = { window = levelOf(f), nineSlice = levelOf(f.NineSlice), portraitContainer = levelOf(f.PortraitContainer),
                      abandon = levelOf(f.AbandonButton) }
         local h = T and T.wins[f]
-        if h then m.levels.glass, m.levels.disc = levelOf(h.win), levelOf(h.disc) end
+        if h then m.levels.glass, m.levels.art = levelOf(h.win), levelOf(h.art) end
     end
     say("QP structure: .Bg " .. tostring(m.key and m.key.atlas) .. " " .. tostring(m.key and m.key.points)
         .. ", the global is .Bg " .. tostring(m.globalIsKey) .. ", page " .. tostring(m.page) .. ", rock "
@@ -6791,7 +6791,11 @@ local function qpState(label)
         r.pageAlpha = alphaOf(page)
         if h then
             r.header = isSeen(h.header)
-            r.disc = h.disc ~= nil and isSeen(h.disc)
+            -- Our book over Blizzard's, faded (#206; no disc since #207).
+            r.art = h.art ~= nil and isSeen(h.art)
+            r.bookAlpha = alphaOf(h.book)
+            -- No ring round it (#208): the window's corner showed through one.
+            r.ring = h.disc ~= nil and isSeen(h.disc)
             local okP, _, rel = call(h.pane.fill, "GetPoint", 1)
             r.pane = isSeen(h.pane.fill)
             r.paneOnPage = r.pane and okP and rel == page
@@ -6830,7 +6834,9 @@ local function qpOn(label, want)
         want_(r.installed, "not installed")
         want_(r.shell == 0, "shell " .. tostring(r.shell))
         want_(r.header, "the band not shown")
-        want_(r.disc, "the book's disc not shown")
+        want_(r.art, "our book not shown")
+        want_(r.bookAlpha == 0, "Blizzard's book at " .. tostring(r.bookAlpha))
+        want_(not r.ring, "a glass ring round the book")
         want_(r.buttonsRight == r.buttons, "buttons " .. r.buttonsRight .. " of " .. r.buttons)
         if r.pageAlpha == 0 then
             want_(r.atlas == DARK, "a page faded that isn't the dark one")
@@ -6942,7 +6948,7 @@ end
 
 Probe:Steps("questpopup", {
     title = "Glass UI: the quest details popup in glass (#202)",
-    rev = 3,
+    rev = 4,
     { text = "Turns on script errors, counts blocked actions, turns the taint log on and saves your Quest Text "
           .. "Contrast (put back at the end; /fp skin gqrestore if you stop early). If Light quest text is on, "
           .. "this step stays: /glassui questtext off, then Retry. " .. TAINT_NOISE, auto = true,
@@ -6976,8 +6982,10 @@ Probe:Steps("questpopup", {
           end
           return true, "the page, the rock and the book found"
       end },
-    { text = "Is the book icon on a glass disc, the window in glass, the parchment page with Blizzard's text, "
-          .. "Abandon, Track and Share on glass (Share dimmed outside a group)? Anything off: the Note.", ask = true },
+    { text = "Is the glass book on the window with no ring round it, and the window's top-left corner hidden "
+          .. "behind it (as Glass Mail's envelope)? The window in glass, the parchment page with Blizzard's text, "
+          .. "Abandon, Track and Share on glass and apart (Share dimmed outside a group)? Anything off: the Note.",
+      ask = true },
     { text = "Press Track twice (untrack, track), then press Next.", check = qpOn("tracked") },
     -- Dark.
     { text = "Turns Light quest text on (Blizzard's Dark quest text).", button = "Light on", run = lightSwitch(true) },

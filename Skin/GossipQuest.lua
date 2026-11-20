@@ -174,7 +174,7 @@ end
 
 -- Each window's shared pieces: the glass and its floor, the band down to the
 -- page's top, the portrait's disc, the close button, the pane (hidden).
-local function installWindow(kit, frame, portrait)
+local function installWindow(kit, frame, portrait, ownArt)
     local win, wg, backing = kit:Panel(frame)
     local h = { kit = kit, frame = frame }
     wins[frame] = h
@@ -194,7 +194,12 @@ local function installWindow(kit, frame, portrait)
         else
             local level = frame:GetFrameLevel()
             win:SetFrameLevel(math.max(0, level - 2))
-            h.disc = kit:Disc(frame, portrait, { ring = DISC_RING, width = PORTRAIT_WIDTH, level = level - 1 })
+            -- Our own round art there instead (the popup's book): no glass
+            -- ring round it, as Glass Mail's envelope has none (the owner,
+            -- after #207).
+            if not ownArt then
+                h.disc = kit:Disc(frame, portrait, { ring = DISC_RING, width = PORTRAIT_WIDTH, level = level - 1 })
+            end
         end
     end
     kit:CloseButton(tbl(frame.CloseButton), h)
@@ -382,7 +387,8 @@ end
 -- round art over Blizzard's, theirs faded and back when the skin is off (the
 -- owner, after #205). The owner's glass book (Media\QuestBook.tga, round on
 -- its own dark disc) on the book icon's 64 px, a level over the popup's
--- regions; our LibGlass disc stays its ring. Blizzard never sets the book's
+-- regions, without our LibGlass disc round it (Glass Mail's envelope has no
+-- ring; the owner, after #207). Blizzard never sets the book's
 -- texture or alpha (QuestMapFrame.xml:314, no key), so the fade holds.
 local BOOK_ART = "Interface\\AddOns\\GlassUI\\Media\\QuestBook"
 
@@ -447,8 +453,8 @@ popupSkin = GUI.Engine.Register({
         local book = bookOf(frame)
         if not book then API.Fail("missing:questpopup:book", "the book icon not found by structure") end
         -- The book is the popup's own texture: #201's own-texture path, the
-        -- disc under the window's regions, the window glass one lower.
-        local h = installWindow(kit, frame, book)
+        -- window glass two under the window, and our art over the book.
+        local h = installWindow(kit, frame, book, true)
         if book then h.book, h.art, h.artTex = book, bookArt(kit, frame, book) end
         h.page = pageOf(frame)
         if not h.page then API.Fail("missing:questpopup:page", ".Bg isn't the page on this build") end

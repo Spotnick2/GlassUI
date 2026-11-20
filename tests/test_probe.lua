@@ -2214,10 +2214,10 @@ WoW.makeQuestPopup()
 local PF = QuestLogPopupDetailFrame
 local title = WoW.blizzObject("FontString", PF.ScrollFrame.ScrollChild, "QuestInfoTitleHeader", "ARTWORK")
 local win = CreateFrame("Frame", nil, PF)
-local h = { win = win, header = win:CreateTexture(), disc = CreateFrame("Frame", nil, PF),
+local h = { win = win, header = win:CreateTexture(), art = CreateFrame("Frame", nil, PF), book = PF._book,
             pane = { fill = win:CreateTexture() }, page = PF.Bg, rock = PF._rock }
 h.pane.fill:Hide()
-for _, x in ipairs({ PF.NineSlice, PF.TopTileStreaks, PF.Inset.Bg, PF._rock }) do x:SetAlpha(0) end
+for _, x in ipairs({ PF.NineSlice, PF.TopTileStreaks, PF.Inset.Bg, PF._rock, PF._book }) do x:SetAlpha(0) end
 local qbuttons = {}
 for _, key in ipairs({ "AbandonButton", "TrackButton", "ShareButton" }) do
     PF[key].Left:SetAlpha(0)
@@ -2255,6 +2255,22 @@ PF._rock:SetAlpha(1)
 ok, why = T.qpOn("p")()
 check(not ok and why:find("shell 1", 1, true), "the rock back: fails")
 PF._rock:SetAlpha(0)
+-- #206/#207: our book shown over Blizzard's, faded.
+PF._book:SetAlpha(1)
+ok, why = T.qpOn("p")()
+check(not ok and why:find("Blizzard's book at 1", 1, true), "Blizzard's book back: fails")
+PF._book:SetAlpha(0)
+h.art:Hide()
+ok, why = T.qpOn("p")()
+check(not ok and why:find("our book not shown", 1, true), "our book hidden: fails")
+h.art:Show()
+-- #208: a glass ring round the book (the window's corner showed through).
+h.disc = CreateFrame("Frame", nil, PF)
+ok, why = T.qpOn("p")()
+check(not ok and why:find("a glass ring round the book", 1, true), "a ring round the book: fails")
+h.disc:Hide()
+check(T.qpOn("p", { faded = false })(), "a ring hidden: passes")
+h.disc = nil
 -- The structure step stays when a piece is missing.
 local steps = FP.procedures["SkinProbe/questpopup"].steps
 local structureStep
