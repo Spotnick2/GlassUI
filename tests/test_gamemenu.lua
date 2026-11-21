@@ -134,6 +134,20 @@ eq(b1.Left:GetAlpha(), 0, "the others faded again")
 table.remove(WoW.gameMenuEntries)
 WoW.hideGameMenu()
 
+-- The stub's visibility sync (Codex on #212): a fixture built hidden, shown
+-- first through the kit's secure entry point rather than Show, gets its
+-- OnShow (the core fires only on a change, and the fixture's hidden write
+-- carries no script).
+WoW.makeGameMenu()
+local fresh, shows = GameMenuFrame, 0
+fresh:HookScript("OnShow", function() shows = shows + 1 end)
+WoW.asBlizzard(function() WoW.setShown(fresh, true) end)
+eq(shows, 1, "a hidden fixture's first secure show runs its OnShow")
+eq(#shownButtons(), #WoW.gameMenuEntries, "its InitButtons filled the pool")
+WoW.asBlizzard(function() WoW.setShown(fresh, true) end)
+eq(shows, 1, "a second show of a shown frame runs nothing")
+WoW.asBlizzard(function() WoW.setShown(fresh, false) end)
+
 eq(next(GUI.failures), nil, "no failures")
 for k, v in pairs(GUI.failures) do io.write("    " .. k .. ": " .. v .. "\n") end
 done("test_gamemenu")

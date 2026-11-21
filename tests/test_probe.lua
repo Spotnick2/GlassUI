@@ -1858,7 +1858,8 @@ xcard.number = backdrop(xcard)
 rxp.CurrentStepFrame.framePool = { xcard }
 local xtrack = { fill = rxp.BottomFrame:CreateTexture() }
 arrow.texture:SetAlpha(0)
-arrow.text = arrow:CreateFontString()
+-- RestedXP gives it a font (map.lua:95 SetFont); without one SetText throws (WowTestKit #69).
+arrow.text = arrow:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 arrow.text:SetText("Step 1\n(10yd)")
 local ourArrow = CreateFrame("Frame", nil, arrow)
 local ourTex = ourArrow:CreateTexture()

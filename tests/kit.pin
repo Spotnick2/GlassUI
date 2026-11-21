@@ -1,4 +1,4 @@
 # WowTestKit for these tests: the commit, and the client build to test against.
-sha=5a3b6cea7e81ece42f5867b9da0560c8bffb9669
+sha=38c8a6c58a8caaf3b4cee41424e6e43502102a45
 build=70450
-api=1
+api=2
