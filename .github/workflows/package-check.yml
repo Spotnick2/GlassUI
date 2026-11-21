@@ -199,12 +199,22 @@ jobs:
   # A GitHub Release for every tag: the zip `check` built and checked,
   # release.json, and the tag's CHANGELOG.md section as the notes. The only job
   # allowed to write to the repository.
+  # One publisher per tag at a time: the tag's push and a manual retry, or two
+  # retries, share the group (the same key as TAG below). Two at once could
+  # both see a draft, and the second's --clobber would then delete a
+  # release.json the first had just published (Codex, wow-dev-tools#57). The
+  # one running always finishes. GitHub keeps one waiting job per group: it
+  # starts after the running one and finds the release done, and a newer run
+  # for the tag cancels it and waits in its place.
   release:
     needs: check
     if: >-
       (github.event_name == 'push' && github.ref_type == 'tag') ||
       (github.event_name == 'workflow_dispatch' && inputs.publish != 'wago')
     runs-on: ubuntu-latest
+    concurrency:
+      group: release-${{ inputs.tag || github.ref_name }}
+      cancel-in-progress: false
     permissions:
       contents: write
     env:
@@ -248,8 +258,7 @@ jobs:
       # retry (a manual run defaults to `both`) that failed there would leave a
       # live release without the file WowUp reads (Codex, #211). One that
       # matches is kept; one that differs stops the run for a repair by hand.
-      # Only a draft's is replaced. The template doesn't do this yet:
-      # Spotnick2/wow-dev-tools#55.
+      # Only a draft's is replaced.
       - name: Create the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
