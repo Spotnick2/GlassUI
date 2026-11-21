@@ -55,10 +55,13 @@ end
 -- one its scripts last reported (_vis, WowTestKit #21/#46, API 2). The stub
 -- writes _shown directly where Blizzard builds a frame hidden (the XML's
 -- hidden="true") or changes it with no script (an UpdateShownState), so
--- before each Show / Hide / SetShown from outside a script walk, those
--- writes are taken as reported, with no script: the frame's whole tree is
--- synced first. Inside a walk (a script that shows or hides), nothing is,
--- so the core's own detection holds there.
+-- before each visibility change from outside a script walk, those writes are
+-- taken as reported, with no script: the frame's whole tree is synced first.
+-- The hook is WoW.setShown, the one entry point the core's Show / Hide /
+-- SetShown and secure code (a snippet's handle, a secure show) all go
+-- through, so a fixture's first secure show fires its OnShow as a Show does
+-- (Codex on #212). Inside a walk (a script that shows or hides), nothing is
+-- synced, so the core's own detection holds there.
 local function visibleNow(w)
     local p = w
     while p do if not p._shown then return false end; p = p._parent end
@@ -69,19 +72,17 @@ local function syncTree(w)
     for _, c in ipairs(w._children or {}) do syncTree(c) end
 end
 local walking = 0
-for _, name in ipairs({ "Show", "Hide", "SetShown" }) do
-    local core = Methods[name]
-    Methods[name] = function(w, ...)
-        if walking == 0 then
-            local root = w
-            while root._parent do root = root._parent end
-            syncTree(root)
-        end
-        walking = walking + 1
-        local ok, err = WoW.rawpcall(core, w, ...)
-        walking = walking - 1
-        if not ok then error(err, 0) end
+local coreSetShown = WoW.setShown
+function WoW.setShown(w, shown)
+    if walking == 0 then
+        local root = w
+        while root._parent do root = root._parent end
+        syncTree(root)
     end
+    walking = walking + 1
+    local ok, err = WoW.rawpcall(coreSetShown, w, shown)
+    walking = walking - 1
+    if not ok then error(err, 0) end
 end
 
 --------------------------------------------------------------------------------
