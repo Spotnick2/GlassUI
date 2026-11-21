@@ -287,7 +287,18 @@ check(R ~= nil, "the Reload UI button is built out of combat")
 eq(R.frame:GetParent(), nil, "on a frame parented to nothing, never inside the Settings panel")
 eq(R.button:GetAttribute("type"), "macro", "a secure macro button")
 eq(R.button:GetAttribute("macrotext"), "/reload", "running /reload")
-eq(R.button._scripts.OnClick, nil, "nothing of ours on its click")
+-- Its OnClick is the secure template's own, the secure action (WowTestKit #20), and nothing of
+-- ours: no script set or hooked on it.
+local scripted = 0
+for _, call in ipairs(R.button._log) do
+    if (call[1] == "SetScript" or call[1] == "HookScript") and call[2] == "OnClick" then scripted = scripted + 1 end
+end
+eq(scripted, 0, "nothing of ours on its click")
+local secureAction, acted = WoW.secureActionClick, nil
+WoW.secureActionClick = function(self) acted = self end
+R.button._scripts.OnClick(R.button, "LeftButton", false)
+WoW.secureActionClick = secureAction
+eq(acted, R.button, "its click is the secure action")
 eq(R.frame:IsShown(), true, "shown over the footer while the page is open")
 local _, rel = R.frame:GetPoint(1)
 eq(rel, nil, "positioned on the screen, never anchored to the page")

@@ -22,9 +22,13 @@
 dofile("tests/kit.lua")
 local Methods = WoW.Methods
 local coreNewWidget = WoW.newWidget
--- The core's method dispatch (record the call, then run WoW.Methods[k]),
--- which Blizzard's objects wrap below to keep the contract record.
-local coreDispatch = getmetatable(coreNewWidget("Frame")).__index
+-- The core's method dispatch is one method table per widget type, its
+-- metatable's __index (WowTestKit #7, API 2): Blizzard's objects keep their
+-- type's (_methods) and wrap its methods below to keep the contract record.
+local function coreDispatch(t, k)
+    local methods = rawget(t, "_methods")
+    return methods and methods[k]
+end
 
 -- The stub's own objects (Blizzard's, a template's pieces) start with the
 -- fields the tests read directly: their children and regions as lists, alpha
@@ -32,16 +36,11 @@ local coreDispatch = getmetatable(coreNewWidget("Frame")).__index
 local function newWidget(wtype, parent, name)
     local w = coreNewWidget(wtype, parent, name)
     w._children, w._regions, w._scale, w._alpha, w._mouse = {}, {}, 1, 1, false
-    return w
-end
-
--- WowTestKit #38: every frame too. A test lists a frame's children or
--- regions with ipairs(f._children) whether it has any or not, and the core
--- makes those lists only with the first child or region.
-local coreCreateFrame = CreateFrame
-function CreateFrame(...)
-    local w = coreCreateFrame(...)
-    w._children, w._regions = w._children or {}, w._regions or {}
+    -- Blizzard's strings come from XML that inherits a font (a template), so
+    -- they take SetText; the core refuses it on a string with none, as the
+    -- client does on 70959 (WowTestKit #69). The addon's own strings are the
+    -- core's CreateFontString, and still checked.
+    if wtype == "FontString" then w._fontTemplate = "GameFontNormal" end
     return w
 end
 
@@ -49,6 +48,39 @@ local function adopt(parent, w)
     if parent then
         parent._children = parent._children or {}
         table.insert(parent._children, w)
+    end
+end
+
+-- The core fires OnShow / OnHide where a frame's visibility differs from the
+-- one its scripts last reported (_vis, WowTestKit #21/#46, API 2). The stub
+-- writes _shown directly where Blizzard builds a frame hidden (the XML's
+-- hidden="true") or changes it with no script (an UpdateShownState), so
+-- before each Show / Hide / SetShown from outside a script walk, those
+-- writes are taken as reported, with no script: the frame's whole tree is
+-- synced first. Inside a walk (a script that shows or hides), nothing is,
+-- so the core's own detection holds there.
+local function visibleNow(w)
+    local p = w
+    while p do if not p._shown then return false end; p = p._parent end
+    return true
+end
+local function syncTree(w)
+    w._vis = visibleNow(w)
+    for _, c in ipairs(w._children or {}) do syncTree(c) end
+end
+local walking = 0
+for _, name in ipairs({ "Show", "Hide", "SetShown" }) do
+    local core = Methods[name]
+    Methods[name] = function(w, ...)
+        if walking == 0 then
+            local root = w
+            while root._parent do root = root._parent end
+            syncTree(root)
+        end
+        walking = walking + 1
+        local ok, err = WoW.rawpcall(core, w, ...)
+        walking = walking - 1
+        if not ok then error(err, 0) end
     end
 end
 
@@ -85,10 +117,6 @@ WoW.templates.UIPanelScrollFrameTemplate = function(w) w.ScrollBar = newWidget("
 -- (GetDisabledTexture; the Blizzard buttons below, and the tests read the
 -- state textures by their keys _normal, _pushed, _disabled, _highlight).
 -- The core's Enable/Disable keep the state in _disabled and would replace it.
--- WowTestKit #41: a frame's ID, 0 by default (the bag windows' bag, an item
--- button's slot; the probe reads them, ContainerFrame.lua:1845).
-function Methods.SetID(w, id) w._id = id end
-function Methods.GetID(w) return w._id or 0 end
 -- OnEnable/OnDisable fire on a change of state, as the client's (the quest
 -- dialog's close button under auto-accept, #114).
 function Methods.SetEnabled(w, v)
@@ -110,17 +138,6 @@ function Methods.CreateTexture(w, name, layer, template, sub)
 end
 -- The tests read it as _desat (the core: _desaturated).
 function Methods.SetDesaturated(t, v) t._desat = v and true or false end
--- A texture painted with SetGradient ignores a later SetAlpha, and GetAlpha
--- keeps reading 1 (porting guide section 3, measured on 70374 twice; an image
--- texture too, SkinProbe W1.6 square C): the core's SetAlpha models that.
--- WowTestKit #37: an alpha set BEFORE the gradient doesn't survive it
--- either, the texture shows and reads 1 (70374, SkinProbe W1.6 square B),
--- and this API takes colour objects; the core's SetGradient does neither.
-function Methods.SetGradient(t, orientation, c1, c2)
-    assert(type(c1) == "table" and type(c2) == "table", "SetGradient takes color objects on this API")
-    t._gradient = { orientation, c1, c2 }
-    t._alpha = 1
-end
 -- The hook is addon code, even when Blizzard's side fired the script (the
 -- contract record).
 function Methods.HookScript(w, name, fn)
@@ -169,8 +186,6 @@ function Methods.SetAtlas(t, atlas) textureArg(t, "SetAtlas", atlas); return cor
 -- Widget methods the core doesn't have
 --------------------------------------------------------------------------------
 
-function Methods.GetNumPoints(w) return #w._points end
-function Methods.GetSize(w) return w._width, w._height end
 function Methods.GetCenter(w) return w._cx, w._cy end
 -- Rects: what a test sets (nil until laid out, as before the first frame).
 function Methods.GetTop(w) return w._top end
@@ -489,7 +504,9 @@ local blizzMT = {
 }
 
 local function blizz(wtype, parent, name, layer)
-    local w = setmetatable(newWidget(wtype, parent, name), blizzMT)
+    local w = newWidget(wtype, parent, name)
+    rawset(w, "_methods", getmetatable(w).__index)
+    setmetatable(w, blizzMT)
     rawset(w, "_blizz", true)
     w._layer = layer
     table.insert(WoW.blizz, w)
@@ -2801,7 +2818,7 @@ function WoW.makeMirrorTimers()
             bar:SetStatusBarTexture(WoW.MIRROR_ATLAS[timer])
             f.Text:SetText(label)
             -- UpdateShownState's SetShown(true): the client fires no OnShow
-            -- on a frame already shown (the core's Show would).
+            -- on a frame already shown (nor does the core's Show, since API 2).
             if not f:IsShown() then f:Show() end
             self.activeTimers[timer] = f
         end)
