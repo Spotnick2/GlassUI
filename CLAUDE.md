@@ -90,8 +90,8 @@ docs/FOREVER-PROBE.md says how to run it.
 
 - `..\References\Docs\PORTING-TBC-TO-FOREVER.md`: Edit Mode systems, secure code, secret values,
   options-page recipe, packaging.
-- `..\References\Forever\api\forever-api-1.60.1.70888.md` (the newest build; take the highest there): does an API exist? Presence is not a contract.
-- `..\wow-ui-source` (branch `forever`, on 70888; the checkout may lag `origin/forever`): the client's own FrameXML. The authority on frame
+- `..\References\Forever\api\forever-api-1.60.1.71037.md` (the newest build; take the highest there): does an API exist? Presence is not a contract.
+- `..\wow-ui-source` (branch `forever`, on 71037; the checkout may lag `origin/forever`): the client's own FrameXML. The authority on frame
   names, templates and `[AllowLoadGameType camelot]` variants.
 - `..\References\Docs\RELEASING.md`, `..\References\Docs\LIBGLASS-MIGRATION.md`, `..\References\Docs\EMBEDDED-LIBRARIES.md`,
   `..\References\Docs\PROBES.md` and `..\ForeverProbe\docs\GUIDE.md` (probes).
